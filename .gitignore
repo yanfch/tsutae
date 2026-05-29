@@ -28,11 +28,11 @@ xcuserdata/
 .swiftpm/
 .build/
 Package.resolved
-Packages/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcworkspace/xcuserdata/
 
-# CocoaPods (just in case)
+# CocoaPods (just in case — note: our local SwiftPM packages also live
+# under Packages/, so we whitelist them explicitly).
 Pods/
 
 # Carthage
@@ -47,6 +47,10 @@ fastlane/test_output
 # Tuist
 .tuist-bin/
 Derived/
+
+# Swift Package Manager local repos pulled by Xcode workspace state
+Packages/checkouts/
+Packages/repositories/
 
 # Editor
 .vscode/
