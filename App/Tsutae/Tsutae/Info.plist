@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 后台 App，无 Dock 图标 -->
+    <key>LSUIElement</key>
+    <true/>
+    
+    <!-- 麦克风权限描述 -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>tsutae 需要麦克风权限来录制语音</string>
+</dict>
+</plist>

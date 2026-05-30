@@ -16,6 +16,7 @@ DerivedData/
 *.perspectivev3
 !default.perspectivev3
 xcuserdata/
+*.xcuserstate
 *.moved-aside
 *.xccheckout
 *.xcscmblueprint
@@ -27,7 +28,6 @@ xcuserdata/
 # Swift Package Manager
 .swiftpm/
 .build/
-Package.resolved
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcworkspace/xcuserdata/
 

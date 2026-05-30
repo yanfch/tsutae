@@ -1,0 +1,600 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		80CFCDDB2FCAC58B00010226 /* TsutaeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 80CFCDDA2FCAC58B00010226 /* TsutaeCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		80CFCD8A2FCAC31200010226 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 80CFCD742FCAC31100010226 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 80CFCD7B2FCAC31100010226;
+			remoteInfo = Tsutae;
+		};
+		80CFCD942FCAC31200010226 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 80CFCD742FCAC31100010226 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 80CFCD7B2FCAC31100010226;
+			remoteInfo = Tsutae;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		80CFCD7C2FCAC31100010226 /* Tsutae.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tsutae.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		80CFCD892FCAC31200010226 /* TsutaeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TsutaeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		80CFCD932FCAC31200010226 /* TsutaeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TsutaeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		80CFCD7E2FCAC31100010226 /* Tsutae */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Tsutae;
+			sourceTree = "<group>";
+		};
+		80CFCD8C2FCAC31200010226 /* TsutaeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TsutaeTests;
+			sourceTree = "<group>";
+		};
+		80CFCD962FCAC31200010226 /* TsutaeUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TsutaeUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		80CFCD792FCAC31100010226 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				80CFCDDB2FCAC58B00010226 /* TsutaeCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		80CFCD862FCAC31200010226 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		80CFCD902FCAC31200010226 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		80CFCD732FCAC31100010226 = {
+			isa = PBXGroup;
+			children = (
+				80CFCD7E2FCAC31100010226 /* Tsutae */,
+				80CFCD8C2FCAC31200010226 /* TsutaeTests */,
+				80CFCD962FCAC31200010226 /* TsutaeUITests */,
+				80CFCDD92FCAC58B00010226 /* Frameworks */,
+				80CFCD7D2FCAC31100010226 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		80CFCD7D2FCAC31100010226 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				80CFCD7C2FCAC31100010226 /* Tsutae.app */,
+				80CFCD892FCAC31200010226 /* TsutaeTests.xctest */,
+				80CFCD932FCAC31200010226 /* TsutaeUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		80CFCDD92FCAC58B00010226 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		80CFCD7B2FCAC31100010226 /* Tsutae */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 80CFCD9D2FCAC31200010226 /* Build configuration list for PBXNativeTarget "Tsutae" */;
+			buildPhases = (
+				80CFCD782FCAC31100010226 /* Sources */,
+				80CFCD792FCAC31100010226 /* Frameworks */,
+				80CFCD7A2FCAC31100010226 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				80CFCD7E2FCAC31100010226 /* Tsutae */,
+			);
+			name = Tsutae;
+			packageProductDependencies = (
+				80CFCDDA2FCAC58B00010226 /* TsutaeCore */,
+			);
+			productName = Tsutae;
+			productReference = 80CFCD7C2FCAC31100010226 /* Tsutae.app */;
+			productType = "com.apple.product-type.application";
+		};
+		80CFCD882FCAC31200010226 /* TsutaeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 80CFCDA02FCAC31200010226 /* Build configuration list for PBXNativeTarget "TsutaeTests" */;
+			buildPhases = (
+				80CFCD852FCAC31200010226 /* Sources */,
+				80CFCD862FCAC31200010226 /* Frameworks */,
+				80CFCD872FCAC31200010226 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				80CFCD8B2FCAC31200010226 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				80CFCD8C2FCAC31200010226 /* TsutaeTests */,
+			);
+			name = TsutaeTests;
+			packageProductDependencies = (
+			);
+			productName = TsutaeTests;
+			productReference = 80CFCD892FCAC31200010226 /* TsutaeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		80CFCD922FCAC31200010226 /* TsutaeUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 80CFCDA32FCAC31200010226 /* Build configuration list for PBXNativeTarget "TsutaeUITests" */;
+			buildPhases = (
+				80CFCD8F2FCAC31200010226 /* Sources */,
+				80CFCD902FCAC31200010226 /* Frameworks */,
+				80CFCD912FCAC31200010226 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				80CFCD952FCAC31200010226 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				80CFCD962FCAC31200010226 /* TsutaeUITests */,
+			);
+			name = TsutaeUITests;
+			packageProductDependencies = (
+			);
+			productName = TsutaeUITests;
+			productReference = 80CFCD932FCAC31200010226 /* TsutaeUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		80CFCD742FCAC31100010226 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					80CFCD7B2FCAC31100010226 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					80CFCD882FCAC31200010226 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 80CFCD7B2FCAC31100010226;
+					};
+					80CFCD922FCAC31200010226 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 80CFCD7B2FCAC31100010226;
+					};
+				};
+			};
+			buildConfigurationList = 80CFCD772FCAC31100010226 /* Build configuration list for PBXProject "Tsutae" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 80CFCD732FCAC31100010226;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				80CFCDC62FCAC4AF00010226 /* XCLocalSwiftPackageReference "../../Packages/TsutaeCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 80CFCD7D2FCAC31100010226 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				80CFCD7B2FCAC31100010226 /* Tsutae */,
+				80CFCD882FCAC31200010226 /* TsutaeTests */,
+				80CFCD922FCAC31200010226 /* TsutaeUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		80CFCD7A2FCAC31100010226 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		80CFCD872FCAC31200010226 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		80CFCD912FCAC31200010226 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		80CFCD782FCAC31100010226 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		80CFCD852FCAC31200010226 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		80CFCD8F2FCAC31200010226 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		80CFCD8B2FCAC31200010226 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 80CFCD7B2FCAC31100010226 /* Tsutae */;
+			targetProxy = 80CFCD8A2FCAC31200010226 /* PBXContainerItemProxy */;
+		};
+		80CFCD952FCAC31200010226 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 80CFCD7B2FCAC31100010226 /* Tsutae */;
+			targetProxy = 80CFCD942FCAC31200010226 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		80CFCD9B2FCAC31200010226 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		80CFCD9C2FCAC31200010226 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		80CFCD9E2FCAC31200010226 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.yanfch.Tsutae;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		80CFCD9F2FCAC31200010226 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.yanfch.Tsutae;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		80CFCDA12FCAC31200010226 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.yanfch.TsutaeTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tsutae.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tsutae";
+			};
+			name = Debug;
+		};
+		80CFCDA22FCAC31200010226 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.yanfch.TsutaeTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tsutae.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tsutae";
+			};
+			name = Release;
+		};
+		80CFCDA42FCAC31200010226 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.yanfch.TsutaeUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Tsutae;
+			};
+			name = Debug;
+		};
+		80CFCDA52FCAC31200010226 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.yanfch.TsutaeUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Tsutae;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		80CFCD772FCAC31100010226 /* Build configuration list for PBXProject "Tsutae" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				80CFCD9B2FCAC31200010226 /* Debug */,
+				80CFCD9C2FCAC31200010226 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		80CFCD9D2FCAC31200010226 /* Build configuration list for PBXNativeTarget "Tsutae" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				80CFCD9E2FCAC31200010226 /* Debug */,
+				80CFCD9F2FCAC31200010226 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		80CFCDA02FCAC31200010226 /* Build configuration list for PBXNativeTarget "TsutaeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				80CFCDA12FCAC31200010226 /* Debug */,
+				80CFCDA22FCAC31200010226 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		80CFCDA32FCAC31200010226 /* Build configuration list for PBXNativeTarget "TsutaeUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				80CFCDA42FCAC31200010226 /* Debug */,
+				80CFCDA52FCAC31200010226 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		80CFCDC62FCAC4AF00010226 /* XCLocalSwiftPackageReference "../../Packages/TsutaeCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../Packages/TsutaeCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		80CFCDDA2FCAC58B00010226 /* TsutaeCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 80CFCDC62FCAC4AF00010226 /* XCLocalSwiftPackageReference "../../Packages/TsutaeCore" */;
+			productName = TsutaeCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 80CFCD742FCAC31100010226 /* Project object */;
+}

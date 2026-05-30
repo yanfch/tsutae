@@ -1,8 +1,290 @@
 import XCTest
+import Yams
 @testable import TsutaeCore
 
 final class TsutaeCoreTests: XCTestCase {
-	func testPlaceholderVersionExists() {
-		XCTAssertFalse(TsutaePlaceholder.version.isEmpty)
-	}
+    
+    var tmpDir: URL!
+    
+    override func setUp() {
+        super.setUp()
+        // 重置 Paths 缓存
+        Paths.resetCache()
+        
+        // 每个测试用独立临时目录
+        tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tsutae-test-\(UUID().uuidString)")
+        try! FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        setenv("TSUTAE_ROOT", tmpDir.path, 1)
+        // 确保目录存在
+        try! Paths.ensureDirectories()
+    }
+    
+    override func tearDown() {
+        // 清理临时目录
+        try? FileManager.default.removeItem(at: tmpDir)
+        Paths.resetCache()
+        super.tearDown()
+    }
+    
+    // MARK: - Config Tests
+    
+    func testDefaultConfigValues() {
+        let config = Config.default
+        
+        XCTAssertFalse(config.general.launchAtLogin)
+        XCTAssertEqual(config.general.language, "auto")
+        XCTAssertEqual(config.stt.engine, "apple")
+        XCTAssertEqual(config.tts.engine, "apple")
+        XCTAssertEqual(config.tts.rate, 1.0)
+        XCTAssertEqual(config.vad.engine, "energy")
+        XCTAssertEqual(config.vad.pauseDurationMs, 800)
+        XCTAssertTrue(config.vad.allowBargeIn)
+        XCTAssertEqual(config.server.port, 1338)
+        XCTAssertEqual(config.server.bind, "127.0.0.1")
+    }
+    
+    func testConfigLoadSave() throws {
+        print("TSUTAE_ROOT: \(ProcessInfo.processInfo.environment["TSUTAE_ROOT"] ?? "nil")")
+        print("Paths.root: \(Paths.root.path)")
+        print("Paths.configYML: \(Paths.configYML.path)")
+        
+        // 加载（应该创建默认配置）
+        let config1 = try ConfigLoader.load()
+        XCTAssertEqual(config1.server.port, 1338)
+        
+        // 修改并保存
+        var config2 = config1
+        config2.server.port = 9999
+        try ConfigLoader.save(config2)
+        
+        // 验证文件已写入
+        let yamlContent = try String(contentsOf: Paths.configYML, encoding: .utf8)
+        print("YAML content after save: \(yamlContent)")
+        
+        // 重新加载，验证修改生效
+        let config3 = try ConfigLoader.load()
+        print("Loaded port: \(config3.server.port)")
+        XCTAssertEqual(config3.server.port, 9999, "Reloaded config should have port 9999")
+    }
+    
+    // MARK: - Paths Tests
+    
+    func testPathsRootDirectory() {
+        let root = Paths.root
+        // TSUTAE_ROOT 环境变量已设置，应该指向临时目录
+        XCTAssertTrue(root.path.contains("tsutae-test-"), "Root path: \(root.path)")
+    }
+    
+    func testPathsSubdirectories() {
+        XCTAssertEqual(Paths.configYML.lastPathComponent, "config.yml")
+        XCTAssertEqual(Paths.hotkeysYML.lastPathComponent, "hotkeys.yml")
+        XCTAssertEqual(Paths.models.lastPathComponent, "models")
+        XCTAssertEqual(Paths.sttModels.lastPathComponent, "stt")
+    }
+    
+    func testEnsureDirectories() throws {
+        try Paths.ensureDirectories()
+        
+        XCTAssertTrue(FileManager.default.fileExists(atPath: Paths.root.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: Paths.recipes.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: Paths.models.path))
+        
+        // 检查 .gitignore 被创建
+        let gitignore = Paths.root.appendingPathComponent(".gitignore")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: gitignore.path))
+    }
+    
+    // MARK: - Hotkeys Tests
+    
+    func testHotkeysDefaultConfig() {
+        let config = HotkeysConfig.default
+        
+        XCTAssertNotNil(config.leader)
+        XCTAssertEqual(config.leader?.key, "option+space")
+        XCTAssertEqual(config.leader?.hudTimeoutMs, 1500)
+        XCTAssertEqual(config.leader?.hudActions.count, 2)
+        XCTAssertEqual(config.hotkeys.count, 3)
+    }
+    
+    func testHotkeysLoadSave() throws {
+        try Paths.ensureDirectories()
+        
+        // 加载（应该创建默认配置）
+        let config1 = try HotkeysLoader.load()
+        XCTAssertNotNil(config1.leader)
+        
+        // 修改并保存
+        var config2 = config1
+        config2.leader?.hudTimeoutMs = 2000
+        try HotkeysLoader.save(config2)
+        
+        // 重新加载
+        let config3 = try HotkeysLoader.load()
+        XCTAssertEqual(config3.leader?.hudTimeoutMs, 2000)
+    }
+    
+    func testActionBindingCodable() throws {
+        // 测试预定义 action
+        let predefined = ActionBinding.predefined(.sendToFocusedApp)
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(predefined)
+        let decoded = try JSONDecoder().decode(ActionBinding.self, from: data)
+        
+        if case .predefined(let action) = decoded {
+            XCTAssertEqual(action, .sendToFocusedApp)
+        } else {
+            XCTFail("Expected predefined action")
+        }
+    }
+    
+    // MARK: - Recipes Tests
+    
+    func testRecipeLoadAll() throws {
+        try Paths.ensureDirectories()
+        
+        // 安装内置配方
+        try BuiltInRecipes.installDefaults()
+        
+        // 加载所有
+        let recipes = try RecipeLoader.loadAll()
+        XCTAssertEqual(recipes.count, 5)
+        
+        // 验证名称
+        let names = recipes.map(\.name)
+        XCTAssertTrue(names.contains("notion_daily"))
+        XCTAssertTrue(names.contains("obsidian_daily"))
+        XCTAssertTrue(names.contains("linear_issue"))
+    }
+    
+    func testRecipeLoadByName() throws {
+        try Paths.ensureDirectories()
+        try BuiltInRecipes.installDefaults()
+        
+        let recipe = try RecipeLoader.load(name: "notion_daily")
+        XCTAssertEqual(recipe.name, "notion_daily")
+        XCTAssertEqual(recipe.action, "post_http")
+        XCTAssertEqual(recipe.url, "https://api.notion.com/v1/pages")
+        XCTAssertNotNil(recipe.onSuccess?.tts)
+    }
+    
+    func testRecipeSaveDelete() throws {
+        try Paths.ensureDirectories()
+        
+        let recipe = Recipe(
+            name: "test_recipe",
+            description: "测试配方",
+            action: "post_http",
+            url: "https://example.com"
+        )
+        
+        // 保存
+        try RecipeLoader.save(recipe)
+        XCTAssertTrue(RecipeLoader.exists(name: "test_recipe"))
+        
+        // 加载
+        let loaded = try RecipeLoader.load(name: "test_recipe")
+        XCTAssertEqual(loaded.name, "test_recipe")
+        XCTAssertEqual(loaded.url, "https://example.com")
+        
+        // 删除
+        try RecipeLoader.delete(name: "test_recipe")
+        XCTAssertFalse(RecipeLoader.exists(name: "test_recipe"))
+    }
+    
+    func testBuiltInRecipesHaveRequiredFields() {
+        for recipe in BuiltInRecipes.all {
+            XCTAssertFalse(recipe.name.isEmpty, "Recipe name should not be empty")
+            XCTAssertFalse(recipe.description.isEmpty, "Recipe description should not be empty")
+            XCTAssertFalse(recipe.action.isEmpty, "Recipe action should not be empty")
+        }
+    }
+    
+    // MARK: - EngineManager Tests
+    
+    func testEngineManagerRegisterAndList() {
+        let manager = EngineManager.shared
+        
+        // 清理（防止其他测试污染）
+        manager.unregisterSTT(id: "test-stt")
+        
+        // 注册测试引擎
+        let engine = MockSTTEngine(id: "test-stt")
+        manager.registerSTT(engine)
+        
+        // 列表应该包含
+        let list = manager.listSTT()
+        XCTAssertTrue(list.contains { $0.id == "test-stt" })
+        
+        // 获取
+        let retrieved = manager.stt(id: "test-stt")
+        XCTAssertNotNil(retrieved)
+        XCTAssertEqual(retrieved?.id, "test-stt")
+        
+        // 清理
+        manager.unregisterSTT(id: "test-stt")
+        XCTAssertNil(manager.stt(id: "test-stt"))
+    }
+    
+    func testEngineManagerFallback() throws {
+        let manager = EngineManager.shared
+        
+        // 清理
+        manager.unregisterSTT(id: "primary")
+        manager.unregisterSTT(id: "fallback")
+        
+        // 注册主引擎（error 状态）
+        let primary = MockSTTEngine(id: "primary", status: .error)
+        manager.registerSTT(primary)
+        
+        // 注册 fallback（ready 状态）
+        let fallback = MockSTTEngine(id: "fallback", status: .ready)
+        manager.registerSTT(fallback)
+        
+        // 应该返回 fallback
+        let engine = try manager.getSTT(primary: "primary", fallback: "fallback")
+        XCTAssertEqual(engine.id, "fallback")
+        
+        // 清理
+        manager.unregisterSTT(id: "primary")
+        manager.unregisterSTT(id: "fallback")
+    }
+    
+    func testEngineManagerNoAvailable() {
+        let manager = EngineManager.shared
+        
+        // 清理
+        manager.unregisterSTT(id: "missing")
+        
+        // 应该抛错
+        XCTAssertThrowsError(try manager.getSTT(primary: "missing", fallback: nil)) { error in
+            XCTAssertTrue(error is EngineError)
+        }
+    }
+}
+
+// MARK: - Mock 引擎
+
+final class MockSTTEngine: STTEngine {
+    let id: String
+    let displayName: String
+    let isLocal: Bool
+    let status: EngineStatus
+    
+    init(id: String, displayName: String = "Mock", isLocal: Bool = true, status: EngineStatus = .ready) {
+        self.id = id
+        self.displayName = displayName
+        self.isLocal = isLocal
+        self.status = status
+    }
+    
+    func transcribe(_ audio: AudioData, language: String?) async throws -> Transcript {
+        Transcript(text: "mock transcription")
+    }
+    
+    func stream(_ audio: AsyncStream<AudioChunk>, language: String?) -> AsyncThrowingStream<TranscriptUpdate, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish()
+        }
+    }
 }

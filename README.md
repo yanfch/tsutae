@@ -69,6 +69,8 @@ cd Packages/TsutaeCore && swift build && swift test
 
 ## Design docs
 
+Internal: `docs/ui-design.md` — UI 构成、页面职责、SwiftUI/AppKit 选型、设计图清单。
+
 External (workspace-level): `docs/01-voicebar.md`, `docs/04-tracing.md`, `docs/07-integration.md`, `docs/08-recipes.md`, `docs/09-paths.md`. Each subdir's README references the relevant doc by path.
 
 ## License
