@@ -3,6 +3,8 @@
 .AppleDouble
 .LSOverride
 ._*
+.Spotlight-V100
+.Trashes
 
 # Xcode
 build/
@@ -16,63 +18,57 @@ DerivedData/
 *.perspectivev3
 !default.perspectivev3
 xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
 *.xcuserstate
 *.moved-aside
 *.xccheckout
 *.xcscmblueprint
 *.hmap
 *.ipa
-*.dSYM.zip
 *.dSYM
+*.dSYM.zip
 
 # Swift Package Manager
 .swiftpm/
 .build/
-*.xcodeproj/project.xcworkspace/xcuserdata/
-*.xcworkspace/xcuserdata/
+Packages/checkouts/
+Packages/repositories/
 
-# CocoaPods (just in case — note: our local SwiftPM packages also live
-# under Packages/, so we whitelist them explicitly).
+# Dependency managers / project tooling
 Pods/
-
-# Carthage
 Carthage/Build/
-
-# fastlane
+.tuist-bin/
+Derived/
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
-# Tuist
-.tuist-bin/
-Derived/
-
-# Swift Package Manager local repos pulled by Xcode workspace state
-Packages/checkouts/
-Packages/repositories/
-
-# Editor
+# Editors
 .vscode/
 .idea/
+.cursor/
+.zed/
 *.swp
 *.swo
 *~
 
-# Models (downloaded large files)
-models/
+# Generated output
+coverage/
+dist/
+out/
 
-# Logs
+# Models / logs
+models/
 *.log
 
 # Local config / secrets
 .env
-.env.local
+.env.*
+!.env.example
 config.local.json
 
-# Pi sessions (if any pi sessions accidentally land in repo)
+# Pi
 .pi/
-
-# Build artifacts
-dist/
-out/
