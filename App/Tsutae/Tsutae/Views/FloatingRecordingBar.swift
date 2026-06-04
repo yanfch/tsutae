@@ -24,8 +24,18 @@ final class FloatingRecordingBar {
     
     private init() {}
     
+    private let panelHorizontalInset: CGFloat = 12
+    private let panelVerticalInset: CGFloat = 10
+    
     private var layout: DS.recordingBar.Layout {
         DS.recordingBar.current
+    }
+    
+    private var panelSize: NSSize {
+        NSSize(
+            width: layout.width + (panelHorizontalInset * 2),
+            height: layout.height + (panelVerticalInset * 2)
+        )
     }
     
     /// 显示悬浮录音条
@@ -42,8 +52,8 @@ final class FloatingRecordingBar {
             contentRect: NSRect(
                 x: 0,
                 y: 0,
-                width: layout.width,
-                height: layout.height
+                width: panelSize.width,
+                height: panelSize.height
             ),
             styleMask: [
                 .nonactivatingPanel,   // 不抢焦点
@@ -64,7 +74,7 @@ final class FloatingRecordingBar {
         panel.hidesOnDeactivate = false                 // 失焦不隐藏
         panel.backgroundColor = .clear                  // 透明背景（让 SwiftUI 画）
         panel.isOpaque = false
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
         
@@ -74,8 +84,8 @@ final class FloatingRecordingBar {
         } else if let screen = screenForPresentation() {
             // 对于菜单栏 App，NSScreen.main 可能为空，优先使用鼠标所在屏幕。
             let visibleFrame = screen.visibleFrame
-            let x = visibleFrame.midX - (layout.width / 2)
-            let y = visibleFrame.midY - (layout.height / 2) - 42
+            let x = visibleFrame.midX - (panelSize.width / 2)
+            let y = visibleFrame.midY - (panelSize.height / 2) - 42
             panel.setFrameOrigin(NSPoint(x: x, y: y))
             logger.info(
                 "Panel positioned on visibleFrame=\(String(describing: visibleFrame), privacy: .public) origin=(\(x, privacy: .public), \(y, privacy: .public))"
@@ -104,13 +114,17 @@ final class FloatingRecordingBar {
         )
         self.presentationModel = presentationModel
         
-        let wrapperView = RecordingBarWrapper(model: presentationModel)
+        let wrapperView = RecordingBarWrapper(
+            model: presentationModel,
+            horizontalInset: panelHorizontalInset,
+            verticalInset: panelVerticalInset
+        )
         let hostingView = NSHostingView(rootView: wrapperView)
         hostingView.frame = NSRect(
             x: 0,
             y: 0,
-            width: layout.width,
-            height: layout.height
+            width: panelSize.width,
+            height: panelSize.height
         )
         // 设置 NSHostingView 背景为透明，让 SwiftUI 视图自己绘制背景
         hostingView.wantsLayer = true
@@ -291,6 +305,8 @@ private final class RecordingBarPresentationModel: ObservableObject {
 /// 包装 RecordingBarView，确保背景正确渲染
 private struct RecordingBarWrapper: View {
     @ObservedObject var model: RecordingBarPresentationModel
+    let horizontalInset: CGFloat
+    let verticalInset: CGFloat
     
     var body: some View {
         RecordingBarView(
@@ -298,5 +314,9 @@ private struct RecordingBarWrapper: View {
             preset: model.preset,
             colorScheme: model.colorScheme
         )
+        .padding(.horizontal, horizontalInset)
+        .padding(.vertical, verticalInset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.clear)
     }
 }

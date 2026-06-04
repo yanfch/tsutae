@@ -61,17 +61,44 @@ enum DS {
         /// 暗色背景 #16201c
         static let backgroundDark = SwiftUI.Color(red: 0x16/255, green: 0x20/255, blue: 0x1C/255)
         
-        /// 暗色表面色
-        static let surfaceDark = SwiftUI.Color(red: 0x1D/255, green: 0x28/255, blue: 0x23/255)
+        /// 暗色表面色（夜里的纸与墨）
+        static let surfaceDark = SwiftUI.Color(red: 0x1A/255, green: 0x23/255, blue: 0x20/255)
+        
+        /// 暗色表面色层级 2
+        static let surface2Dark = SwiftUI.Color(red: 0x21/255, green: 0x2C/255, blue: 0x28/255)
+        
+        /// 暗色表面色层级 3
+        static let surface3Dark = SwiftUI.Color(red: 0x28/255, green: 0x34/255, blue: 0x30/255)
         
         /// 暗色卡片
         static let cardDark = SwiftUI.Color(red: 0x24/255, green: 0x30/255, blue: 0x2A/255)
         
         /// 暗色主文字
-        static let foregroundDark = SwiftUI.Color(red: 0xF2/255, green: 0xF2/255, blue: 0xE9/255)
+        static let foregroundDark = SwiftUI.Color(red: 0xE8/255, green: 0xE6/255, blue: 0xDC/255)
         
         /// 暗色次要文字
-        static let mutedDark = SwiftUI.Color(red: 0xB8/255, green: 0xC9/255, blue: 0xC0/255)
+        static let mutedDark = SwiftUI.Color(red: 0xA9/255, green: 0xB5/255, blue: 0xAE/255)
+        
+        /// 暗色边框
+        static let borderDark = SwiftUI.Color(red: 0x5E/255, green: 0x6E/255, blue: 0x67/255)
+        
+        /// 暗色柔和边框
+        static let borderDarkSoft = SwiftUI.Color(red: 0x7A/255, green: 0x88/255, blue: 0x82/255)
+        
+        /// 暗色强调色（提亮但不发荧光）
+        static let accentDark = SwiftUI.Color(red: 0x7C/255, green: 0x9E/255, blue: 0x92/255)
+        
+        /// 暗色强调色柔和变体
+        static let accentDarkSoft = SwiftUI.Color(red: 0x62/255, green: 0x7D/255, blue: 0x73/255)
+        
+        /// 暗色成功色
+        static let successDark = SwiftUI.Color(red: 0x8C/255, green: 0xA8/255, blue: 0x76/255)
+        
+        /// 暗色警告色
+        static let warningDark = SwiftUI.Color(red: 0xB5/255, green: 0x96/255, blue: 0x63/255)
+        
+        /// 暗色错误色
+        static let dangerDark = SwiftUI.Color(red: 0xC2/255, green: 0x7A/255, blue: 0x63/255)
         
         // --- 兼容旧代码的映射 ---
         

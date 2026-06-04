@@ -47,23 +47,22 @@ struct RecordingBarView: View {
             .padding(.trailing, layout.trailingPadding)
             .padding(.vertical, layout.verticalPadding)
             .frame(width: layout.width, height: layout.height)
-            .background(backgroundShape.fill(backgroundColor))
+            .background(
+                backgroundShape
+                    .fill(backgroundColor)
+                    .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowYOffset)
+            )
             .overlay(
                 backgroundShape
                     .strokeBorder(
                         LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.08),
-                                Color.white.opacity(0.04),
-                                Color.white.opacity(0.06)
-                            ],
+                            colors: capsuleBorderColors,
                             startPoint: .top,
                             endPoint: .bottom
                         ),
-                        lineWidth: 0.5
+                        lineWidth: capsuleBorderWidth
                     )
             )
-            .shadow(color: shadowColor, radius: 10, x: 0, y: 4)
         }
         .onChange(of: state) { _, newState in
             if newState == .idle {
@@ -90,7 +89,7 @@ struct RecordingBarView: View {
     private func breathingDot(breathPhase: Double) -> some View {
         ZStack {
             Circle()
-                .fill(stateColor.opacity(0.08))
+                .fill(stateColor.opacity(isDarkMode ? 0.14 : 0.08))
                 .frame(width: layout.dotGlowSize, height: layout.dotGlowSize)
                 .scaleEffect(1.0 + sin(breathPhase) * 0.08 + completionPulse)
                 .opacity(0.58 + sin(breathPhase) * 0.16)
@@ -98,7 +97,7 @@ struct RecordingBarView: View {
             if state == .idle && preset == .minimal {
                 Image(systemName: "checkmark")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(DS.color.success)
+                    .foregroundStyle(successColor)
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.88).combined(with: .opacity),
                         removal: .opacity
@@ -136,7 +135,7 @@ struct RecordingBarView: View {
                 .font(statusFont)
                 .italic()
                 .tracking(statusTracking)
-                .foregroundStyle(DS.color.foreground)
+                .foregroundStyle(statusLabelColor)
                 .lineLimit(1)
                 .id(stateLabel)
                 .transition(.asymmetric(
@@ -220,41 +219,94 @@ struct RecordingBarView: View {
     
     // MARK: - 颜色
     
-    private var backgroundColor: Color {
+    private var isDarkMode: Bool {
         colorScheme == .dark
-            ? Color(red: 0x1B / 255, green: 0x25 / 255, blue: 0x21 / 255)
-            : Color(red: 0xFF / 255, green: 0xFD / 255, blue: 0xF3 / 255)
+    }
+    
+    private var accentColor: Color {
+        isDarkMode ? DS.color.accentDark : DS.color.accent
+    }
+    
+    private var successColor: Color {
+        isDarkMode ? DS.color.successDark : DS.color.success
+    }
+    
+    private var statusLabelColor: Color {
+        isDarkMode ? DS.color.foregroundDark : DS.color.foreground
+    }
+    
+    private var backgroundColor: Color {
+        isDarkMode ? DS.color.surfaceDark : Color(red: 0xFF / 255, green: 0xFD / 255, blue: 0xF3 / 255)
+    }
+    
+    private var capsuleBorderColors: [Color] {
+        if isDarkMode {
+            return [
+                Color.white.opacity(0.12),
+                DS.color.borderDarkSoft.opacity(0.16),
+                Color.black.opacity(0.14)
+            ]
+        }
+        
+        return [
+            Color.white.opacity(0.08),
+            Color.white.opacity(0.04),
+            Color.white.opacity(0.06)
+        ]
+    }
+    
+    private var capsuleBorderWidth: CGFloat {
+        isDarkMode ? 0.6 : 0.5
     }
     
     private var shadowColor: Color {
-        colorScheme == .dark
-            ? .black.opacity(0.3)
-            : DS.color.accent.opacity(0.08)
+        isDarkMode ? .black.opacity(0.18) : DS.color.accent.opacity(0.04)
+    }
+    
+    private var shadowRadius: CGFloat {
+        isDarkMode ? 5 : 4
+    }
+    
+    private var shadowYOffset: CGFloat {
+        isDarkMode ? 2 : 1
     }
     
     private var stateColor: Color {
         switch state {
         case .idle:
-            return preset == .standard ? DS.color.accent : DS.color.success
+            return preset == .standard ? accentColor : successColor
         case .listening:
-            return DS.color.accent
+            return accentColor
         case .thinking:
-            return DS.color.accent
+            return accentColor
         case .speaking:
-            return DS.color.success
+            return successColor
         }
     }
     
     private var waveformColor: Color {
         switch state {
         case .idle, .listening, .thinking:
-            return DS.color.accent
+            return accentColor
         case .speaking:
-            return DS.color.success
+            return successColor
         }
     }
     
     private var keycapForegroundColor: Color {
+        if isDarkMode {
+            switch state {
+            case .idle:
+                return successColor
+            case .listening:
+                return DS.color.mutedDark
+            case .thinking:
+                return accentColor
+            case .speaking:
+                return successColor
+            }
+        }
+        
         switch state {
         case .idle:
             return DS.color.success
@@ -268,6 +320,19 @@ struct RecordingBarView: View {
     }
     
     private var keycapBackgroundColor: Color {
+        if isDarkMode {
+            switch state {
+            case .idle:
+                return successColor.opacity(0.14)
+            case .listening:
+                return DS.color.surface2Dark
+            case .thinking:
+                return DS.color.accentDarkSoft.opacity(0.24)
+            case .speaking:
+                return successColor.opacity(0.14)
+            }
+        }
+        
         switch state {
         case .idle:
             return DS.color.success.opacity(0.1)
@@ -281,6 +346,19 @@ struct RecordingBarView: View {
     }
     
     private var keycapBorderColor: Color {
+        if isDarkMode {
+            switch state {
+            case .idle:
+                return successColor.opacity(0.34)
+            case .listening:
+                return DS.color.borderDark.opacity(0.9)
+            case .thinking:
+                return accentColor.opacity(0.32)
+            case .speaking:
+                return successColor.opacity(0.34)
+            }
+        }
+        
         switch state {
         case .idle:
             return DS.color.success.opacity(0.3)
