@@ -362,7 +362,8 @@ enum DS {
         struct Layout {
             let height: CGFloat
             let cornerRadius: CGFloat
-            let horizontalPadding: CGFloat
+            let leadingPadding: CGFloat
+            let trailingPadding: CGFloat
             let verticalPadding: CGFloat
             let contentSpacing: CGFloat
             let leadingClusterSpacing: CGFloat
@@ -395,7 +396,8 @@ enum DS {
             }
             
             var width: CGFloat {
-                (horizontalPadding * 2)
+                leadingPadding
+                + trailingPadding
                 + leadingSlotWidth
                 + (showsStatusLabel ? contentSpacing + statusWidth : 0)
                 + (showsKeycap ? contentSpacing + keycapWidth : 0)
@@ -406,7 +408,8 @@ enum DS {
                 case .standard:
                     height = 38
                     cornerRadius = 999
-                    horizontalPadding = 14
+                    leadingPadding = 14
+                    trailingPadding = 14
                     verticalPadding = 10
                     contentSpacing = 8
                     leadingClusterSpacing = 6
@@ -429,7 +432,8 @@ enum DS {
                 case .minimal:
                     height = 32
                     cornerRadius = 16
-                    horizontalPadding = 17
+                    leadingPadding = 13
+                    trailingPadding = 18
                     verticalPadding = 8
                     contentSpacing = 0
                     leadingClusterSpacing = 6

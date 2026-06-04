@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import TsutaeCore
 import OSLog
 
@@ -17,6 +18,7 @@ final class FloatingRecordingBar {
     private let savedOriginXKey = "recordingBar.origin.x"
     private let savedOriginYKey = "recordingBar.origin.y"
     private var panel: NSPanel?
+    private var presentationModel: RecordingBarPresentationModel?
     private(set) var isShowing = false
     private var currentState: AppState = .idle
     
@@ -84,34 +86,25 @@ final class FloatingRecordingBar {
         }
         
         // 嵌入 SwiftUI 视图
-        // 根据设置中的外观设置决定颜色方案
         let appearanceMode = UserDefaults.standard.string(forKey: "settings.appearanceMode") ?? "system"
-        let colorScheme: ColorScheme
-        switch appearanceMode {
-        case "light":
-            colorScheme = .light
-        case "dark":
-            colorScheme = .dark
-        default: // "system"
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            colorScheme = isDark ? .dark : .light
-        }
+        let colorScheme = resolvedColorScheme(for: appearanceMode)
         
-        // 设置 NSPanel 的外观
         if appearanceMode == "light" {
             panel.appearance = NSAppearance(named: .aqua)
         } else if appearanceMode == "dark" {
             panel.appearance = NSAppearance(named: .darkAqua)
         } else {
-            panel.appearance = nil // 跟随系统
+            panel.appearance = nil
         }
         
-        // 创建包装视图，确保背景正确
-        let wrapperView = RecordingBarWrapper(
+        let presentationModel = RecordingBarPresentationModel(
             state: state,
             preset: DS.recordingBar.currentPreset,
             colorScheme: colorScheme
         )
+        self.presentationModel = presentationModel
+        
+        let wrapperView = RecordingBarWrapper(model: presentationModel)
         let hostingView = NSHostingView(rootView: wrapperView)
         hostingView.frame = NSRect(
             x: 0,
@@ -144,28 +137,19 @@ final class FloatingRecordingBar {
             return
         }
         
-        guard let hostingView = panel?.contentView as? NSHostingView<RecordingBarWrapper> else {
-            logger.error("Failed to update recording bar because contentView has unexpected type")
+        guard let presentationModel else {
+            logger.error("Failed to update recording bar because presentation model is missing")
             return
         }
         
         let appearanceMode = UserDefaults.standard.string(forKey: "settings.appearanceMode") ?? "system"
-        let colorScheme: ColorScheme
-        switch appearanceMode {
-        case "light":
-            colorScheme = .light
-        case "dark":
-            colorScheme = .dark
-        default:
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            colorScheme = isDark ? .dark : .light
-        }
+        let colorScheme = resolvedColorScheme(for: appearanceMode)
         
-        hostingView.rootView = RecordingBarWrapper(
-            state: state,
-            preset: DS.recordingBar.currentPreset,
-            colorScheme: colorScheme
-        )
+        withAnimation(.easeInOut(duration: 0.24)) {
+            presentationModel.state = state
+            presentationModel.preset = DS.recordingBar.currentPreset
+            presentationModel.colorScheme = colorScheme
+        }
         logger.info("Recording bar state updated to \(state.rawValue, privacy: .public)")
     }
     
@@ -174,6 +158,7 @@ final class FloatingRecordingBar {
         logger.info("hide() called. hasPanel=\(self.panel != nil, privacy: .public)")
         panel?.orderOut(nil)
         panel = nil
+        presentationModel = nil
         isShowing = false
         currentState = .idle
         logger.info("hide() completed")
@@ -195,6 +180,18 @@ final class FloatingRecordingBar {
         let state = currentState
         hide()
         show(state: state)
+    }
+    
+    private func resolvedColorScheme(for appearanceMode: String) -> ColorScheme {
+        switch appearanceMode {
+        case "light":
+            return .light
+        case "dark":
+            return .dark
+        default:
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return isDark ? .dark : .light
+        }
     }
     
     private func screenForPresentation() -> NSScreen? {
@@ -278,18 +275,28 @@ private final class DraggableRecordingPanel: NSPanel {
 
 // MARK: - RecordingBarWrapper
 
+@MainActor
+private final class RecordingBarPresentationModel: ObservableObject {
+    @Published var state: AppState
+    @Published var preset: DS.recordingBar.Preset
+    @Published var colorScheme: ColorScheme
+    
+    init(state: AppState, preset: DS.recordingBar.Preset, colorScheme: ColorScheme) {
+        self.state = state
+        self.preset = preset
+        self.colorScheme = colorScheme
+    }
+}
+
 /// 包装 RecordingBarView，确保背景正确渲染
 private struct RecordingBarWrapper: View {
-    
-    let state: AppState
-    let preset: DS.recordingBar.Preset
-    let colorScheme: ColorScheme
+    @ObservedObject var model: RecordingBarPresentationModel
     
     var body: some View {
         RecordingBarView(
-            state: state,
-            preset: preset,
-            colorScheme: colorScheme
+            state: model.state,
+            preset: model.preset,
+            colorScheme: model.colorScheme
         )
     }
 }

@@ -101,7 +101,6 @@ final class RecordingSession: ObservableObject {
                 lastTranscript = transcript.text
                 lastError = nil
                 statusText = "done"
-                isBusy = false
                 
                 // 显示 Done 状态
                 FloatingRecordingBar.shared.update(state: .idle)
@@ -119,7 +118,6 @@ final class RecordingSession: ObservableObject {
                     NSPasteboard.general.setString(transcript.text, forType: .string)
                     lastError = "Inject failed, copied to clipboard: \(error.localizedDescription)"
                     statusText = "inject failed"
-                    isBusy = false
                     FloatingRecordingBar.shared.hide()
                     notify(title: "tsutae 注入失败，已复制", body: error.localizedDescription)
                     logger.error("Injection failed: \(error.localizedDescription, privacy: .public)")
