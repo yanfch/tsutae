@@ -7,6 +7,7 @@ struct SettingsView: View {
     
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("settings.appearanceMode") private var appearanceMode = "system"
+    @AppStorage(L10n.appLanguageDefaultsKey) private var appLanguage = L10n.AppLanguage.system.rawValue
     @AppStorage("settings.selectedTab") private var selectedTabRaw = SettingsTab.general.rawValue
     
     var body: some View {
@@ -18,7 +19,7 @@ struct SettingsView: View {
             
             VStack(spacing: 0) {
                 // 标题栏
-                Text("tsutae 设置")
+                Text(L10n.Settings.windowTitle)
                     .font(.system(.title3, design: .default).weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 72)
@@ -39,6 +40,7 @@ struct SettingsView: View {
             }
             .background(settingsBackground)
         }
+        .id(appLanguage)
         .frame(width: 920, height: 620)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .tint(DS.color.brandBlue)
@@ -101,15 +103,15 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .general: return "通用"
-        case .stt: return "语音转文字"
-        case .tts: return "文字转语音"
-        case .vad: return "语音检测"
-        case .hotkeys: return "快捷键"
-        case .recipes: return "配方"
-        case .secrets: return "密钥"
-        case .server: return "服务"
-        case .about: return "关于"
+        case .general: return L10n.Settings.tabGeneral
+        case .stt: return L10n.Settings.tabSTT
+        case .tts: return L10n.Settings.tabTTS
+        case .vad: return L10n.Settings.tabVAD
+        case .hotkeys: return L10n.Settings.tabHotkeys
+        case .recipes: return L10n.Settings.tabRecipes
+        case .secrets: return L10n.Settings.tabSecrets
+        case .server: return L10n.Settings.tabServer
+        case .about: return L10n.Settings.tabAbout
         }
     }
     
@@ -218,6 +220,7 @@ private struct GeneralSettingsView: View {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("settings.themeMode") private var themeMode = "defaultBlue"
     @AppStorage("settings.appearanceMode") private var appearanceMode = "system"
+    @AppStorage(L10n.appLanguageDefaultsKey) private var appLanguage = L10n.AppLanguage.system.rawValue
     @AppStorage("settings.defaultAction") private var defaultAction = "injectFocusedApp"
     @AppStorage("settings.transcriptionLanguage") private var transcriptionLanguage = "auto"
     @AppStorage(DS.recordingBar.presetDefaultsKey) private var recordingBarPreset = DS.recordingBar.defaultPreset.rawValue
@@ -225,13 +228,13 @@ private struct GeneralSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 26) {
             // 外观分组
-            SettingsSection(title: "外观") {
+            SettingsSection(title: L10n.Settings.sectionAppearance) {
                 // 主题色
-                SettingsRow(label: "主题色") {
+                SettingsRow(label: L10n.Settings.themeColorLabel) {
                     Picker("", selection: $themeMode) {
-                        Text("默认蓝").tag("defaultBlue")
-                        Text("跟随系统").tag("system")
-                        Text("自定义").tag("custom")
+                        Text(L10n.Settings.themeDefaultBlue).tag("defaultBlue")
+                        Text(L10n.Settings.themeFollowSystem).tag("system")
+                        Text(L10n.Settings.themeCustom).tag("custom")
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 330)
@@ -240,18 +243,31 @@ private struct GeneralSettingsView: View {
                 SettingsDivider()
                 
                 // 主题色预览
-                SettingsRow(label: "主题色预览") {
+                SettingsRow(label: L10n.Settings.themePreviewLabel) {
                     ThemeColorPicker(selectedTheme: $themeMode)
                 }
                 
                 SettingsDivider()
                 
                 // 外观
-                SettingsRow(label: "外观") {
+                SettingsRow(label: L10n.Settings.appearanceModeLabel) {
                     Picker("", selection: $appearanceMode) {
-                        Text("跟随系统").tag("system")
-                        Text("浅色").tag("light")
-                        Text("深色").tag("dark")
+                        Text(L10n.Settings.appearanceSystem).tag("system")
+                        Text(L10n.Settings.appearanceLight).tag("light")
+                        Text(L10n.Settings.appearanceDark).tag("dark")
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 150)
+                }
+                
+                SettingsDivider()
+                
+                // 界面语言
+                SettingsRow(label: L10n.Settings.appLanguageLabel) {
+                    Picker("", selection: $appLanguage) {
+                        Text(L10n.Settings.appearanceSystem).tag(L10n.AppLanguage.system.rawValue)
+                        Text(L10n.Settings.languageEnglish).tag(L10n.AppLanguage.english.rawValue)
+                        Text(L10n.Settings.languageChinese).tag(L10n.AppLanguage.simplifiedChinese.rawValue)
                     }
                     .pickerStyle(.menu)
                     .frame(width: 150)
@@ -260,7 +276,7 @@ private struct GeneralSettingsView: View {
                 SettingsDivider()
                 
                 // 录音胶囊样式
-                SettingsRow(label: "录音胶囊") {
+                SettingsRow(label: L10n.Settings.recordingCapsuleLabel) {
                     Picker("", selection: $recordingBarPreset) {
                         ForEach(DS.recordingBar.Preset.allCases, id: \.rawValue) { preset in
                             Text(preset.title).tag(preset.rawValue)
@@ -276,9 +292,9 @@ private struct GeneralSettingsView: View {
             }
             
             // 行为分组
-            SettingsSection(title: "行为") {
+            SettingsSection(title: L10n.Settings.sectionBehavior) {
                 // 开机自动启动
-                SettingsRow(label: "开机自动启动") {
+                SettingsRow(label: L10n.Settings.launchAtLoginLabel) {
                     Toggle("", isOn: $launchAtLogin)
                         .labelsHidden()
                 }
@@ -286,10 +302,10 @@ private struct GeneralSettingsView: View {
                 SettingsDivider()
                 
                 // 默认动作
-                SettingsRow(label: "默认动作") {
+                SettingsRow(label: L10n.Settings.defaultActionLabel) {
                     Picker("", selection: $defaultAction) {
-                        Text("注入到当前焦点 App").tag("injectFocusedApp")
-                        Text("复制到剪切板").tag("copyToClipboard")
+                        Text(L10n.Settings.actionInjectFocusedApp).tag("injectFocusedApp")
+                        Text(L10n.Settings.actionCopyToClipboard).tag("copyToClipboard")
                     }
                     .pickerStyle(.menu)
                     .frame(width: 220)
@@ -298,11 +314,11 @@ private struct GeneralSettingsView: View {
                 SettingsDivider()
                 
                 // 转写语言
-                SettingsRow(label: "转写语言") {
+                SettingsRow(label: L10n.Settings.transcriptionLanguageLabel) {
                     Picker("", selection: $transcriptionLanguage) {
-                        Text("自动").tag("auto")
-                        Text("中文").tag("zh")
-                        Text("英文").tag("en")
+                        Text(L10n.Settings.languageAuto).tag("auto")
+                        Text(L10n.Settings.languageChinese).tag("zh")
+                        Text(L10n.Settings.languageEnglish).tag("en")
                     }
                     .pickerStyle(.menu)
                     .frame(width: 120)
@@ -311,8 +327,8 @@ private struct GeneralSettingsView: View {
                 SettingsDivider()
                 
                 // 辅助功能权限
-                SettingsRow(label: "辅助功能权限") {
-                    Button("打开系统设置") {
+                SettingsRow(label: L10n.Settings.accessibilityPermissionLabel) {
+                    Button(L10n.Settings.openSystemSettingsButton) {
                         FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Accessibility")
                     }
                     .buttonStyle(.bordered)
@@ -320,9 +336,9 @@ private struct GeneralSettingsView: View {
             }
             
             // 重置分组
-            SettingsSection(title: "重置") {
+            SettingsSection(title: L10n.Settings.sectionReset) {
                 HStack {
-                    Button("恢复默认设置") {
+                    Button(L10n.Settings.resetDefaultsButton) {
                         resetDefaults()
                     }
                     .buttonStyle(.bordered)
@@ -339,6 +355,7 @@ private struct GeneralSettingsView: View {
         launchAtLogin = false
         themeMode = "defaultBlue"
         appearanceMode = "system"
+        appLanguage = L10n.AppLanguage.system.rawValue
         defaultAction = "injectFocusedApp"
         transcriptionLanguage = "auto"
     }
@@ -435,9 +452,9 @@ private struct SettingsPlaceholderView: View {
         VStack(alignment: .leading, spacing: 26) {
             SettingsSection(title: tab.title) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("\(tab.title) 设置")
+                    Text(L10n.Settings.placeholderTitle(tab.title))
                         .font(.headline)
-                    Text("下一步会按同一套卡片骨架接入真实配置。")
+                    Text(L10n.Settings.placeholderDescription)
                         .foregroundStyle(.secondary)
                 }
                 .padding(18)

@@ -380,8 +380,8 @@ enum DS {
             
             var title: String {
                 switch self {
-                case .standard: return "标准"
-                case .minimal: return "极简"
+                case .standard: return L10n.RecordingBar.presetStandard
+                case .minimal: return L10n.RecordingBar.presetMinimal
                 }
             }
         }

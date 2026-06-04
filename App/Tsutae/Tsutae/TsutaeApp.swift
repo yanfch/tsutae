@@ -9,57 +9,70 @@ struct TsutaeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "MenuBar")
     @StateObject private var recordingSession = RecordingSession.shared
+    @AppStorage(L10n.appLanguageDefaultsKey) private var appLanguage = L10n.AppLanguage.system.rawValue
     
     var body: some Scene {
         // 使用自定义品牌图标
         MenuBarExtra("tsutae", image: "MenuBarIcon") {
-            if let transcript = recordingSession.lastTranscript, !transcript.isEmpty {
-                Text(transcript)
-                    .lineLimit(3)
-                    .font(.caption)
-                Button("复制最近转写") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(transcript, forType: .string)
-                }
-                Divider()
-            }
-            
-            if let error = recordingSession.lastError {
-                Text("错误：\(error)")
-                    .lineLimit(2)
-                    .font(.caption)
-                Divider()
-            }
-            
-            Text("快捷键：\(GlobalHotkeyManager.shared.toggleRecordingShortcutDisplay)")
-                .foregroundStyle(.secondary)
-            
-            Button(recordingSession.isRecording ? "停止并转写" : "开始录音") {
-                logger.info("Menu action: toggle recording")
-                Task { @MainActor in
-                    RecordingSession.shared.toggle()
-                }
-            }
-            
-            Divider()
-            
-            SettingsLink {
-                Text("设置…")
-            }
-            .keyboardShortcut(",", modifiers: .command)
-            
-            Divider()
-            
-            Button("退出 tsutae") {
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut("q", modifiers: .command)
+            menuContent
+                .environment(\.locale, currentLocale)
         }
         .menuBarExtraStyle(.menu)
         
         Settings {
             SettingsView()
+                .environment(\.locale, currentLocale)
         }
+    }
+    
+    private var currentLocale: Locale {
+        _ = appLanguage
+        return L10n.currentLocale
+    }
+    
+    @ViewBuilder
+    private var menuContent: some View {
+        if let transcript = recordingSession.lastTranscript, !transcript.isEmpty {
+            Text(transcript)
+                .lineLimit(3)
+                .font(.caption)
+            Button(L10n.Menu.copyLatestTranscript) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(transcript, forType: .string)
+            }
+            Divider()
+        }
+        
+        if let error = recordingSession.lastError {
+            Text(L10n.Menu.error(error))
+                .lineLimit(2)
+                .font(.caption)
+            Divider()
+        }
+        
+        Text(L10n.Menu.shortcut(GlobalHotkeyManager.shared.toggleRecordingShortcutDisplay))
+            .foregroundStyle(.secondary)
+        
+        Button(recordingSession.isRecording ? L10n.Menu.stopAndTranscribe : L10n.Menu.startRecording) {
+            logger.info("Menu action: toggle recording")
+            Task { @MainActor in
+                RecordingSession.shared.toggle()
+            }
+        }
+        
+        Divider()
+        
+        SettingsLink {
+            Text(L10n.Menu.settings)
+        }
+        .keyboardShortcut(",", modifiers: .command)
+        
+        Divider()
+        
+        Button(L10n.Menu.quit) {
+            NSApplication.shared.terminate(nil)
+        }
+        .keyboardShortcut("q", modifiers: .command)
     }
 }
 

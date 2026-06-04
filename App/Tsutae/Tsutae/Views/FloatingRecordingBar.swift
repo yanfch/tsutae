@@ -470,9 +470,8 @@ private struct RecordingBarCompanionCard: View {
                 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(companion.title)
-                        .font(DS.font.body(.footnote))
-                        .fontWeight(.semibold)
-                        .tracking(0.08)
+                        .font(DS.font.mono(size: 13, weight: .medium))
+                        .tracking(0.12)
                         .foregroundStyle(titleColor)
                     
                     Text(companion.message)
@@ -537,9 +536,8 @@ private struct CompanionActionButton: View {
     var body: some View {
         Button(action.title, action: action.handler)
             .buttonStyle(.plain)
-            .font(DS.font.body(.footnote))
-            .fontWeight(.medium)
-            .tracking(0.04)
+            .font(DS.font.mono(size: 12, weight: .medium))
+            .tracking(0.08)
             .foregroundStyle(foregroundColor)
             .padding(.horizontal, 12)
             .frame(height: 30)

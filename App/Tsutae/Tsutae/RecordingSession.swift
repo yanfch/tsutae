@@ -141,7 +141,7 @@ final class RecordingSession: ObservableObject {
                         return
                     }
                     FloatingRecordingBar.shared.hide()
-                    self.notify(title: "tsutae 已注入文本", body: transcript.text)
+                    self.notify(title: L10n.Notification.insertedTextTitle, body: transcript.text)
                     self.logger.info("Transcription injected. chars=\(transcript.text.count, privacy: .public)")
                 } catch {
                     guard !Task.isCancelled, self.activeOperationID == operationID else {
@@ -198,31 +198,31 @@ final class RecordingSession: ObservableObject {
             switch audioError {
             case .microphonePermissionDenied:
                 presentCompanion(
-                    title: "Microphone Access Required",
-                    message: "Tsutae needs microphone permission to start recording.",
-                    primaryAction: .init(title: "Open System Settings", style: .primary) {
+                    title: L10n.RecordingCompanion.microphoneAccessRequiredTitle,
+                    message: L10n.RecordingCompanion.microphoneAccessRequiredMessage,
+                    primaryAction: .init(title: L10n.Common.openSystemSettings, style: .primary) {
                         FloatingRecordingBar.shared.dismissCompanion()
                         FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Microphone")
                     },
-                    secondaryAction: .init(title: "Not Now", style: .secondary) {
+                    secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
                         FloatingRecordingBar.shared.dismissCompanion()
                     }
                 )
                 return
             case .noInputDevice:
                 presentCompanion(
-                    title: "No Microphone Detected",
-                    message: "No microphone input device is available right now. Check your audio input and try again.",
-                    primaryAction: .init(title: "Dismiss", style: .primary) {
+                    title: L10n.RecordingCompanion.noMicrophoneDetectedTitle,
+                    message: L10n.RecordingCompanion.noMicrophoneDetectedMessage,
+                    primaryAction: .init(title: L10n.Common.dismiss, style: .primary) {
                         FloatingRecordingBar.shared.dismissCompanion()
                     }
                 )
                 return
             case .formatConversionUnavailable:
                 presentCompanion(
-                    title: "Audio Input Unavailable",
-                    message: "Tsutae couldn’t prepare the microphone input format. Try another input device and record again.",
-                    primaryAction: .init(title: "Dismiss", style: .primary) {
+                    title: L10n.RecordingCompanion.audioInputUnavailableTitle,
+                    message: L10n.RecordingCompanion.audioInputUnavailableMessage,
+                    primaryAction: .init(title: L10n.Common.dismiss, style: .primary) {
                         FloatingRecordingBar.shared.dismissCompanion()
                     }
                 )
@@ -233,9 +233,9 @@ final class RecordingSession: ObservableObject {
         }
         
         presentCompanion(
-            title: "Recording Failed",
+            title: L10n.RecordingCompanion.recordingFailedTitle,
             message: error.localizedDescription,
-            primaryAction: .init(title: "Dismiss", style: .primary) {
+            primaryAction: .init(title: L10n.Common.dismiss, style: .primary) {
                 FloatingRecordingBar.shared.dismissCompanion()
             }
         )
@@ -243,9 +243,9 @@ final class RecordingSession: ObservableObject {
     
     private func presentStopError(_ error: Error) {
         presentCompanion(
-            title: "Couldn’t Finish Recording",
+            title: L10n.RecordingCompanion.couldntFinishRecordingTitle,
             message: error.localizedDescription,
-            primaryAction: .init(title: "Dismiss", style: .primary) {
+            primaryAction: .init(title: L10n.Common.dismiss, style: .primary) {
                 FloatingRecordingBar.shared.dismissCompanion()
             }
         )
@@ -256,21 +256,21 @@ final class RecordingSession: ObservableObject {
             let message: String
             switch urlError.code {
             case .notConnectedToInternet, .networkConnectionLost:
-                message = "Check your network connection and try again."
+                message = L10n.RecordingCompanion.transcriptionNetworkMessage
             case .timedOut:
-                message = "The transcription service timed out. Try again or check the service status."
+                message = L10n.RecordingCompanion.transcriptionTimeoutMessage
             default:
-                message = "Cannot reach the transcription service. Check network, endpoint, or model settings."
+                message = L10n.RecordingCompanion.transcriptionUnreachableMessage
             }
             
             presentCompanion(
-                title: "Transcription Unavailable",
+                title: L10n.RecordingCompanion.transcriptionUnavailableTitle,
                 message: message,
-                primaryAction: .init(title: "Open Settings", style: .primary) {
+                primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
                     FloatingRecordingBar.shared.dismissCompanion()
                     FloatingRecordingBar.shared.openAppSettings(tab: "server")
                 },
-                secondaryAction: .init(title: "Not Now", style: .secondary) {
+                secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
                     FloatingRecordingBar.shared.dismissCompanion()
                 }
             )
@@ -282,13 +282,13 @@ final class RecordingSession: ObservableObject {
             case .httpStatus(let status, _):
                 if status == 401 || status == 403 {
                     presentCompanion(
-                        title: "Authentication Failed",
-                        message: "Check your API key or service permissions before trying again.",
-                        primaryAction: .init(title: "Open Settings", style: .primary) {
+                        title: L10n.RecordingCompanion.authenticationFailedTitle,
+                        message: L10n.RecordingCompanion.authenticationFailedMessage,
+                        primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
                             FloatingRecordingBar.shared.dismissCompanion()
                             FloatingRecordingBar.shared.openAppSettings(tab: "server")
                         },
-                        secondaryAction: .init(title: "Not Now", style: .secondary) {
+                        secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
                             FloatingRecordingBar.shared.dismissCompanion()
                         }
                     )
@@ -297,13 +297,13 @@ final class RecordingSession: ObservableObject {
                 
                 if status == 400 || status == 404 || status == 422 {
                     presentCompanion(
-                        title: "STT Configuration Error",
-                        message: "Check the model, endpoint, or request settings for transcription.",
-                        primaryAction: .init(title: "Open Settings", style: .primary) {
+                        title: L10n.RecordingCompanion.sttConfigurationErrorTitle,
+                        message: L10n.RecordingCompanion.sttConfigurationErrorMessage,
+                        primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
                             FloatingRecordingBar.shared.dismissCompanion()
                             FloatingRecordingBar.shared.openAppSettings(tab: "stt")
                         },
-                        secondaryAction: .init(title: "Not Now", style: .secondary) {
+                        secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
                             FloatingRecordingBar.shared.dismissCompanion()
                         }
                     )
@@ -317,13 +317,13 @@ final class RecordingSession: ObservableObject {
         }
         
         presentCompanion(
-            title: "Transcription Failed",
-            message: "The transcription service returned an unexpected error. Check your service settings and try again.",
-            primaryAction: .init(title: "Open Settings", style: .primary) {
+            title: L10n.RecordingCompanion.transcriptionFailedTitle,
+            message: L10n.RecordingCompanion.transcriptionFailedMessage,
+            primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
                 FloatingRecordingBar.shared.dismissCompanion()
                 FloatingRecordingBar.shared.openAppSettings(tab: "server")
             },
-            secondaryAction: .init(title: "Not Now", style: .secondary) {
+            secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
                 FloatingRecordingBar.shared.dismissCompanion()
             }
         )
@@ -336,14 +336,14 @@ final class RecordingSession: ObservableObject {
                 if !hasShownAccessibilityPermissionCompanionThisLaunch {
                     hasShownAccessibilityPermissionCompanionThisLaunch = true
                     presentCompanion(
-                        title: "Accessibility Access Required",
-                        message: "Tsutae copied the transcript to your clipboard. Enable Tsutae in Accessibility to insert text into the focused app.",
-                        primaryAction: .init(title: "Open Accessibility Settings", style: .primary) {
+                        title: L10n.RecordingCompanion.accessibilityAccessRequiredTitle,
+                        message: L10n.RecordingCompanion.accessibilityAccessRequiredMessage,
+                        primaryAction: .init(title: L10n.Common.openAccessibilitySettings, style: .primary) {
                             _ = FocusedTextInjector.requestAccessibilityPermission()
                             FloatingRecordingBar.shared.dismissCompanion()
                             FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Accessibility")
                         },
-                        secondaryAction: .init(title: "Not Now", style: .secondary) {
+                        secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
                             FloatingRecordingBar.shared.dismissCompanion()
                         },
                         displayState: .idle
@@ -351,9 +351,9 @@ final class RecordingSession: ObservableObject {
                 } else if !hasShownClipboardFallbackCompanionThisLaunch {
                     hasShownClipboardFallbackCompanionThisLaunch = true
                     presentCompanion(
-                        title: "Copied to Clipboard",
-                        message: "Couldn’t insert into the focused app. The transcript was copied instead.",
-                        primaryAction: .init(title: "Dismiss", style: .primary) {
+                        title: L10n.RecordingCompanion.copiedToClipboardTitle,
+                        message: L10n.RecordingCompanion.copiedToClipboardMessage,
+                        primaryAction: .init(title: L10n.Common.dismiss, style: .primary) {
                             FloatingRecordingBar.shared.dismissCompanion()
                         },
                         autoDismissAfter: 3,
@@ -369,9 +369,9 @@ final class RecordingSession: ObservableObject {
         if !hasShownClipboardFallbackCompanionThisLaunch {
             hasShownClipboardFallbackCompanionThisLaunch = true
             presentCompanion(
-                title: "Copied to Clipboard",
-                message: "Couldn’t insert into the focused app. The transcript was copied instead.",
-                primaryAction: .init(title: "Dismiss", style: .primary) {
+                title: L10n.RecordingCompanion.copiedToClipboardTitle,
+                message: L10n.RecordingCompanion.copiedToClipboardMessage,
+                primaryAction: .init(title: L10n.Common.dismiss, style: .primary) {
                     FloatingRecordingBar.shared.dismissCompanion()
                 },
                 autoDismissAfter: 3,
