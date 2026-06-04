@@ -67,7 +67,8 @@ struct TsutaeApp: App {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     
-    private var escapeMonitor: Any?
+    private var localEscapeMonitor: Any?
+    private var globalEscapeMonitor: Any?
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "AppDelegate")
     
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -76,7 +77,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationWillTerminate(_ notification: Notification) {
-        if let m = escapeMonitor { NSEvent.removeMonitor(m) }
+        if let m = localEscapeMonitor { NSEvent.removeMonitor(m) }
+        if let m = globalEscapeMonitor { NSEvent.removeMonitor(m) }
         GlobalHotkeyManager.shared.stop()
     }
     
@@ -90,14 +92,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
-        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 53, FloatingRecordingBar.shared.isShowing {
-                self.logger.info("Escape pressed while recording bar is visible")
-                RecordingSession.shared.cancel()
+        localEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if self.handleEscapeKeyEvent(event) {
                 return nil
             }
             
             return event
         }
+        
+        globalEscapeMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            _ = self.handleEscapeKeyEvent(event)
+        }
+    }
+    
+    private func handleEscapeKeyEvent(_ event: NSEvent) -> Bool {
+        guard event.keyCode == 53, FloatingRecordingBar.shared.isShowing else {
+            return false
+        }
+        
+        logger.info("Escape pressed while recording bar is visible")
+        Task { @MainActor in
+            RecordingSession.shared.cancel()
+        }
+        return true
     }
 }

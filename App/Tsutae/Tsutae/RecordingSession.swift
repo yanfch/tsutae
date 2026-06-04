@@ -25,6 +25,8 @@ final class RecordingSession: ObservableObject {
     
     private var hasShownAccessibilityPermissionCompanionThisLaunch = false
     private var hasShownClipboardFallbackCompanionThisLaunch = false
+    private var activeTranscriptionTask: Task<Void, Never>?
+    private var activeOperationID = UUID()
     
     private init() {}
     
@@ -37,6 +39,10 @@ final class RecordingSession: ObservableObject {
     }
     
     func cancel() {
+        logger.info("Cancelling current recording/transcription session")
+        activeOperationID = UUID()
+        activeTranscriptionTask?.cancel()
+        activeTranscriptionTask = nil
         audioInput.cancelRecording()
         FloatingRecordingBar.shared.hide()
         isBusy = false
@@ -96,40 +102,71 @@ final class RecordingSession: ObservableObject {
             return
         }
         
-        Task {
+        let operationID = UUID()
+        activeOperationID = operationID
+        activeTranscriptionTask?.cancel()
+        activeTranscriptionTask = Task {
+            defer {
+                if self.activeOperationID == operationID {
+                    self.activeTranscriptionTask = nil
+                    self.isBusy = false
+                }
+            }
+            
             do {
                 let transcript = try await stt.transcribe(audio, language: nil)
-                lastTranscript = transcript.text
-                lastError = nil
-                statusText = "done"
+                guard !Task.isCancelled, self.activeOperationID == operationID else {
+                    self.logger.info("Discarded transcription result for cancelled session")
+                    return
+                }
+                
+                self.lastTranscript = transcript.text
+                self.lastError = nil
+                self.statusText = "done"
                 
                 // 显示 Done 状态
                 FloatingRecordingBar.shared.update(state: .idle)
                 
                 // 延迟一会再关闭，便于观察 Done 状态
-                try? await Task.sleep(for: .milliseconds(1500))
+                try await Task.sleep(for: .milliseconds(1500))
+                guard !Task.isCancelled, self.activeOperationID == operationID else {
+                    self.logger.info("Cancelled session during done hold")
+                    return
+                }
                 
                 do {
                     try FocusedTextInjector.inject(transcript.text)
+                    guard !Task.isCancelled, self.activeOperationID == operationID else {
+                        self.logger.info("Cancelled session after injection completed")
+                        return
+                    }
                     FloatingRecordingBar.shared.hide()
-                    notify(title: "tsutae 已注入文本", body: transcript.text)
-                    logger.info("Transcription injected. chars=\(transcript.text.count, privacy: .public)")
+                    self.notify(title: "tsutae 已注入文本", body: transcript.text)
+                    self.logger.info("Transcription injected. chars=\(transcript.text.count, privacy: .public)")
                 } catch {
+                    guard !Task.isCancelled, self.activeOperationID == operationID else {
+                        self.logger.info("Cancelled session before injection fallback")
+                        return
+                    }
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(transcript.text, forType: .string)
-                    lastError = "Inject failed, copied to clipboard: \(error.localizedDescription)"
-                    statusText = "inject failed"
-                    presentInjectionError(error)
-                    logger.error("Injection failed: \(error.localizedDescription, privacy: .public)")
+                    self.lastError = "Inject failed, copied to clipboard: \(error.localizedDescription)"
+                    self.statusText = "inject failed"
+                    self.presentInjectionError(error)
+                    self.logger.error("Injection failed: \(error.localizedDescription, privacy: .public)")
                 }
+            } catch is CancellationError {
+                self.logger.info("Transcription task cancelled")
             } catch {
-                lastError = error.localizedDescription
-                statusText = "transcription failed"
-                presentTranscriptionError(error)
-                logger.error("Transcription failed: \(error.localizedDescription, privacy: .public)")
+                guard !Task.isCancelled, self.activeOperationID == operationID else {
+                    self.logger.info("Discarded transcription error for cancelled session")
+                    return
+                }
+                self.lastError = error.localizedDescription
+                self.statusText = "transcription failed"
+                self.presentTranscriptionError(error)
+                self.logger.error("Transcription failed: \(error.localizedDescription, privacy: .public)")
             }
-            
-            isBusy = false
         }
     }
     
