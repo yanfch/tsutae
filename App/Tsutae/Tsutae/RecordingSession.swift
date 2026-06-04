@@ -23,6 +23,9 @@ final class RecordingSession: ObservableObject {
     @Published private(set) var lastRecordingPath: String?
     @Published private(set) var liveRecordedBytes: Int = 0
     
+    private var hasShownAccessibilityPermissionCompanionThisLaunch = false
+    private var hasShownClipboardFallbackCompanionThisLaunch = false
+    
     private init() {}
     
     func toggle() {
@@ -65,8 +68,7 @@ final class RecordingSession: ObservableObject {
                 isRecording = false
                 statusText = "start failed"
                 lastError = error.localizedDescription
-                FloatingRecordingBar.shared.hide()
-                notify(title: "tsutae 录音失败", body: error.localizedDescription)
+                presentStartError(error)
                 logger.error("Failed to start recording: \(error.localizedDescription, privacy: .public)")
             }
         }
@@ -89,8 +91,7 @@ final class RecordingSession: ObservableObject {
             liveRecordedBytes = 0
             statusText = "stop failed"
             lastError = error.localizedDescription
-            FloatingRecordingBar.shared.hide()
-            notify(title: "tsutae 停止录音失败", body: error.localizedDescription)
+            presentStopError(error)
             logger.error("Failed to stop recording: \(error.localizedDescription, privacy: .public)")
             return
         }
@@ -118,15 +119,13 @@ final class RecordingSession: ObservableObject {
                     NSPasteboard.general.setString(transcript.text, forType: .string)
                     lastError = "Inject failed, copied to clipboard: \(error.localizedDescription)"
                     statusText = "inject failed"
-                    FloatingRecordingBar.shared.hide()
-                    notify(title: "tsutae 注入失败，已复制", body: error.localizedDescription)
+                    presentInjectionError(error)
                     logger.error("Injection failed: \(error.localizedDescription, privacy: .public)")
                 }
             } catch {
                 lastError = error.localizedDescription
                 statusText = "transcription failed"
-                FloatingRecordingBar.shared.hide()
-                notify(title: "tsutae 转写失败", body: error.localizedDescription)
+                presentTranscriptionError(error)
                 logger.error("Transcription failed: \(error.localizedDescription, privacy: .public)")
             }
             
@@ -155,6 +154,215 @@ final class RecordingSession: ObservableObject {
             lastError = "Failed to save debug recording: \(error.localizedDescription)"
             logger.error("Failed to save debug recording: \(error.localizedDescription, privacy: .public)")
         }
+    }
+    
+    private func presentStartError(_ error: Error) {
+        if let audioError = error as? AudioInputError {
+            switch audioError {
+            case .microphonePermissionDenied:
+                presentCompanion(
+                    title: "Microphone Access Required",
+                    message: "Tsutae needs microphone permission to start recording.",
+                    primaryAction: .init(title: "Open System Settings", style: .primary) {
+                        FloatingRecordingBar.shared.dismissCompanion()
+                        FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Microphone")
+                    },
+                    secondaryAction: .init(title: "Not Now", style: .secondary) {
+                        FloatingRecordingBar.shared.dismissCompanion()
+                    }
+                )
+                return
+            case .noInputDevice:
+                presentCompanion(
+                    title: "No Microphone Detected",
+                    message: "No microphone input device is available right now. Check your audio input and try again.",
+                    primaryAction: .init(title: "Dismiss", style: .primary) {
+                        FloatingRecordingBar.shared.dismissCompanion()
+                    }
+                )
+                return
+            case .formatConversionUnavailable:
+                presentCompanion(
+                    title: "Audio Input Unavailable",
+                    message: "Tsutae couldn’t prepare the microphone input format. Try another input device and record again.",
+                    primaryAction: .init(title: "Dismiss", style: .primary) {
+                        FloatingRecordingBar.shared.dismissCompanion()
+                    }
+                )
+                return
+            case .notRecording, .recordingTooShort:
+                break
+            }
+        }
+        
+        presentCompanion(
+            title: "Recording Failed",
+            message: error.localizedDescription,
+            primaryAction: .init(title: "Dismiss", style: .primary) {
+                FloatingRecordingBar.shared.dismissCompanion()
+            }
+        )
+    }
+    
+    private func presentStopError(_ error: Error) {
+        presentCompanion(
+            title: "Couldn’t Finish Recording",
+            message: error.localizedDescription,
+            primaryAction: .init(title: "Dismiss", style: .primary) {
+                FloatingRecordingBar.shared.dismissCompanion()
+            }
+        )
+    }
+    
+    private func presentTranscriptionError(_ error: Error) {
+        if let urlError = error as? URLError {
+            let message: String
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                message = "Check your network connection and try again."
+            case .timedOut:
+                message = "The transcription service timed out. Try again or check the service status."
+            default:
+                message = "Cannot reach the transcription service. Check network, endpoint, or model settings."
+            }
+            
+            presentCompanion(
+                title: "Transcription Unavailable",
+                message: message,
+                primaryAction: .init(title: "Open Settings", style: .primary) {
+                    FloatingRecordingBar.shared.dismissCompanion()
+                    FloatingRecordingBar.shared.openAppSettings(tab: "server")
+                },
+                secondaryAction: .init(title: "Not Now", style: .secondary) {
+                    FloatingRecordingBar.shared.dismissCompanion()
+                }
+            )
+            return
+        }
+        
+        if let sttError = error as? OpenAICompatibleSTTError {
+            switch sttError {
+            case .httpStatus(let status, _):
+                if status == 401 || status == 403 {
+                    presentCompanion(
+                        title: "Authentication Failed",
+                        message: "Check your API key or service permissions before trying again.",
+                        primaryAction: .init(title: "Open Settings", style: .primary) {
+                            FloatingRecordingBar.shared.dismissCompanion()
+                            FloatingRecordingBar.shared.openAppSettings(tab: "server")
+                        },
+                        secondaryAction: .init(title: "Not Now", style: .secondary) {
+                            FloatingRecordingBar.shared.dismissCompanion()
+                        }
+                    )
+                    return
+                }
+                
+                if status == 400 || status == 404 || status == 422 {
+                    presentCompanion(
+                        title: "STT Configuration Error",
+                        message: "Check the model, endpoint, or request settings for transcription.",
+                        primaryAction: .init(title: "Open Settings", style: .primary) {
+                            FloatingRecordingBar.shared.dismissCompanion()
+                            FloatingRecordingBar.shared.openAppSettings(tab: "stt")
+                        },
+                        secondaryAction: .init(title: "Not Now", style: .secondary) {
+                            FloatingRecordingBar.shared.dismissCompanion()
+                        }
+                    )
+                    return
+                }
+            case .invalidResponse:
+                break
+            case .invalidAudioFormat:
+                break
+            }
+        }
+        
+        presentCompanion(
+            title: "Transcription Failed",
+            message: "The transcription service returned an unexpected error. Check your service settings and try again.",
+            primaryAction: .init(title: "Open Settings", style: .primary) {
+                FloatingRecordingBar.shared.dismissCompanion()
+                FloatingRecordingBar.shared.openAppSettings(tab: "server")
+            },
+            secondaryAction: .init(title: "Not Now", style: .secondary) {
+                FloatingRecordingBar.shared.dismissCompanion()
+            }
+        )
+    }
+    
+    private func presentInjectionError(_ error: Error) {
+        if let injectError = error as? FocusedTextInjectorError {
+            switch injectError {
+            case .accessibilityPermissionDenied:
+                if !hasShownAccessibilityPermissionCompanionThisLaunch {
+                    hasShownAccessibilityPermissionCompanionThisLaunch = true
+                    presentCompanion(
+                        title: "Accessibility Access Required",
+                        message: "Tsutae copied the transcript to your clipboard. Enable Tsutae in Accessibility to insert text into the focused app. Turn on Tsutae in the app list.",
+                        primaryAction: .init(title: "Open Accessibility Settings", style: .primary) {
+                            _ = FocusedTextInjector.requestAccessibilityPermission()
+                            FloatingRecordingBar.shared.dismissCompanion()
+                            FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Accessibility")
+                        },
+                        secondaryAction: .init(title: "Not Now", style: .secondary) {
+                            FloatingRecordingBar.shared.dismissCompanion()
+                        },
+                        displayState: .idle
+                    )
+                } else if !hasShownClipboardFallbackCompanionThisLaunch {
+                    hasShownClipboardFallbackCompanionThisLaunch = true
+                    presentCompanion(
+                        title: "Copied to Clipboard",
+                        message: "Tsutae couldn’t insert into the focused app, so the transcript was copied instead.",
+                        primaryAction: .init(title: "Dismiss", style: .primary) {
+                            FloatingRecordingBar.shared.dismissCompanion()
+                        },
+                        autoDismissAfter: 3,
+                        displayState: .idle
+                    )
+                } else {
+                    FloatingRecordingBar.shared.hide()
+                }
+                return
+            }
+        }
+        
+        if !hasShownClipboardFallbackCompanionThisLaunch {
+            hasShownClipboardFallbackCompanionThisLaunch = true
+            presentCompanion(
+                title: "Copied to Clipboard",
+                message: "Tsutae couldn’t insert into the current app, so the transcript was copied instead.",
+                primaryAction: .init(title: "Dismiss", style: .primary) {
+                    FloatingRecordingBar.shared.dismissCompanion()
+                },
+                autoDismissAfter: 3,
+                displayState: .idle
+            )
+        } else {
+            FloatingRecordingBar.shared.hide()
+        }
+    }
+    
+    private func presentCompanion(
+        title: String,
+        message: String,
+        primaryAction: RecordingBarCompanionAction,
+        secondaryAction: RecordingBarCompanionAction? = nil,
+        autoDismissAfter: TimeInterval? = nil,
+        displayState: RecordingBarVisualState = .failed
+    ) {
+        FloatingRecordingBar.shared.showCompanion(
+            RecordingBarCompanion(
+                title: title,
+                message: message,
+                primaryAction: primaryAction,
+                secondaryAction: secondaryAction,
+                autoDismissAfter: autoDismissAfter
+            ),
+            displayState: displayState
+        )
     }
     
     private func notify(title: String, body: String) {

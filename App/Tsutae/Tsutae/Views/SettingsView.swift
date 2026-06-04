@@ -7,11 +7,11 @@ struct SettingsView: View {
     
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("settings.appearanceMode") private var appearanceMode = "system"
-    @State private var selectedTab: SettingsTab = .general
+    @AppStorage("settings.selectedTab") private var selectedTabRaw = SettingsTab.general.rawValue
     
     var body: some View {
         HStack(spacing: 0) {
-            SettingsSidebar(selectedTab: $selectedTab)
+            SettingsSidebar(selectedTab: selectedTabBinding)
             
             Divider()
                 .overlay(colorScheme == .dark ? Color.white.opacity(0.1) : Color.clear)
@@ -66,6 +66,17 @@ struct SettingsView: View {
         default:
             SettingsPlaceholderView(tab: selectedTab)
         }
+    }
+    
+    private var selectedTab: SettingsTab {
+        SettingsTab(rawValue: selectedTabRaw) ?? .general
+    }
+    
+    private var selectedTabBinding: Binding<SettingsTab> {
+        Binding(
+            get: { selectedTab },
+            set: { selectedTabRaw = $0.rawValue }
+        )
     }
     
     private var settingsBackground: Color {
@@ -295,6 +306,16 @@ private struct GeneralSettingsView: View {
                     }
                     .pickerStyle(.menu)
                     .frame(width: 120)
+                }
+                
+                SettingsDivider()
+                
+                // 辅助功能权限
+                SettingsRow(label: "辅助功能权限") {
+                    Button("打开系统设置") {
+                        FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Accessibility")
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
             

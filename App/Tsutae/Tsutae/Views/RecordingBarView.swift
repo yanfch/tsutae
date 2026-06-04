@@ -1,10 +1,17 @@
 import SwiftUI
-import TsutaeCore
+
+enum RecordingBarVisualState {
+    case idle
+    case listening
+    case thinking
+    case speaking
+    case failed
+}
 
 /// 纸感录音胶囊 — 共用一套骨架，按 preset 切换标准 / 极简
 struct RecordingBarView: View {
     
-    let state: AppState
+    let state: RecordingBarVisualState
     let preset: DS.recordingBar.Preset
     let colorScheme: ColorScheme
     
@@ -17,7 +24,7 @@ struct RecordingBarView: View {
     }
     
     init(
-        state: AppState,
+        state: RecordingBarVisualState,
         preset: DS.recordingBar.Preset = DS.recordingBar.defaultPreset,
         colorScheme: ColorScheme = .light
     ) {
@@ -94,12 +101,20 @@ struct RecordingBarView: View {
                 .scaleEffect(1.0 + sin(breathPhase) * 0.08 + completionPulse)
                 .opacity(0.58 + sin(breathPhase) * 0.16)
             
-            if state == .idle && preset == .minimal {
+            if preset == .minimal && state == .idle {
                 Image(systemName: "checkmark")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(successColor)
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.88).combined(with: .opacity),
+                        removal: .opacity
+                    ))
+            } else if preset == .minimal && state == .failed {
+                Image(systemName: "exclamationmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(dangerColor)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.9).combined(with: .opacity),
                         removal: .opacity
                     ))
             } else {
@@ -189,6 +204,7 @@ struct RecordingBarView: View {
         case .listening: return "Listen"
         case .thinking: return "Think"
         case .speaking: return "Speak"
+        case .failed: return "Failed"
         }
     }
     
@@ -198,6 +214,7 @@ struct RecordingBarView: View {
         case .listening: return "Esc"
         case .thinking: return "Esc"
         case .speaking: return "⌥R"
+        case .failed: return "Esc"
         }
     }
     
@@ -229,6 +246,10 @@ struct RecordingBarView: View {
     
     private var successColor: Color {
         isDarkMode ? DS.color.successDark : DS.color.success
+    }
+    
+    private var dangerColor: Color {
+        isDarkMode ? DS.color.dangerDark : DS.color.danger
     }
     
     private var statusLabelColor: Color {
@@ -281,6 +302,8 @@ struct RecordingBarView: View {
             return accentColor
         case .speaking:
             return successColor
+        case .failed:
+            return dangerColor
         }
     }
     
@@ -290,6 +313,8 @@ struct RecordingBarView: View {
             return accentColor
         case .speaking:
             return successColor
+        case .failed:
+            return dangerColor
         }
     }
     
@@ -304,6 +329,8 @@ struct RecordingBarView: View {
                 return accentColor
             case .speaking:
                 return successColor
+            case .failed:
+                return dangerColor
             }
         }
         
@@ -316,6 +343,8 @@ struct RecordingBarView: View {
             return DS.color.accent
         case .speaking:
             return DS.color.success
+        case .failed:
+            return DS.color.danger
         }
     }
     
@@ -330,6 +359,8 @@ struct RecordingBarView: View {
                 return DS.color.accentDarkSoft.opacity(0.24)
             case .speaking:
                 return successColor.opacity(0.14)
+            case .failed:
+                return dangerColor.opacity(0.16)
             }
         }
         
@@ -342,6 +373,8 @@ struct RecordingBarView: View {
             return DS.color.accent.opacity(0.08)
         case .speaking:
             return DS.color.success.opacity(0.1)
+        case .failed:
+            return DS.color.danger.opacity(0.1)
         }
     }
     
@@ -356,6 +389,8 @@ struct RecordingBarView: View {
                 return accentColor.opacity(0.32)
             case .speaking:
                 return successColor.opacity(0.34)
+            case .failed:
+                return dangerColor.opacity(0.36)
             }
         }
         
@@ -368,6 +403,8 @@ struct RecordingBarView: View {
             return DS.color.accent.opacity(0.22)
         case .speaking:
             return DS.color.success.opacity(0.28)
+        case .failed:
+            return DS.color.danger.opacity(0.26)
         }
     }
     
@@ -383,6 +420,8 @@ struct RecordingBarView: View {
             return animatedBarValue(at: index, wavePhase: wavePhase, min: 0.9, max: 1.03)
         case .speaking:
             return animatedBarValue(at: index, wavePhase: wavePhase, min: 0.82, max: 1.12)
+        case .failed:
+            return 1.0
         }
     }
     
@@ -396,6 +435,8 @@ struct RecordingBarView: View {
             return animatedBarOpacity(at: index, wavePhase: wavePhase, min: 0.76, max: 0.88)
         case .speaking:
             return animatedBarOpacity(at: index, wavePhase: wavePhase, min: 0.64, max: 0.96)
+        case .failed:
+            return 0.82
         }
     }
     
