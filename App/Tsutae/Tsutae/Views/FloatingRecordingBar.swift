@@ -14,8 +14,11 @@ final class FloatingRecordingBar {
     static let shared = FloatingRecordingBar()
     
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "FloatingRecordingBar")
+    private let savedOriginXKey = "recordingBar.origin.x"
+    private let savedOriginYKey = "recordingBar.origin.y"
     private var panel: NSPanel?
     private(set) var isShowing = false
+    private var currentState: AppState = .idle
     
     private init() {}
     
@@ -24,18 +27,16 @@ final class FloatingRecordingBar {
     }
     
     /// 显示悬浮录音条
-    func show() {
+    func show(state: AppState = .listening) {
         logger.info("show() called. isShowing=\(self.isShowing, privacy: .public)")
+        currentState = state
         
         if isShowing {
-            logger.info("show() ignored because panel is already visible")
+            update(state: state)
             return
         }
         
-        NSApp.activate(ignoringOtherApps: true)
-        logger.info("App activated for recording bar presentation")
-        
-        let panel = NSPanel(
+        let panel = DraggableRecordingPanel(
             contentRect: NSRect(
                 x: 0,
                 y: 0,
@@ -49,6 +50,10 @@ final class FloatingRecordingBar {
             backing: .buffered,
             defer: false
         )
+        panel.onDragEnded = { [weak self, weak panel] in
+            guard let self, let panel else { return }
+            self.savePanelOrigin(panel.frame.origin)
+        }
         logger.info("NSPanel created")
         
         // 配置面板属性
@@ -61,8 +66,11 @@ final class FloatingRecordingBar {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
         
-        // 对于菜单栏 App，NSScreen.main 可能为空，优先使用鼠标所在屏幕
-        if let screen = screenForPresentation() {
+        if let savedOrigin = savedOrigin(for: panel.frame.size) {
+            panel.setFrameOrigin(savedOrigin)
+            logger.info("Panel restored to saved origin=(\(savedOrigin.x, privacy: .public), \(savedOrigin.y, privacy: .public))")
+        } else if let screen = screenForPresentation() {
+            // 对于菜单栏 App，NSScreen.main 可能为空，优先使用鼠标所在屏幕。
             let visibleFrame = screen.visibleFrame
             let x = visibleFrame.midX - (layout.width / 2)
             let y = visibleFrame.midY - (layout.height / 2) - 42
@@ -76,14 +84,44 @@ final class FloatingRecordingBar {
         }
         
         // 嵌入 SwiftUI 视图
-        let contentView = RecordingBarView(state: .listening, preset: DS.recordingBar.currentPreset)
-        let hostingView = NSHostingView(rootView: contentView)
+        // 根据设置中的外观设置决定颜色方案
+        let appearanceMode = UserDefaults.standard.string(forKey: "settings.appearanceMode") ?? "system"
+        let colorScheme: ColorScheme
+        switch appearanceMode {
+        case "light":
+            colorScheme = .light
+        case "dark":
+            colorScheme = .dark
+        default: // "system"
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            colorScheme = isDark ? .dark : .light
+        }
+        
+        // 设置 NSPanel 的外观
+        if appearanceMode == "light" {
+            panel.appearance = NSAppearance(named: .aqua)
+        } else if appearanceMode == "dark" {
+            panel.appearance = NSAppearance(named: .darkAqua)
+        } else {
+            panel.appearance = nil // 跟随系统
+        }
+        
+        // 创建包装视图，确保背景正确
+        let wrapperView = RecordingBarWrapper(
+            state: state,
+            preset: DS.recordingBar.currentPreset,
+            colorScheme: colorScheme
+        )
+        let hostingView = NSHostingView(rootView: wrapperView)
         hostingView.frame = NSRect(
             x: 0,
             y: 0,
             width: layout.width,
             height: layout.height
         )
+        // 设置 NSHostingView 背景为透明，让 SwiftUI 视图自己绘制背景
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         panel.contentView = hostingView
         logger.info("Hosting view attached")
         
@@ -92,12 +130,43 @@ final class FloatingRecordingBar {
         
         DispatchQueue.main.async {
             panel.orderFrontRegardless()
-            panel.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            self.logger.info("Panel ordered front on next runloop")
+            self.logger.info("Panel ordered front without activating app")
         }
         
         logger.info("show() completed")
+    }
+    
+    func update(state: AppState) {
+        currentState = state
+        
+        guard isShowing else {
+            show(state: state)
+            return
+        }
+        
+        guard let hostingView = panel?.contentView as? NSHostingView<RecordingBarWrapper> else {
+            logger.error("Failed to update recording bar because contentView has unexpected type")
+            return
+        }
+        
+        let appearanceMode = UserDefaults.standard.string(forKey: "settings.appearanceMode") ?? "system"
+        let colorScheme: ColorScheme
+        switch appearanceMode {
+        case "light":
+            colorScheme = .light
+        case "dark":
+            colorScheme = .dark
+        default:
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            colorScheme = isDark ? .dark : .light
+        }
+        
+        hostingView.rootView = RecordingBarWrapper(
+            state: state,
+            preset: DS.recordingBar.currentPreset,
+            colorScheme: colorScheme
+        )
+        logger.info("Recording bar state updated to \(state.rawValue, privacy: .public)")
     }
     
     /// 隐藏悬浮录音条
@@ -106,6 +175,7 @@ final class FloatingRecordingBar {
         panel?.orderOut(nil)
         panel = nil
         isShowing = false
+        currentState = .idle
         logger.info("hide() completed")
     }
     
@@ -122,8 +192,9 @@ final class FloatingRecordingBar {
     func reloadIfShowing() {
         guard isShowing else { return }
         logger.info("reloadIfShowing() called while visible")
+        let state = currentState
         hide()
-        show()
+        show(state: state)
     }
     
     private func screenForPresentation() -> NSScreen? {
@@ -133,5 +204,92 @@ final class FloatingRecordingBar {
         return NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
             ?? NSScreen.main
             ?? NSScreen.screens.first
+    }
+    
+    private func savedOrigin(for panelSize: NSSize) -> NSPoint? {
+        let defaults = UserDefaults.standard
+        
+        guard
+            defaults.object(forKey: savedOriginXKey) != nil,
+            defaults.object(forKey: savedOriginYKey) != nil
+        else {
+            return nil
+        }
+        
+        let origin = NSPoint(
+            x: defaults.double(forKey: savedOriginXKey),
+            y: defaults.double(forKey: savedOriginYKey)
+        )
+        
+        let frame = NSRect(origin: origin, size: panelSize)
+        guard NSScreen.screens.contains(where: { $0.visibleFrame.intersects(frame) }) else {
+            return nil
+        }
+        
+        return origin
+    }
+    
+    private func savePanelOrigin(_ origin: NSPoint) {
+        UserDefaults.standard.set(origin.x, forKey: savedOriginXKey)
+        UserDefaults.standard.set(origin.y, forKey: savedOriginYKey)
+        logger.info("Panel origin saved=(\(origin.x, privacy: .public), \(origin.y, privacy: .public))")
+    }
+}
+
+private final class DraggableRecordingPanel: NSPanel {
+    
+    var onDragEnded: (() -> Void)?
+    
+    private var dragStartLocation: NSPoint?
+    private var dragStartOrigin: NSPoint?
+    
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+    
+    override func mouseDown(with event: NSEvent) {
+        dragStartLocation = NSEvent.mouseLocation
+        dragStartOrigin = frame.origin
+    }
+    
+    override func mouseDragged(with event: NSEvent) {
+        guard
+            let dragStartLocation,
+            let dragStartOrigin
+        else {
+            return
+        }
+        
+        let currentLocation = NSEvent.mouseLocation
+        let deltaX = currentLocation.x - dragStartLocation.x
+        let deltaY = currentLocation.y - dragStartLocation.y
+        
+        setFrameOrigin(NSPoint(
+            x: dragStartOrigin.x + deltaX,
+            y: dragStartOrigin.y + deltaY
+        ))
+    }
+    
+    override func mouseUp(with event: NSEvent) {
+        dragStartLocation = nil
+        dragStartOrigin = nil
+        onDragEnded?()
+    }
+}
+
+// MARK: - RecordingBarWrapper
+
+/// 包装 RecordingBarView，确保背景正确渲染
+private struct RecordingBarWrapper: View {
+    
+    let state: AppState
+    let preset: DS.recordingBar.Preset
+    let colorScheme: ColorScheme
+    
+    var body: some View {
+        RecordingBarView(
+            state: state,
+            preset: preset,
+            colorScheme: colorScheme
+        )
     }
 }

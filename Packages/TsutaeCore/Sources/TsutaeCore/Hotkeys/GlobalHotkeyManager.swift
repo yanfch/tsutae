@@ -12,14 +12,14 @@ public final class GlobalHotkeyManager {
     private static let hotkeyKeyCode: UInt32 = UInt32(kVK_ANSI_R)
     private static let hotkeyModifiers: UInt32 = UInt32(optionKey | shiftKey)
     
-    private var onToggleRecordingBar: (() -> Void)?
+    private var onToggleRecording: (() -> Void)?
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
     
     private init() {}
     
     public func start(onToggleRecordingBar: @escaping () -> Void) {
-        self.onToggleRecordingBar = onToggleRecordingBar
+        self.onToggleRecording = onToggleRecordingBar
         
         guard eventHandlerRef == nil else {
             registerHotKey()
@@ -62,7 +62,7 @@ public final class GlobalHotkeyManager {
     }
     
     public func stop() {
-        onToggleRecordingBar = nil
+        onToggleRecording = nil
         
         if let hotKeyRef {
             UnregisterEventHotKey(hotKeyRef)
@@ -75,12 +75,20 @@ public final class GlobalHotkeyManager {
         }
     }
     
-    public var toggleRecordingBarShortcutDisplay: String {
+    public var toggleRecordingShortcutDisplay: String {
         "⌥⇧R"
     }
     
-    public var isToggleRecordingBarEnabled: Bool {
+    public var toggleRecordingBarShortcutDisplay: String {
+        toggleRecordingShortcutDisplay
+    }
+    
+    public var isToggleRecordingShortcutEnabled: Bool {
         hotKeyRef != nil && eventHandlerRef != nil
+    }
+    
+    public var isToggleRecordingBarEnabled: Bool {
+        isToggleRecordingShortcutEnabled
     }
     
     private func registerHotKey() {
@@ -89,7 +97,7 @@ public final class GlobalHotkeyManager {
             self.hotKeyRef = nil
         }
         
-        var hotKeyID = EventHotKeyID(
+        let hotKeyID = EventHotKeyID(
             signature: Self.hotkeySignature,
             id: UInt32(Self.hotkeyID)
         )
@@ -128,7 +136,7 @@ public final class GlobalHotkeyManager {
             return OSStatus(eventNotHandledErr)
         }
         
-        onToggleRecordingBar?()
+        onToggleRecording?()
         return noErr
     }
 }
