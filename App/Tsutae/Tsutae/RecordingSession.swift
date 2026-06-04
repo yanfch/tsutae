@@ -337,7 +337,7 @@ final class RecordingSession: ObservableObject {
                     hasShownAccessibilityPermissionCompanionThisLaunch = true
                     presentCompanion(
                         title: "Accessibility Access Required",
-                        message: "Tsutae copied the transcript to your clipboard. Enable Tsutae in Accessibility to insert text into the focused app. Turn on Tsutae in the app list.",
+                        message: "Tsutae copied the transcript to your clipboard. Enable Tsutae in Accessibility to insert text into the focused app.",
                         primaryAction: .init(title: "Open Accessibility Settings", style: .primary) {
                             _ = FocusedTextInjector.requestAccessibilityPermission()
                             FloatingRecordingBar.shared.dismissCompanion()
@@ -352,7 +352,7 @@ final class RecordingSession: ObservableObject {
                     hasShownClipboardFallbackCompanionThisLaunch = true
                     presentCompanion(
                         title: "Copied to Clipboard",
-                        message: "Tsutae couldn’t insert into the focused app, so the transcript was copied instead.",
+                        message: "Couldn’t insert into the focused app. The transcript was copied instead.",
                         primaryAction: .init(title: "Dismiss", style: .primary) {
                             FloatingRecordingBar.shared.dismissCompanion()
                         },
@@ -370,7 +370,7 @@ final class RecordingSession: ObservableObject {
             hasShownClipboardFallbackCompanionThisLaunch = true
             presentCompanion(
                 title: "Copied to Clipboard",
-                message: "Tsutae couldn’t insert into the current app, so the transcript was copied instead.",
+                message: "Couldn’t insert into the focused app. The transcript was copied instead.",
                 primaryAction: .init(title: "Dismiss", style: .primary) {
                     FloatingRecordingBar.shared.dismissCompanion()
                 },

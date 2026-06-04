@@ -52,8 +52,8 @@ kill:
     @pkill -x Tsutae >/dev/null 2>&1 || true
     @echo "KILL_OK"
 
-# 启动应用
-run: install-dev
+# 启动应用（会先杀掉旧进程，确保加载最新构建）
+run: kill install-dev
     @open dist/Tsutae.app >/dev/null 2>&1
     @echo "RUN_OK"
 
@@ -64,4 +64,4 @@ relaunch: kill
     @echo "RELAUNCH_OK"
 
 # 重启
-restart: kill run
+restart: run
