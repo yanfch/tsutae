@@ -133,8 +133,9 @@ struct RecordingBarView: View {
     private var statusLabelSlot: some View {
         ZStack {
             Text(stateLabel)
-                .font(.system(size: layout.statusFontSize, weight: .medium, design: .monospaced))
+                .font(statusFont)
                 .italic()
+                .tracking(statusTracking)
                 .foregroundStyle(DS.color.foreground)
                 .lineLimit(1)
                 .id(stateLabel)
@@ -164,8 +165,8 @@ struct RecordingBarView: View {
     
     private func keycapView(text: String) -> some View {
         Text(text)
-            .font(.system(size: layout.keycapFontSize, weight: .regular, design: .monospaced))
-            .italic()
+            .font(keycapFont)
+            .tracking(keycapTracking)
             .foregroundStyle(keycapForegroundColor)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, layout.keycapHorizontalPadding)
@@ -199,6 +200,22 @@ struct RecordingBarView: View {
         case .thinking: return "Esc"
         case .speaking: return "⌥R"
         }
+    }
+    
+    private var statusFont: Font {
+        DS.font.mono(size: layout.statusFontSize, weight: .regular)
+    }
+    
+    private var keycapFont: Font {
+        DS.font.mono(size: layout.keycapFontSize, weight: .medium)
+    }
+    
+    private var statusTracking: CGFloat {
+        0.32
+    }
+    
+    private var keycapTracking: CGFloat {
+        0.12
     }
     
     // MARK: - 颜色
