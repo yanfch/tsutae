@@ -422,6 +422,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "tsutae needs microphone access to record voice for transcription.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "tsutae needs speech recognition access to use Apple Speech as a transcription fallback.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -456,6 +457,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "tsutae needs microphone access to record voice for transcription.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "tsutae needs speech recognition access to use Apple Speech as a transcription fallback.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

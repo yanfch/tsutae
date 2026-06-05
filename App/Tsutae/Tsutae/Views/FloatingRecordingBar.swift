@@ -226,14 +226,8 @@ final class FloatingRecordingBar {
     }
     
     func openAppSettings(tab: String? = nil) {
-        if let tab {
-            UserDefaults.standard.set(tab, forKey: "settings.selectedTab")
-        }
         NSApp.activate(ignoringOtherApps: true)
-        let opened = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        if !opened {
-            _ = NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
+        SettingsWindowCoordinator.shared.open?(tab)
     }
     
     func openSystemSettingsPrivacyPane(_ anchor: String) {

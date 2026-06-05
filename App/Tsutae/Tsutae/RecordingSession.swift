@@ -12,7 +12,6 @@ final class RecordingSession: ObservableObject {
     
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "RecordingSession")
     private let audioInput = AudioInput.shared
-    private let stt = OpenAICompatibleSTT()
     
     @Published private(set) var isBusy = false
     @Published private(set) var isRecording = false
@@ -82,15 +81,21 @@ final class RecordingSession: ObservableObject {
     
     private func stopAndTranscribe() {
         let audio: AudioData
+        let stopStartedAt = CFAbsoluteTimeGetCurrent()
         do {
             audio = try audioInput.stopRecording()
+            let stopElapsedMs = formatElapsedMs(since: stopStartedAt)
             isRecording = false
             liveRecordedBytes = 0
             lastRecordingBytes = audio.samples.count
             statusText = "transcribing"
+            let saveStartedAt = CFAbsoluteTimeGetCurrent()
             saveDebugWAV(audio)
+            let saveElapsedMs = formatElapsedMs(since: saveStartedAt)
             FloatingRecordingBar.shared.update(state: .thinking)
-            logger.info("Recording stopped. bytes=\(audio.samples.count, privacy: .public)")
+            let stopMessage = "Recording stopped. bytes=\(audio.samples.count) stop_elapsed_ms=\(stopElapsedMs) save_wav_elapsed_ms=\(saveElapsedMs)"
+            logger.info("\(stopMessage, privacy: .public)")
+            PerformanceLog.record(category: "RecordingSession", message: stopMessage)
         } catch {
             isBusy = false
             isRecording = false
@@ -106,6 +111,7 @@ final class RecordingSession: ObservableObject {
         activeOperationID = operationID
         activeTranscriptionTask?.cancel()
         activeTranscriptionTask = Task {
+            let transcriptionStartedAt = CFAbsoluteTimeGetCurrent()
             defer {
                 if self.activeOperationID == operationID {
                     self.activeTranscriptionTask = nil
@@ -114,7 +120,10 @@ final class RecordingSession: ObservableObject {
             }
             
             do {
-                let transcript = try await stt.transcribe(audio, language: nil)
+                let transcript = try await ConfiguredSTTRouter.transcribe(audio)
+                let transcribeDoneMessage = "RecordingSession transcription finished. chars=\(transcript.text.count) elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                self.logger.info("\(transcribeDoneMessage, privacy: .public)")
+                PerformanceLog.record(category: "RecordingSession", message: transcribeDoneMessage)
                 guard !Task.isCancelled, self.activeOperationID == operationID else {
                     self.logger.info("Discarded transcription result for cancelled session")
                     return
@@ -128,13 +137,18 @@ final class RecordingSession: ObservableObject {
                 FloatingRecordingBar.shared.update(state: .idle)
                 
                 // 延迟一会再关闭，便于观察 Done 状态
-                try await Task.sleep(for: .milliseconds(1500))
+                let doneHoldStartedAt = CFAbsoluteTimeGetCurrent()
+                try await Task.sleep(for: .milliseconds(150))
+                let doneHoldMessage = "RecordingSession done hold finished. elapsed_ms=\(self.formatElapsedMs(since: doneHoldStartedAt))"
+                self.logger.info("\(doneHoldMessage, privacy: .public)")
+                PerformanceLog.record(category: "RecordingSession", message: doneHoldMessage)
                 guard !Task.isCancelled, self.activeOperationID == operationID else {
                     self.logger.info("Cancelled session during done hold")
                     return
                 }
                 
                 do {
+                    let injectStartedAt = CFAbsoluteTimeGetCurrent()
                     try FocusedTextInjector.inject(transcript.text)
                     guard !Task.isCancelled, self.activeOperationID == operationID else {
                         self.logger.info("Cancelled session after injection completed")
@@ -142,7 +156,9 @@ final class RecordingSession: ObservableObject {
                     }
                     FloatingRecordingBar.shared.hide()
                     self.notify(title: L10n.Notification.insertedTextTitle, body: transcript.text)
-                    self.logger.info("Transcription injected. chars=\(transcript.text.count, privacy: .public)")
+                    let injectDoneMessage = "Transcription injected. chars=\(transcript.text.count) inject_elapsed_ms=\(self.formatElapsedMs(since: injectStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                    self.logger.info("\(injectDoneMessage, privacy: .public)")
+                    PerformanceLog.record(category: "RecordingSession", message: injectDoneMessage)
                 } catch {
                     guard !Task.isCancelled, self.activeOperationID == operationID else {
                         self.logger.info("Cancelled session before injection fallback")
@@ -153,10 +169,14 @@ final class RecordingSession: ObservableObject {
                     self.lastError = "Inject failed, copied to clipboard: \(error.localizedDescription)"
                     self.statusText = "inject failed"
                     self.presentInjectionError(error)
-                    self.logger.error("Injection failed: \(error.localizedDescription, privacy: .public)")
+                    let injectFailedMessage = "Injection failed: \(error.localizedDescription) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                    self.logger.error("\(injectFailedMessage, privacy: .public)")
+                    PerformanceLog.record(category: "RecordingSession", message: injectFailedMessage)
                 }
             } catch is CancellationError {
-                self.logger.info("Transcription task cancelled")
+                let cancelledMessage = "Transcription task cancelled. elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                self.logger.info("\(cancelledMessage, privacy: .public)")
+                PerformanceLog.record(category: "RecordingSession", message: cancelledMessage)
             } catch {
                 guard !Task.isCancelled, self.activeOperationID == operationID else {
                     self.logger.info("Discarded transcription error for cancelled session")
@@ -165,7 +185,9 @@ final class RecordingSession: ObservableObject {
                 self.lastError = error.localizedDescription
                 self.statusText = "transcription failed"
                 self.presentTranscriptionError(error)
-                self.logger.error("Transcription failed: \(error.localizedDescription, privacy: .public)")
+                let transcriptionFailedMessage = "Transcription failed: \(error.localizedDescription) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                self.logger.error("\(transcriptionFailedMessage, privacy: .public)")
+                PerformanceLog.record(category: "RecordingSession", message: transcriptionFailedMessage)
             }
         }
     }
@@ -316,6 +338,21 @@ final class RecordingSession: ObservableObject {
             }
         }
         
+        if error is FluidAudioSTTError || error is AppleSpeechSTTError {
+            presentCompanion(
+                title: L10n.RecordingCompanion.sttConfigurationErrorTitle,
+                message: error.localizedDescription,
+                primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
+                    FloatingRecordingBar.shared.dismissCompanion()
+                    FloatingRecordingBar.shared.openAppSettings(tab: "stt")
+                },
+                secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
+                    FloatingRecordingBar.shared.dismissCompanion()
+                }
+            )
+            return
+        }
+        
         presentCompanion(
             title: L10n.RecordingCompanion.transcriptionFailedTitle,
             message: L10n.RecordingCompanion.transcriptionFailedMessage,
@@ -400,6 +437,10 @@ final class RecordingSession: ObservableObject {
             ),
             displayState: displayState
         )
+    }
+    
+    private func formatElapsedMs(since startedAt: CFAbsoluteTime) -> String {
+        String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - startedAt) * 1000)
     }
     
     private func notify(title: String, body: String) {

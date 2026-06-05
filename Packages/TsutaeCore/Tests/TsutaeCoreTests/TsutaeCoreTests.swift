@@ -34,7 +34,11 @@ final class TsutaeCoreTests: XCTestCase {
         
         XCTAssertFalse(config.general.launchAtLogin)
         XCTAssertEqual(config.general.language, "auto")
-        XCTAssertEqual(config.stt.engine, "apple")
+        XCTAssertEqual(config.stt.mode, .localFirst)
+        XCTAssertEqual(config.stt.engine, "fluidaudio_local")
+        XCTAssertEqual(config.stt.model, "parakeet-tdt-v3")
+        XCTAssertEqual(config.stt.fallbackEngine, "apple_speech")
+        XCTAssertEqual(config.stt.remote.requestStyle, .audioTranscriptions)
         XCTAssertEqual(config.tts.engine, "apple")
         XCTAssertEqual(config.tts.rate, 1.0)
         XCTAssertEqual(config.vad.engine, "energy")

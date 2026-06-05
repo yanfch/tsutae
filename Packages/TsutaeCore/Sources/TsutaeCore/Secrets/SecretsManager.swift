@@ -9,6 +9,8 @@ import Security
 public enum SecretsManager {
     
     private static let service = "dev.yanfch.tsutae"
+    nonisolated(unsafe) private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var cache: [String: CachedSecret] = [:]
     
     // MARK: - 存取
     
@@ -46,12 +48,22 @@ public enum SecretsManager {
         guard status == errSecSuccess else {
             throw SecretsError.keychainError(status)
         }
+        setCachedSecret(.value(value), for: name)
     }
     
     /// 读取 secret
     /// - Parameter name: 引用名
     /// - Returns: 密钥值（不存在返回 nil）
     public static func get(_ name: String) throws -> String? {
+        if let cached = cachedSecret(for: name) {
+            switch cached {
+            case .value(let value):
+                return value
+            case .missing:
+                return nil
+            }
+        }
+        
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -64,6 +76,7 @@ public enum SecretsManager {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         
         if status == errSecItemNotFound {
+            setCachedSecret(.missing, for: name)
             return nil
         }
         
@@ -71,7 +84,11 @@ public enum SecretsManager {
             throw SecretsError.keychainError(status)
         }
         
-        return String(data: data, encoding: .utf8)
+        let value = String(data: data, encoding: .utf8)
+        if let value {
+            setCachedSecret(.value(value), for: name)
+        }
+        return value
     }
     
     /// 删除 secret
@@ -88,6 +105,7 @@ public enum SecretsManager {
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw SecretsError.keychainError(status)
         }
+        setCachedSecret(.missing, for: name)
     }
     
     /// 列出所有 secret 名称
@@ -119,6 +137,23 @@ public enum SecretsManager {
     /// - Returns: 是否存在
     public static func exists(_ name: String) -> Bool {
         (try? get(name)) != nil
+    }
+    
+    private static func cachedSecret(for name: String) -> CachedSecret? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return cache[name]
+    }
+    
+    private static func setCachedSecret(_ secret: CachedSecret, for name: String) {
+        cacheLock.lock()
+        cache[name] = secret
+        cacheLock.unlock()
+    }
+    
+    private enum CachedSecret {
+        case value(String)
+        case missing
     }
     
     // MARK: - 测试

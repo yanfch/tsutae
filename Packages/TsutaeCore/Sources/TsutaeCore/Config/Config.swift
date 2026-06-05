@@ -45,11 +45,104 @@ public struct Config: Codable, Sendable {
         }
     }
     
+    public enum STTRoutingMode: String, Codable, CaseIterable, Sendable {
+        case localFirst
+        case remoteFirst
+    }
+    
+    public enum STTRemoteRequestStyle: String, Codable, CaseIterable, Sendable {
+        case audioTranscriptions
+        case chatCompletionsAudio
+    }
+    
+    public struct STTRemoteConfig: Codable, Sendable {
+        /// 是否启用远程 API
+        public var enabled: Bool
+        
+        /// OpenAI-compatible base URL
+        public var baseURL: String?
+        
+        /// 远程模型名称
+        public var model: String?
+        
+        /// 远程请求协议
+        public var requestStyle: STTRemoteRequestStyle
+        
+        /// API Key 引用名（存在 Keychain）
+        public var apiKeyRef: String?
+        
+        public init(
+            enabled: Bool = false,
+            baseURL: String? = nil,
+            model: String? = nil,
+            requestStyle: STTRemoteRequestStyle = .audioTranscriptions,
+            apiKeyRef: String? = nil
+        ) {
+            self.enabled = enabled
+            self.baseURL = baseURL
+            self.model = model
+            self.requestStyle = requestStyle
+            self.apiKeyRef = apiKeyRef
+        }
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+            self.baseURL = try container.decodeIfPresent(String.self, forKey: .baseURL)
+            self.model = try container.decodeIfPresent(String.self, forKey: .model)
+            self.requestStyle = try container.decodeIfPresent(STTRemoteRequestStyle.self, forKey: .requestStyle) ?? .audioTranscriptions
+            self.apiKeyRef = try container.decodeIfPresent(String.self, forKey: .apiKeyRef)
+        }
+    }
+    
+    public struct STTLocalConfig: Codable, Sendable {
+        /// 默认本地模型 ID
+        public var preferredModel: String?
+        
+        /// 已下载模型 ID（仅作配置记忆，磁盘探测仍以运行时为准）
+        public var downloadedModels: [String]
+        
+        /// 预览模型 ID
+        public var previewModel: String?
+        
+        /// 最终模型 ID
+        public var finalModel: String?
+        
+        /// Remote First 下是否仍保持本地模型热加载待命
+        public var keepModelWarmedInRemoteFirst: Bool
+        
+        public init(
+            preferredModel: String? = nil,
+            downloadedModels: [String] = [],
+            previewModel: String? = nil,
+            finalModel: String? = nil,
+            keepModelWarmedInRemoteFirst: Bool = false
+        ) {
+            self.preferredModel = preferredModel
+            self.downloadedModels = downloadedModels
+            self.previewModel = previewModel
+            self.finalModel = finalModel
+            self.keepModelWarmedInRemoteFirst = keepModelWarmedInRemoteFirst
+        }
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.preferredModel = try container.decodeIfPresent(String.self, forKey: .preferredModel)
+            self.downloadedModels = try container.decodeIfPresent([String].self, forKey: .downloadedModels) ?? []
+            self.previewModel = try container.decodeIfPresent(String.self, forKey: .previewModel)
+            self.finalModel = try container.decodeIfPresent(String.self, forKey: .finalModel)
+            self.keepModelWarmedInRemoteFirst = try container.decodeIfPresent(Bool.self, forKey: .keepModelWarmedInRemoteFirst) ?? false
+        }
+    }
+    
     public struct STTConfig: Codable, Sendable {
-        /// 主引擎 ID
+        /// 路由模式
+        public var mode: STTRoutingMode
+        
+        /// 本地主引擎 ID
         public var engine: String
         
-        /// 模型名称
+        /// 当前主模型 ID
         public var model: String?
         
         /// 语言
@@ -58,26 +151,75 @@ public struct Config: Codable, Sendable {
         /// Fallback 引擎 ID
         public var fallbackEngine: String?
         
-        /// Fallback Base URL（用于 OpenAI 兼容引擎）
+        /// 兼容旧配置：fallback Base URL（用于 OpenAI-compatible）
         public var fallbackBaseURL: String?
         
-        /// Fallback API Key 引用名（存在 Keychain）
+        /// 兼容旧配置：fallback API Key 引用名（存在 Keychain）
         public var fallbackAPIKeyRef: String?
         
+        /// 远程 API 设置
+        public var remote: STTRemoteConfig
+        
+        /// 本地模型设置
+        public var local: STTLocalConfig
+        
         public init(
-            engine: String = "apple",
-            model: String? = nil,
+            mode: STTRoutingMode = .localFirst,
+            engine: String = "fluidaudio_local",
+            model: String? = "parakeet-tdt-v3",
             language: String? = nil,
-            fallbackEngine: String? = nil,
+            fallbackEngine: String? = "apple_speech",
             fallbackBaseURL: String? = nil,
-            fallbackAPIKeyRef: String? = nil
+            fallbackAPIKeyRef: String? = nil,
+            remote: STTRemoteConfig = STTRemoteConfig(),
+            local: STTLocalConfig = STTLocalConfig(
+                preferredModel: "parakeet-tdt-v3",
+                downloadedModels: [],
+                previewModel: "parakeet-eou",
+                finalModel: "parakeet-tdt-v3"
+            )
         ) {
+            self.mode = mode
             self.engine = engine
             self.model = model
             self.language = language
             self.fallbackEngine = fallbackEngine
             self.fallbackBaseURL = fallbackBaseURL
             self.fallbackAPIKeyRef = fallbackAPIKeyRef
+            self.remote = remote
+            self.local = local
+        }
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let defaults = STTConfig()
+            
+            let legacyFallbackBaseURL = try container.decodeIfPresent(String.self, forKey: .fallbackBaseURL)
+            let legacyFallbackAPIKeyRef = try container.decodeIfPresent(String.self, forKey: .fallbackAPIKeyRef)
+            let legacyModel = try container.decodeIfPresent(String.self, forKey: .model)
+            
+            self.mode = try container.decodeIfPresent(STTRoutingMode.self, forKey: .mode) ?? defaults.mode
+            self.engine = try container.decodeIfPresent(String.self, forKey: .engine) ?? defaults.engine
+            self.model = legacyModel ?? defaults.model
+            self.language = try container.decodeIfPresent(String.self, forKey: .language) ?? defaults.language
+            self.fallbackEngine = try container.decodeIfPresent(String.self, forKey: .fallbackEngine) ?? defaults.fallbackEngine
+            self.fallbackBaseURL = legacyFallbackBaseURL
+            self.fallbackAPIKeyRef = legacyFallbackAPIKeyRef
+            self.remote = try container.decodeIfPresent(STTRemoteConfig.self, forKey: .remote)
+                ?? STTRemoteConfig(
+                    enabled: legacyFallbackBaseURL != nil || legacyFallbackAPIKeyRef != nil,
+                    baseURL: legacyFallbackBaseURL,
+                    model: nil,
+                    requestStyle: .audioTranscriptions,
+                    apiKeyRef: legacyFallbackAPIKeyRef
+                )
+            self.local = try container.decodeIfPresent(STTLocalConfig.self, forKey: .local)
+                ?? STTLocalConfig(
+                    preferredModel: legacyModel ?? defaults.local.preferredModel,
+                    downloadedModels: [],
+                    previewModel: defaults.local.previewModel,
+                    finalModel: legacyModel ?? defaults.local.finalModel
+                )
         }
     }
     

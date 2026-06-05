@@ -36,7 +36,10 @@ final class AppControllerTests: XCTestCase {
     func testLoadConfigReturnsDefault() throws {
         let config = try controller.loadConfig()
         XCTAssertEqual(config.server.port, 1338)
-        XCTAssertEqual(config.stt.engine, "apple")
+        XCTAssertEqual(config.stt.mode, .localFirst)
+        XCTAssertEqual(config.stt.engine, "fluidaudio_local")
+        XCTAssertEqual(config.stt.model, "parakeet-tdt-v3")
+        XCTAssertEqual(config.stt.remote.requestStyle, .audioTranscriptions)
     }
     
     func testSaveAndLoadConfig() throws {
