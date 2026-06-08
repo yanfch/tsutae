@@ -32,7 +32,8 @@ struct SettingsView: View {
                     .preferredColorScheme(preferredColorScheme)
             ),
             titlebarCompensation: $titlebarCompensation,
-            colorScheme: resolvedColorScheme
+            colorScheme: resolvedColorScheme,
+            appearanceOverride: preferredColorScheme
         )
         .id(appLanguage)
         .onAppear {
@@ -50,33 +51,53 @@ struct SettingsView: View {
     }
     
     private var settingsShell: some View {
-        HStack(spacing: 0) {
-            SettingsSidebar(
-                selectedTab: selectedTabBinding,
-                selectionAnimation: sidebarSelectionAnimation
-            )
-            .frame(width: 232)
-            
-            Divider()
-                .overlay(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(settingsBackground)
             
             VStack(spacing: 0) {
-                SettingsPageChrome(tab: selectedTab)
+                Rectangle()
+                    .fill(settingsBackground)
+                    .frame(height: 34)
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(resolvedColorScheme == .dark ? Color.white.opacity(0.035) : Color.black.opacity(0.05))
+                            .frame(height: 1)
+                    }
                 
-                ScrollView {
-                    currentTabView
-                        .padding(.horizontal, 28)
-                        .padding(.top, 18)
-                        .padding(.bottom, 24)
+                HStack(spacing: 0) {
+                    SettingsSidebar(
+                        selectedTab: selectedTabBinding,
+                        selectionAnimation: sidebarSelectionAnimation
+                    )
+                    .frame(width: 232)
+                    
+                    Divider()
+                        .overlay(resolvedColorScheme == .dark ? Color.white.opacity(0.038) : Color.black.opacity(0.05))
+                    
+                    VStack(spacing: 0) {
+                        SettingsPageChrome(tab: selectedTab)
+                        
+                        ScrollView {
+                            currentTabView
+                                .padding(.horizontal, 28)
+                                .padding(.top, 18)
+                                .padding(.bottom, 24)
+                        }
+                        .scrollIndicators(.never)
+                        .background(settingsBackground)
+                    }
+                    .background(settingsBackground)
                 }
-                .scrollIndicators(.never)
-                .background(settingsBackground)
             }
-            .background(settingsBackground)
         }
-        .background(settingsBackground)
         .frame(width: 980, height: 680)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(resolvedColorScheme == .dark ? Color.black.opacity(0.58) : Color.black.opacity(0.06), lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .compositingGroup()
     }
     
     private var preferredColorScheme: ColorScheme? {
@@ -130,7 +151,7 @@ struct SettingsView: View {
     }
     
     private var settingsBackground: Color {
-        colorScheme == .dark ? DS.color.settingsBgDark : DS.color.settingsBgLight
+        resolvedColorScheme == .dark ? DS.color.surfaceDark : DS.color.settingsBgLight
     }
 }
 
@@ -181,7 +202,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .general:
             return "Tune the everyday behavior and appearance of tsutae."
         case .stt:
-            return "Configure transcription engines, routing, and service health."
+            return "Configure transcription engines and routing."
         case .tts:
             return "Prepare voices, playback, and synthesis behavior."
         case .server:
@@ -249,7 +270,7 @@ private struct SettingsSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
-                .frame(height: 46)
+                .frame(height: 18)
             
             VStack(alignment: .leading, spacing: 16) {
                 SettingsSidebarBrand()
@@ -269,7 +290,7 @@ private struct SettingsSidebar: View {
                 SettingsSidebarAdvancedRow(selectedTab: $selectedTab)
             }
             .padding(.horizontal, 14)
-            .padding(.top, 16)
+            .padding(.top, 8)
             
             Spacer()
         }
@@ -279,12 +300,12 @@ private struct SettingsSidebar: View {
     private var sidebarBackground: some View {
         Group {
             if colorScheme == .dark {
-                Color.black.opacity(0.18)
+                DS.color.backgroundDark.opacity(0.76)
             } else {
                 Color.white.opacity(0.38)
+                    .overlay(.ultraThinMaterial)
             }
         }
-        .overlay(.ultraThinMaterial)
     }
 }
 
@@ -293,10 +314,11 @@ private struct SettingsSidebarBrand: View {
     
     var body: some View {
         Text("Tsutae")
-            .font(DS.font.display(.title3))
-            .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground)
+            .font(.system(size: 17, weight: .semibold, design: .default))
+            .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark.opacity(0.9) : DS.color.foreground)
             .padding(.horizontal, 8)
-            .padding(.bottom, 2)
+            .frame(height: 24, alignment: .leading)
+            .padding(.bottom, 4)
     }
 }
 
@@ -319,7 +341,7 @@ private struct SettingsSidebarAdvancedRow: View {
             Text("Advanced")
                 .font(DS.font.mono(size: 11, weight: .medium))
                 .tracking(0.3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark.opacity(0.74) : DS.color.muted)
                 .padding(.leading, 10)
             
             FlexibleTagRow(items: SettingsTab.secondaryTabs, selectedTab: $selectedTab)
@@ -427,55 +449,53 @@ private struct GeneralSettingsView: View {
     @AppStorage("settings.transcriptionLanguage") private var transcriptionLanguage = "auto"
     @AppStorage(DS.recordingBar.presetDefaultsKey) private var recordingBarPreset = DS.recordingBar.defaultPreset.rawValue
     
+    private let appearanceOptions = [
+        SettingsDropdownOption(id: "system", title: L10n.Settings.appearanceSystem),
+        SettingsDropdownOption(id: "light", title: L10n.Settings.appearanceLight),
+        SettingsDropdownOption(id: "dark", title: L10n.Settings.appearanceDark)
+    ]
+    
+    private let languageOptions = [
+        SettingsDropdownOption(id: L10n.AppLanguage.system.rawValue, title: L10n.Settings.appearanceSystem),
+        SettingsDropdownOption(id: L10n.AppLanguage.english.rawValue, title: L10n.Settings.languageEnglish),
+        SettingsDropdownOption(id: L10n.AppLanguage.simplifiedChinese.rawValue, title: L10n.Settings.languageChinese)
+    ]
+    
+    private let defaultActionOptions = [
+        SettingsDropdownOption(id: "injectFocusedApp", title: L10n.Settings.actionInjectFocusedApp),
+        SettingsDropdownOption(id: "copyToClipboard", title: L10n.Settings.actionCopyToClipboard)
+    ]
+    
+    private let transcriptionLanguageOptions = [
+        SettingsDropdownOption(id: "auto", title: L10n.Settings.languageAuto),
+        SettingsDropdownOption(id: "zh", title: L10n.Settings.languageChinese),
+        SettingsDropdownOption(id: "en", title: L10n.Settings.languageEnglish)
+    ]
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            // 外观分组
             SettingsSection(title: L10n.Settings.sectionAppearance) {
-                // 外观
                 SettingsRow(label: L10n.Settings.appearanceModeLabel) {
-                    Picker("", selection: $appearanceMode) {
-                        Text(L10n.Settings.appearanceSystem).tag("system")
-                        Text(L10n.Settings.appearanceLight).tag("light")
-                        Text(L10n.Settings.appearanceDark).tag("dark")
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 150)
+                    SettingsDropdown(selection: $appearanceMode, options: appearanceOptions, width: 150)
                 }
                 
                 SettingsDivider()
                 
-                // 界面语言
                 SettingsRow(label: L10n.Settings.appLanguageLabel) {
-                    Picker("", selection: $appLanguage) {
-                        Text(L10n.Settings.appearanceSystem).tag(L10n.AppLanguage.system.rawValue)
-                        Text(L10n.Settings.languageEnglish).tag(L10n.AppLanguage.english.rawValue)
-                        Text(L10n.Settings.languageChinese).tag(L10n.AppLanguage.simplifiedChinese.rawValue)
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 150)
+                    SettingsDropdown(selection: $appLanguage, options: languageOptions, width: 150)
                 }
                 
                 SettingsDivider()
                 
-                // 录音胶囊样式
                 SettingsRow(label: L10n.Settings.recordingCapsuleLabel) {
-                    Picker("", selection: $recordingBarPreset) {
-                        ForEach(DS.recordingBar.Preset.allCases, id: \.rawValue) { preset in
-                            Text(preset.title).tag(preset.rawValue)
+                    SettingsChipSelector(selection: $recordingBarPreset, options: DS.recordingBar.Preset.allCases.map { ($0.rawValue, $0.title) })
+                        .onChange(of: recordingBarPreset) { _, _ in
+                            FloatingRecordingBar.shared.reloadIfShowing()
                         }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 200)
-                    .onChange(of: recordingBarPreset) { _, _ in
-                        // 重新加载悬浮条（如果正在显示）
-                        FloatingRecordingBar.shared.reloadIfShowing()
-                    }
                 }
             }
             
-            // 行为分组
             SettingsSection(title: L10n.Settings.sectionBehavior) {
-                // 开机自动启动
                 SettingsRow(label: L10n.Settings.launchAtLoginLabel) {
                     Toggle("", isOn: $launchAtLogin)
                         .labelsHidden()
@@ -483,27 +503,14 @@ private struct GeneralSettingsView: View {
                 
                 SettingsDivider()
                 
-                // 默认动作
                 SettingsRow(label: L10n.Settings.defaultActionLabel) {
-                    Picker("", selection: $defaultAction) {
-                        Text(L10n.Settings.actionInjectFocusedApp).tag("injectFocusedApp")
-                        Text(L10n.Settings.actionCopyToClipboard).tag("copyToClipboard")
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 220)
+                    SettingsDropdown(selection: $defaultAction, options: defaultActionOptions, width: 220)
                 }
                 
                 SettingsDivider()
                 
-                // 转写语言
                 SettingsRow(label: L10n.Settings.transcriptionLanguageLabel) {
-                    Picker("", selection: $transcriptionLanguage) {
-                        Text(L10n.Settings.languageAuto).tag("auto")
-                        Text(L10n.Settings.languageChinese).tag("zh")
-                        Text(L10n.Settings.languageEnglish).tag("en")
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 120)
+                    SettingsDropdown(selection: $transcriptionLanguage, options: transcriptionLanguageOptions, width: 120)
                 }
                 
                 SettingsDivider()
@@ -516,7 +523,6 @@ private struct GeneralSettingsView: View {
                 }
             }
             
-            // 重置分组
             SettingsSection(title: L10n.Settings.sectionReset) {
                 HStack {
                     Button(L10n.Settings.resetDefaultsButton) {
@@ -1727,6 +1733,22 @@ private struct SettingsDropdown: View {
     }
 }
 
+private struct SettingsChipSelector: View {
+    let selection: Binding<String>
+    let options: [(id: String, title: String)]
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(options, id: \.id) { option in
+                Button(option.title) {
+                    selection.wrappedValue = option.id
+                }
+                .buttonStyle(SecondaryChipButtonStyle(isSelected: selection.wrappedValue == option.id))
+            }
+        }
+    }
+}
+
 private struct STTStackedControlRow<Content: View>: View {
     let label: String
     @ViewBuilder let content: Content
@@ -2331,6 +2353,10 @@ private struct ModelStateBadge: View {
         switch tone {
         case .active:
             return colorScheme == .dark ? DS.color.foregroundDark : DS.color.accent
+        case .success:
+            return colorScheme == .dark ? DS.color.successDark : DS.color.success
+        case .warning:
+            return colorScheme == .dark ? DS.color.warningDark : DS.color.warning
         case .soft:
             return colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground
         case .neutral:
@@ -2342,6 +2368,10 @@ private struct ModelStateBadge: View {
         switch tone {
         case .active:
             return colorScheme == .dark ? DS.color.accentDark.opacity(0.24) : DS.color.accent.opacity(0.12)
+        case .success:
+            return colorScheme == .dark ? DS.color.successDark.opacity(0.18) : DS.color.success.opacity(0.08)
+        case .warning:
+            return colorScheme == .dark ? DS.color.warningDark.opacity(0.16) : DS.color.warning.opacity(0.08)
         case .soft:
             return colorScheme == .dark ? DS.color.surface2Dark.opacity(0.94) : Color.white.opacity(0.94)
         case .neutral:
@@ -2353,6 +2383,10 @@ private struct ModelStateBadge: View {
         switch tone {
         case .active:
             return colorScheme == .dark ? DS.color.accentDark.opacity(0.42) : DS.color.accent.opacity(0.28)
+        case .success:
+            return colorScheme == .dark ? DS.color.successDark.opacity(0.38) : DS.color.success.opacity(0.24)
+        case .warning:
+            return colorScheme == .dark ? DS.color.warningDark.opacity(0.38) : DS.color.warning.opacity(0.24)
         case .soft:
             return colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.44) : DS.color.borderSoft.opacity(0.56)
         case .neutral:
@@ -2617,16 +2651,43 @@ private struct SettingsDangerIconButtonStyle: ButtonStyle {
 }
 
 private struct SettingsGhostButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(DS.color.accent.opacity(configuration.isPressed ? 0.72 : 1))
+            .foregroundStyle(foreground(configuration: configuration))
             .padding(.horizontal, 14)
             .frame(height: 36)
             .background(
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(DS.color.accent.opacity(0.08))
+                    .fill(background(configuration: configuration))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .strokeBorder(border, lineWidth: 1)
+                    )
             )
+    }
+    
+    private func foreground(configuration: Configuration) -> Color {
+        if colorScheme == .dark {
+            return DS.color.accentDark.opacity(configuration.isPressed ? 0.82 : 1)
+        }
+        return DS.color.accent.opacity(configuration.isPressed ? 0.72 : 1)
+    }
+    
+    private func background(configuration: Configuration) -> Color {
+        if colorScheme == .dark {
+            return DS.color.accentDark.opacity(configuration.isPressed ? 0.16 : 0.12)
+        }
+        return DS.color.accent.opacity(0.08)
+    }
+    
+    private var border: Color {
+        if colorScheme == .dark {
+            return DS.color.accentDark.opacity(0.3)
+        }
+        return DS.color.accent.opacity(0.16)
     }
 }
 
@@ -2945,21 +3006,46 @@ private struct FlowLayout: Layout {
 
 private struct SecondaryChipButtonStyle: ButtonStyle {
     let isSelected: Bool
+    @Environment(\.colorScheme) private var colorScheme
     
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-            .foregroundStyle(isSelected ? DS.color.foreground : DS.color.muted)
+            .foregroundStyle(foreground)
             .padding(.horizontal, 9)
             .frame(height: 27)
             .background(
                 Capsule()
-                    .fill(isSelected ? Color.white.opacity(0.86) : Color.white.opacity(configuration.isPressed ? 0.78 : 0.58))
+                    .fill(background(configuration: configuration))
                     .overlay(
                         Capsule()
-                            .strokeBorder(Color.black.opacity(isSelected ? 0.06 : 0.04), lineWidth: 1)
+                            .strokeBorder(border, lineWidth: 1)
                     )
             )
+    }
+    
+    private var foreground: Color {
+        if colorScheme == .dark {
+            return isSelected ? Color.white.opacity(0.98) : DS.color.foregroundDark.opacity(0.9)
+        }
+        return isSelected ? Color.white : DS.color.muted
+    }
+    
+    private func background(configuration: Configuration) -> Color {
+        if colorScheme == .dark {
+            if isSelected {
+                return DS.color.accent.opacity(configuration.isPressed ? 0.74 : 0.88)
+            }
+            return DS.color.surface2Dark.opacity(configuration.isPressed ? 0.98 : 0.9)
+        }
+        return isSelected ? DS.color.accent.opacity(configuration.isPressed ? 0.8 : 0.92) : Color.white.opacity(configuration.isPressed ? 0.78 : 0.58)
+    }
+    
+    private var border: Color {
+        if colorScheme == .dark {
+            return isSelected ? DS.color.accent.opacity(0.96) : DS.color.borderDarkSoft.opacity(0.42)
+        }
+        return isSelected ? DS.color.accent.opacity(0.9) : Color.black.opacity(0.04)
     }
 }
 
@@ -2979,7 +3065,7 @@ private struct SettingsPageChrome: View {
             let modeTitle = config.stt.mode == .remoteFirst ? "Remote First" : "Local First"
             let fallbackEnabled = config.stt.fallbackEngine != nil
             let fallbackTitle = fallbackEnabled ? "Fallback On" : "No Fallback"
-            let fallbackTone: ServerStatusCapsule.Tone = fallbackEnabled ? .soft : .neutral
+            let fallbackTone: ServerStatusCapsule.Tone = fallbackEnabled ? .active : .neutral
             let remoteReady = config.stt.remote.enabled && (config.stt.remote.baseURL?.isEmpty == false) && (config.stt.remote.model?.isEmpty == false)
             let remoteTitle: String
             let remoteTone: ServerStatusCapsule.Tone
@@ -2991,7 +3077,7 @@ private struct SettingsPageChrome: View {
                 remoteTone = .active
             } else {
                 remoteTitle = "Needs Setup"
-                remoteTone = .soft
+                remoteTone = .neutral
             }
             return STTSummary(
                 modeTitle: modeTitle,
@@ -3031,7 +3117,7 @@ private struct SettingsPageChrome: View {
                 .overlay(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
         }
         .padding(.horizontal, 30)
-        .padding(.top, 24)
+        .padding(.top, 22)
         .padding(.bottom, 16)
         .background(settingsChromeBackground)
         .onAppear {
@@ -3050,24 +3136,40 @@ private struct SettingsPageChrome: View {
     private var summaryPills: some View {
         switch tab {
         case .stt:
-            ServerStatusCapsule(title: sttSummary.modeTitle, tone: .active)
-            ServerStatusCapsule(title: sttSummary.fallbackTitle, tone: sttSummary.fallbackTone)
-            ServerStatusCapsule(title: sttSummary.remoteTitle, tone: sttSummary.remoteTone)
+            summaryCapsule(title: sttSummary.modeTitle, tone: .active)
+            summaryCapsule(title: sttSummary.fallbackTitle, tone: sttSummary.fallbackTone)
+            summaryCapsule(title: sttSummary.remoteTitle, tone: sttSummary.remoteTone)
         case .tts:
-            ServerStatusCapsule(title: "Playback", tone: .soft)
-            ServerStatusCapsule(title: "Cloud Optional", tone: .neutral)
+            summaryCapsule(title: "Playback", tone: .soft)
+            summaryCapsule(title: "Cloud Optional", tone: .neutral)
         case .server:
-            ServerStatusCapsule(title: "STT · TTS", tone: .soft)
-            ServerStatusCapsule(title: "Hooks Planned", tone: .active)
+            summaryCapsule(title: "STT · TTS", tone: .soft)
+            summaryCapsule(title: "Hooks Planned", tone: .active)
         case .permissions:
-            ServerStatusCapsule(title: "Review", tone: .soft)
+            summaryCapsule(title: "Review", tone: .soft)
         default:
-            ServerStatusCapsule(title: tab.statusTitle, tone: .soft)
+            summaryCapsule(title: tab.statusTitle, tone: .soft)
+        }
+    }
+    
+    private func summaryCapsule(title: String, tone: ServerStatusCapsule.Tone) -> some View {
+        ServerStatusCapsule(title: title, tone: tone)
+            .opacity(summaryCapsuleOpacity(for: tone))
+    }
+    
+    private func summaryCapsuleOpacity(for tone: ServerStatusCapsule.Tone) -> Double {
+        switch tone {
+        case .active, .success, .warning:
+            return 1
+        case .soft:
+            return colorScheme == .dark ? 0.82 : 0.9
+        case .neutral:
+            return colorScheme == .dark ? 0.66 : 0.82
         }
     }
     
     private var settingsChromeBackground: Color {
-        colorScheme == .dark ? DS.color.settingsBgDark : DS.color.settingsBgLight
+        colorScheme == .dark ? DS.color.surfaceDark : DS.color.settingsBgLight
     }
     
     private func refreshSTTSummary() {
@@ -3202,7 +3304,7 @@ private struct PermissionCard: View {
                 ServerStatusCapsule(title: badgeTitle, tone: badgeTone)
                 Spacer()
                 Button(actionTitle, action: action)
-                    .buttonStyle(.bordered)
+                    .buttonStyle(SettingsGhostButtonStyle())
             }
         }
         .overlay {
@@ -3304,6 +3406,8 @@ private enum PermissionAccessState {
 private struct ServerStatusCapsule: View {
     enum Tone {
         case active
+        case success
+        case warning
         case soft
         case neutral
     }
@@ -3331,32 +3435,44 @@ private struct ServerStatusCapsule: View {
         switch tone {
         case .active:
             return colorScheme == .dark ? DS.color.foregroundDark : DS.color.accent
+        case .success:
+            return colorScheme == .dark ? DS.color.successDark : DS.color.success
+        case .warning:
+            return colorScheme == .dark ? DS.color.warningDark : DS.color.warning
         case .soft:
             return colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground
         case .neutral:
-            return colorScheme == .dark ? DS.color.mutedDark : DS.color.soft
+            return colorScheme == .dark ? DS.color.mutedDark.opacity(0.96) : DS.color.soft
         }
     }
     
     private var background: Color {
         switch tone {
         case .active:
-            return colorScheme == .dark ? DS.color.accentDark.opacity(0.22) : DS.color.accent.opacity(0.12)
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.24) : DS.color.accent.opacity(0.12)
+        case .success:
+            return colorScheme == .dark ? DS.color.successDark.opacity(0.18) : DS.color.success.opacity(0.08)
+        case .warning:
+            return colorScheme == .dark ? DS.color.warningDark.opacity(0.16) : DS.color.warning.opacity(0.08)
         case .soft:
-            return colorScheme == .dark ? DS.color.surface2Dark.opacity(0.9) : Color.white.opacity(0.92)
+            return colorScheme == .dark ? DS.color.surface2Dark.opacity(0.96) : Color.white.opacity(0.92)
         case .neutral:
-            return colorScheme == .dark ? DS.color.surface3Dark.opacity(0.78) : DS.color.surface.opacity(0.92)
+            return colorScheme == .dark ? DS.color.surface3Dark.opacity(0.84) : DS.color.surface.opacity(0.92)
         }
     }
     
     private var border: Color {
         switch tone {
         case .active:
-            return colorScheme == .dark ? DS.color.accentDark.opacity(0.42) : DS.color.accent.opacity(0.24)
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.48) : DS.color.accent.opacity(0.24)
+        case .success:
+            return colorScheme == .dark ? DS.color.successDark.opacity(0.38) : DS.color.success.opacity(0.24)
+        case .warning:
+            return colorScheme == .dark ? DS.color.warningDark.opacity(0.38) : DS.color.warning.opacity(0.24)
         case .soft:
-            return colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.4) : DS.color.borderSoft.opacity(0.54)
+            return colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.48) : DS.color.borderSoft.opacity(0.54)
         case .neutral:
-            return colorScheme == .dark ? DS.color.borderDark.opacity(0.34) : DS.color.borderSoft.opacity(0.42)
+            return colorScheme == .dark ? DS.color.borderDark.opacity(0.42) : DS.color.borderSoft.opacity(0.42)
         }
     }
 }
@@ -3385,12 +3501,13 @@ private struct SettingsRow<Content: View>: View {
     
     let label: String
     @ViewBuilder let content: Content
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         HStack(spacing: 16) {
             Text(label)
                 .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(.primary)
+                .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground)
             
             Spacer()
             
@@ -3405,13 +3522,14 @@ private struct SettingsFormRow<Content: View>: View {
     let label: String
     var helpText: String? = nil
     @ViewBuilder let content: Content
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         HStack(spacing: 18) {
             HStack(spacing: 6) {
                 Text(label)
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground)
                 if let helpText {
                     SettingsHelpButton(text: helpText)
                 }
@@ -3535,6 +3653,7 @@ private struct SettingsWindowHost: NSViewRepresentable {
     let content: AnyView
     @Binding var titlebarCompensation: CGFloat
     let colorScheme: ColorScheme
+    let appearanceOverride: ColorScheme?
     
     func makeNSView(context: Context) -> SafeAreaIgnoringHostingView<AnyView> {
         let view = SafeAreaIgnoringHostingView(rootView: content)
@@ -3563,30 +3682,64 @@ private struct SettingsWindowHost: NSViewRepresentable {
         window.styleMask.insert(.fullSizeContentView)
         window.isMovableByWindowBackground = true
         window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = true
+        window.backgroundColor = nsWindowBackgroundColor
+        window.appearance = nsAppearance
+        window.hasShadow = colorScheme != .dark
         
         if #available(macOS 15.0, *) {
             window.toolbarStyle = .unifiedCompact
             window.titlebarSeparatorStyle = .none
         }
         
+        view.wantsLayer = true
+        view.layer?.backgroundColor = nsWindowBackgroundColor.cgColor
+        view.layer?.cornerRadius = 24
+        view.layer?.cornerCurve = .continuous
+        view.layer?.masksToBounds = true
+        
         if let contentView = window.contentView {
+            contentView.appearance = nsAppearance
             contentView.wantsLayer = true
-            contentView.layer?.backgroundColor = NSColor.clear.cgColor
-            contentView.superview?.wantsLayer = true
-            contentView.superview?.layer?.backgroundColor = NSColor.clear.cgColor
+            contentView.layer?.backgroundColor = nsWindowBackgroundColor.cgColor
+            contentView.layer?.cornerRadius = 24
+            contentView.layer?.cornerCurve = .continuous
+            contentView.layer?.masksToBounds = true
+            
+            if let frameView = contentView.superview {
+                frameView.wantsLayer = true
+                frameView.layer?.backgroundColor = nsWindowBackgroundColor.cgColor
+                frameView.layer?.cornerRadius = 24
+                frameView.layer?.cornerCurve = .continuous
+                frameView.layer?.masksToBounds = true
+                
+                if let rootFrameView = frameView.superview {
+                    rootFrameView.wantsLayer = true
+                    rootFrameView.layer?.backgroundColor = nsWindowBackgroundColor.cgColor
+                    rootFrameView.layer?.cornerRadius = 24
+                    rootFrameView.layer?.cornerCurve = .continuous
+                    rootFrameView.layer?.masksToBounds = true
+                }
+            }
         }
         
         if let titlebarView = window.standardWindowButton(.closeButton)?.superview {
             titlebarView.wantsLayer = true
-            titlebarView.layer?.backgroundColor = NSColor.clear.cgColor
-            titlebarView.superview?.wantsLayer = true
-            titlebarView.superview?.layer?.backgroundColor = NSColor.clear.cgColor
+            titlebarView.layer?.backgroundColor = nsWindowBackgroundColor.cgColor
+            titlebarView.layer?.cornerRadius = 24
+            titlebarView.layer?.cornerCurve = .continuous
+            titlebarView.layer?.masksToBounds = true
+            
+            if let titlebarContainer = titlebarView.superview {
+                titlebarContainer.wantsLayer = true
+                titlebarContainer.layer?.backgroundColor = nsWindowBackgroundColor.cgColor
+                titlebarContainer.layer?.cornerRadius = 24
+                titlebarContainer.layer?.cornerCurve = .continuous
+                titlebarContainer.layer?.masksToBounds = true
+            }
         }
         
         let titlebarHeight = window.frame.height - window.contentLayoutRect.height
-        let compensation = -titlebarHeight
+        let compensation = -(titlebarHeight + 10)
         if abs(titlebarCompensation - compensation) > 0.5 {
             titlebarCompensation = compensation
         }
@@ -3594,6 +3747,31 @@ private struct SettingsWindowHost: NSViewRepresentable {
         window.collectionBehavior.insert(.moveToActiveSpace)
         window.level = .normal
         window.alphaValue = 1
+        window.invalidateShadow()
+    }
+    
+    private var nsWindowBackgroundColor: NSColor {
+        switch colorScheme {
+        case .dark:
+            return NSColor(calibratedRed: 0x1A / 255, green: 0x23 / 255, blue: 0x20 / 255, alpha: 1)
+        case .light:
+            return NSColor(calibratedRed: 0xF2 / 255, green: 0xF1 / 255, blue: 0xDF / 255, alpha: 1)
+        @unknown default:
+            return NSColor.windowBackgroundColor
+        }
+    }
+    
+    private var nsAppearance: NSAppearance? {
+        switch appearanceOverride {
+        case .dark:
+            return NSAppearance(named: .darkAqua)
+        case .light:
+            return NSAppearance(named: .aqua)
+        case nil:
+            return nil
+        @unknown default:
+            return nil
+        }
     }
 }
 
