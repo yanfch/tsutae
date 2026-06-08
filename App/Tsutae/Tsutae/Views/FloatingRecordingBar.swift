@@ -10,6 +10,11 @@ import OSLog
 /// - 无边框、不抢焦点
 /// - 置顶、点外面不消失
 /// - 屏幕中央显示
+private enum RecordingBarCompanionPlacement {
+    case above
+    case below
+}
+
 final class FloatingRecordingBar {
     
     static let shared = FloatingRecordingBar()
@@ -31,6 +36,10 @@ final class FloatingRecordingBar {
     private let companionSpacing: CGFloat = 10
     private let companionHeight: CGFloat = 122
     private let companionMinWidth: CGFloat = 360
+    
+    private var companionVerticalShift: CGFloat {
+        companionSpacing + companionHeight
+    }
     
     private var layout: DS.recordingBar.Layout {
         DS.recordingBar.current
@@ -56,6 +65,10 @@ final class FloatingRecordingBar {
     
     /// 显示悬浮录音条
     func show(state: AppState = .listening) {
+        show(state: state, initialDisplayState: nil, companion: nil)
+    }
+    
+    private func show(state: AppState, initialDisplayState: RecordingBarVisualState?, companion: RecordingBarCompanion?) {
         logger.info("show() called. isShowing=\(self.isShowing, privacy: .public)")
         currentState = state
         
@@ -80,7 +93,7 @@ final class FloatingRecordingBar {
         )
         panel.onDragEnded = { [weak self, weak panel] in
             guard let self, let panel else { return }
-            self.savePanelOrigin(panel.frame.origin)
+            self.savePanelOrigin(self.persistedOrigin(from: panel.frame.origin))
         }
         logger.info("NSPanel created")
         
@@ -123,10 +136,26 @@ final class FloatingRecordingBar {
             panel.appearance = nil
         }
         
+        let initialPlacement: RecordingBarCompanionPlacement
+        if companion != nil {
+            initialPlacement = resolvedCompanionPlacement(for: panel.frame, currentPlacement: .below)
+            if initialPlacement == .above {
+                let adjustedOrigin = clampedPanelOriginKeepingBarVisible(
+                    NSPoint(x: panel.frame.origin.x, y: panel.frame.origin.y + companionVerticalShift),
+                    placement: .above,
+                    preferredScreen: panel.screen
+                )
+                panel.setFrameOrigin(adjustedOrigin)
+            }
+        } else {
+            initialPlacement = .below
+        }
+        
         let presentationModel = RecordingBarPresentationModel(
-            displayState: visualState(for: state),
+            displayState: initialDisplayState ?? visualState(for: state),
             preset: DS.recordingBar.currentPreset,
-            colorScheme: colorScheme
+            colorScheme: colorScheme,
+            companionPlacement: initialPlacement
         )
         self.presentationModel = presentationModel
         
@@ -135,6 +164,7 @@ final class FloatingRecordingBar {
             horizontalInset: panelHorizontalInset,
             verticalInset: panelVerticalInset,
             companionSpacing: companionSpacing,
+            companionVerticalShift: companionVerticalShift,
             contentWidth: panelContentWidth
         )
         let hostingView = NSHostingView(rootView: wrapperView)
@@ -151,12 +181,28 @@ final class FloatingRecordingBar {
         panel.contentView = hostingView
         logger.info("Hosting view attached")
         
+        if let companion {
+            presentationModel.companion = companion
+        }
+        
         self.hostingView = hostingView
         self.panel = panel
         self.isShowing = true
         
+        panel.alphaValue = 0
+        panel.contentView?.layer?.setAffineTransform(CGAffineTransform(scaleX: 0.975, y: 0.975))
         DispatchQueue.main.async {
             panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.12
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().alphaValue = 1
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.14
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.contentView?.animator().layer?.setAffineTransform(.identity)
+            }
             self.logger.info("Panel ordered front without activating app")
         }
         
@@ -181,6 +227,7 @@ final class FloatingRecordingBar {
         
         companionDismissWorkItem?.cancel()
         companionDismissWorkItem = nil
+        restoreBarOnlyPositionIfNeeded()
         withAnimation(.easeInOut(duration: 0.24)) {
             presentationModel.displayState = visualState(for: state)
             presentationModel.preset = DS.recordingBar.currentPreset
@@ -194,10 +241,7 @@ final class FloatingRecordingBar {
         companionDismissWorkItem?.cancel()
         companionDismissWorkItem = nil
         guard isShowing, let presentationModel else {
-            show(state: .idle)
-            guard let presentationModel else { return }
-            presentationModel.displayState = displayState
-            presentationModel.companion = companion
+            show(state: .idle, initialDisplayState: displayState, companion: companion)
             scheduleCompanionAutoDismissIfNeeded(companion)
             return
         }
@@ -206,6 +250,7 @@ final class FloatingRecordingBar {
         presentationModel.colorScheme = resolvedColorScheme(for: appearanceMode)
         presentationModel.preset = DS.recordingBar.currentPreset
         
+        applyBestCompanionPlacement()
         withAnimation(.easeInOut(duration: 0.22)) {
             presentationModel.displayState = displayState
             presentationModel.companion = companion
@@ -216,18 +261,19 @@ final class FloatingRecordingBar {
     func dismissCompanion() {
         companionDismissWorkItem?.cancel()
         companionDismissWorkItem = nil
-        guard let presentationModel else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            presentationModel.companion = nil
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            self.hide()
-        }
+        guard presentationModel != nil else { return }
+        hide(animated: true)
     }
     
-    func openAppSettings(tab: String? = nil) {
-        NSApp.activate(ignoringOtherApps: true)
-        SettingsWindowCoordinator.shared.open?(tab)
+    func openAppSettings(tab: String? = nil, focus: String? = nil) {
+        if tab == "permissions" {
+            if let focus, focus.isEmpty == false {
+                UserDefaults.standard.set(focus, forKey: "settings.permissions.focus")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "settings.permissions.focus")
+            }
+        }
+        SettingsWindowCoordinator.shared.openSettings(tab: tab)
     }
     
     func openSystemSettingsPrivacyPane(_ anchor: String) {
@@ -237,24 +283,37 @@ final class FloatingRecordingBar {
     }
     
     /// 隐藏悬浮录音条
-    func hide() {
+    func hide(animated: Bool = false) {
         logger.info("hide() called. hasPanel=\(self.panel != nil, privacy: .public)")
         companionDismissWorkItem?.cancel()
         companionDismissWorkItem = nil
-        panel?.orderOut(nil)
-        panel = nil
-        hostingView = nil
-        presentationModel = nil
-        isShowing = false
-        currentState = .idle
-        logger.info("hide() completed")
+        
+        guard animated, let panel else {
+            teardownPanel()
+            logger.info("hide() completed")
+            return
+        }
+        
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.14
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().alphaValue = 0
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.14
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.contentView?.animator().layer?.setAffineTransform(CGAffineTransform(scaleX: 0.975, y: 0.975))
+        } completionHandler: {
+            self.teardownPanel()
+            self.logger.info("hide() completed")
+        }
     }
     
     /// 切换显示/隐藏
     func toggle() {
         logger.info("toggle() called. isShowing=\(self.isShowing, privacy: .public)")
         if isShowing {
-            hide()
+            hide(animated: true)
         } else {
             show()
         }
@@ -302,6 +361,60 @@ final class FloatingRecordingBar {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
     
+    private func applyBestCompanionPlacement() {
+        guard let panel, let presentationModel else { return }
+        let placement = resolvedCompanionPlacement(for: panel.frame, currentPlacement: presentationModel.companionPlacement)
+        guard placement != presentationModel.companionPlacement else { return }
+        var origin = panel.frame.origin
+        origin.y += placement == .above ? companionVerticalShift : -companionVerticalShift
+        origin = clampedPanelOriginKeepingBarVisible(origin, placement: placement, preferredScreen: panel.screen)
+        panel.setFrameOrigin(origin)
+        presentationModel.companionPlacement = placement
+    }
+    
+    private func restoreBarOnlyPositionIfNeeded() {
+        guard let panel, let presentationModel, presentationModel.companionPlacement == .above else { return }
+        let origin = clampedPanelOriginKeepingBarVisible(
+            NSPoint(x: panel.frame.origin.x, y: panel.frame.origin.y - companionVerticalShift),
+            placement: .below,
+            preferredScreen: panel.screen
+        )
+        panel.setFrameOrigin(origin)
+        presentationModel.companionPlacement = .below
+    }
+    
+    private func resolvedCompanionPlacement(for panelFrame: NSRect, currentPlacement: RecordingBarCompanionPlacement) -> RecordingBarCompanionPlacement {
+        let visibleFrame = (panel?.screen ?? screenForPresentation())?.visibleFrame ?? .zero
+        let barFrame = barFrame(for: panelFrame, placement: currentPlacement)
+        let requiredSpace = companionVerticalShift + panelVerticalInset
+        let spaceBelow = barFrame.minY - visibleFrame.minY
+        let spaceAbove = visibleFrame.maxY - barFrame.maxY
+        
+        if spaceBelow >= requiredSpace {
+            return .below
+        }
+        if spaceAbove >= requiredSpace {
+            return .above
+        }
+        return spaceAbove > spaceBelow ? .above : .below
+    }
+    
+    private func barFrame(for panelFrame: NSRect, placement: RecordingBarCompanionPlacement) -> NSRect {
+        let barOriginY: CGFloat
+        switch placement {
+        case .below:
+            barOriginY = panelFrame.maxY - panelVerticalInset - layout.height
+        case .above:
+            barOriginY = panelFrame.maxY - panelVerticalInset - companionVerticalShift - layout.height
+        }
+        return NSRect(
+            x: panelFrame.minX + panelHorizontalInset,
+            y: barOriginY,
+            width: layout.width,
+            height: layout.height
+        )
+    }
+    
     private func screenForPresentation() -> NSScreen? {
         let mouseLocation = NSEvent.mouseLocation
         logger.info("Resolving screen for mouseLocation=\(String(describing: mouseLocation), privacy: .public)")
@@ -325,19 +438,69 @@ final class FloatingRecordingBar {
             x: defaults.double(forKey: savedOriginXKey),
             y: defaults.double(forKey: savedOriginYKey)
         )
-        
         let frame = NSRect(origin: origin, size: panelSize)
-        guard NSScreen.screens.contains(where: { $0.visibleFrame.intersects(frame) }) else {
+        let barFrame = barFrame(for: frame, placement: .below)
+        guard let screen = NSScreen.screens.max(by: { $0.visibleFrame.intersection(barFrame).area < $1.visibleFrame.intersection(barFrame).area }) else {
             return nil
         }
-        
-        return origin
+        guard screen.visibleFrame.intersects(barFrame) else {
+            return nil
+        }
+        return clampedPanelOriginKeepingBarVisible(origin, placement: .below, preferredScreen: screen)
+    }
+    
+    private func persistedOrigin(from panelOrigin: NSPoint) -> NSPoint {
+        guard let presentationModel, presentationModel.companionPlacement == .above else {
+            return panelOrigin
+        }
+        return NSPoint(x: panelOrigin.x, y: panelOrigin.y - companionVerticalShift)
+    }
+    
+    private func clampedPanelOriginKeepingBarVisible(
+        _ origin: NSPoint,
+        placement: RecordingBarCompanionPlacement,
+        preferredScreen: NSScreen?
+    ) -> NSPoint {
+        let frame = NSRect(origin: origin, size: panelSize)
+        let barFrame = barFrame(for: frame, placement: placement)
+        let screen = preferredScreen
+            ?? NSScreen.screens.first(where: { $0.visibleFrame.intersects(barFrame) })
+            ?? screenForPresentation()
+        let visibleFrame = screen?.visibleFrame ?? .zero
+        let minX = visibleFrame.minX + panelHorizontalInset
+        let maxX = max(minX, visibleFrame.maxX - panelHorizontalInset - layout.width)
+        let minY = visibleFrame.minY + panelVerticalInset
+        let maxY = max(minY, visibleFrame.maxY - panelVerticalInset - layout.height)
+        let clampedBarOrigin = NSPoint(
+            x: min(max(barFrame.minX, minX), maxX),
+            y: min(max(barFrame.minY, minY), maxY)
+        )
+        let deltaX = clampedBarOrigin.x - barFrame.minX
+        let deltaY = clampedBarOrigin.y - barFrame.minY
+        return NSPoint(x: origin.x + deltaX, y: origin.y + deltaY)
     }
     
     private func savePanelOrigin(_ origin: NSPoint) {
         UserDefaults.standard.set(origin.x, forKey: savedOriginXKey)
         UserDefaults.standard.set(origin.y, forKey: savedOriginYKey)
         logger.info("Panel origin saved=(\(origin.x, privacy: .public), \(origin.y, privacy: .public))")
+    }
+    
+    private func teardownPanel() {
+        panel?.orderOut(nil)
+        panel?.alphaValue = 1
+        panel?.contentView?.layer?.setAffineTransform(.identity)
+        panel = nil
+        hostingView = nil
+        presentationModel = nil
+        isShowing = false
+        currentState = .idle
+    }
+}
+
+private extension NSRect {
+    var area: CGFloat {
+        width * height
     }
 }
 
@@ -395,9 +558,16 @@ struct RecordingBarCompanionAction {
 }
 
 struct RecordingBarCompanion {
+    enum Tone {
+        case info
+        case warning
+        case danger
+    }
+    
     let title: String
     let message: String
-    let primaryAction: RecordingBarCompanionAction
+    let tone: Tone
+    let primaryAction: RecordingBarCompanionAction?
     let secondaryAction: RecordingBarCompanionAction?
     let autoDismissAfter: TimeInterval?
 }
@@ -407,12 +577,14 @@ private final class RecordingBarPresentationModel: ObservableObject {
     @Published var displayState: RecordingBarVisualState
     @Published var preset: DS.recordingBar.Preset
     @Published var colorScheme: ColorScheme
+    @Published var companionPlacement: RecordingBarCompanionPlacement
     @Published var companion: RecordingBarCompanion?
     
-    init(displayState: RecordingBarVisualState, preset: DS.recordingBar.Preset, colorScheme: ColorScheme) {
+    init(displayState: RecordingBarVisualState, preset: DS.recordingBar.Preset, colorScheme: ColorScheme, companionPlacement: RecordingBarCompanionPlacement) {
         self.displayState = displayState
         self.preset = preset
         self.colorScheme = colorScheme
+        self.companionPlacement = companionPlacement
         self.companion = nil
     }
 }
@@ -423,29 +595,73 @@ private struct RecordingBarWrapper: View {
     let horizontalInset: CGFloat
     let verticalInset: CGFloat
     let companionSpacing: CGFloat
+    let companionVerticalShift: CGFloat
     let contentWidth: CGFloat
     
+    private var layout: DS.recordingBar.Layout {
+        DS.recordingBar.layout(for: model.preset)
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: companionSpacing) {
+        ZStack(alignment: .topLeading) {
+            if let companion = model.companion, model.companionPlacement == .above {
+                RecordingBarCompanionCard(
+                    companion: companion,
+                    colorScheme: model.colorScheme,
+                    width: contentWidth,
+                    height: companionReservedHeight
+                )
+                .offset(x: 0, y: 0)
+                .transition(companionTransition(for: .above))
+            }
+            
             RecordingBarView(
                 state: model.displayState,
                 preset: model.preset,
                 colorScheme: model.colorScheme
             )
+            .offset(x: 0, y: barOffsetY)
             
-            if let companion = model.companion {
+            if let companion = model.companion, model.companionPlacement == .below {
                 RecordingBarCompanionCard(
                     companion: companion,
                     colorScheme: model.colorScheme,
-                    width: contentWidth
+                    width: contentWidth,
+                    height: companionReservedHeight
                 )
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .offset(x: 0, y: companionBelowOffsetY)
+                .transition(companionTransition(for: .below))
             }
         }
+        .frame(width: contentWidth, height: contentHeight, alignment: .topLeading)
         .padding(.horizontal, horizontalInset)
         .padding(.vertical, verticalInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.clear)
+    }
+    
+    private var companionReservedHeight: CGFloat {
+        companionVerticalShift - companionSpacing
+    }
+    
+    private var contentHeight: CGFloat {
+        layout.height + companionSpacing + companionReservedHeight
+    }
+    
+    private var barOffsetY: CGFloat {
+        model.companionPlacement == .above ? companionVerticalShift : 0
+    }
+    
+    private var companionBelowOffsetY: CGFloat {
+        layout.height + companionSpacing
+    }
+    
+    private func companionTransition(for placement: RecordingBarCompanionPlacement) -> AnyTransition {
+        let offsetY: CGFloat = placement == .above ? -10 : 10
+        return .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: offsetY)),
+            removal: .opacity
+        )
     }
 }
 
@@ -453,6 +669,7 @@ private struct RecordingBarCompanionCard: View {
     let companion: RecordingBarCompanion
     let colorScheme: ColorScheme
     let width: CGFloat
+    let height: CGFloat
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -476,19 +693,23 @@ private struct RecordingBarCompanionCard: View {
                 }
             }
             
-            HStack(spacing: 10) {
-                CompanionActionButton(action: companion.primaryAction, colorScheme: colorScheme)
-                
-                if let secondaryAction = companion.secondaryAction {
-                    CompanionActionButton(action: secondaryAction, colorScheme: colorScheme)
+            if companion.primaryAction != nil || companion.secondaryAction != nil {
+                HStack(spacing: 10) {
+                    if let primaryAction = companion.primaryAction {
+                        CompanionActionButton(action: primaryAction, colorScheme: colorScheme)
+                    }
+                    
+                    if let secondaryAction = companion.secondaryAction {
+                        CompanionActionButton(action: secondaryAction, colorScheme: colorScheme)
+                    }
+                    
+                    Spacer(minLength: 0)
                 }
-                
-                Spacer(minLength: 0)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .frame(width: width, alignment: .leading)
+        .frame(width: width, height: height, alignment: .leading)
         .background(cardBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -515,7 +736,14 @@ private struct RecordingBarCompanionCard: View {
     }
     
     private var accentMarkColor: Color {
-        colorScheme == .dark ? DS.color.dangerDark : DS.color.danger
+        switch companion.tone {
+        case .info:
+            return colorScheme == .dark ? DS.color.accentDark : DS.color.accent
+        case .warning:
+            return colorScheme == .dark ? DS.color.warningDark : DS.color.warning
+        case .danger:
+            return colorScheme == .dark ? DS.color.dangerDark : DS.color.danger
+        }
     }
     
     private var shadowColor: Color {

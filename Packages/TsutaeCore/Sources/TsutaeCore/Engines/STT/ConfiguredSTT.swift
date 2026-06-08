@@ -249,15 +249,16 @@ public enum ConfiguredSTTRouter {
         let localEngine = STTEngineFactory.makeLocalEngine(config: resolvedConfig.stt)
         let modelID = resolvedConfig.stt.local.preferredModel ?? resolvedConfig.stt.model ?? ""
         
-        if try shouldKeepLocalModelWarmed(config: resolvedConfig) {
+        if try shouldKeepLocalModelWarmed(config: resolvedConfig), modelID.isEmpty == false {
+            await FluidAudioSTT.unloadAllModels(except: modelID)
             let startedAt = CFAbsoluteTimeGetCurrent()
             try await localEngine.load()
             let message = "STT prewarm finished. engine=\(localEngine.id) model=\(modelID) elapsed_ms=\(formatElapsedMs(since: startedAt))"
             logger.info("\(message, privacy: .public)")
             PerformanceLog.record(category: "STTRouter", message: message)
         } else {
-            localEngine.unload()
-            let message = "STT local model unloaded by residency policy. engine=\(localEngine.id) model=\(modelID) mode=\(resolvedConfig.stt.mode.rawValue)"
+            await FluidAudioSTT.unloadAllModels()
+            let message = "STT local models unloaded by residency policy. engine=\(localEngine.id) model=\(modelID) mode=\(resolvedConfig.stt.mode.rawValue)"
             logger.info("\(message, privacy: .public)")
             PerformanceLog.record(category: "STTRouter", message: message)
         }
@@ -265,6 +266,16 @@ public enum ConfiguredSTTRouter {
     
     public static func prewarmLocalModel(config: Config? = nil) async throws {
         try await applyLocalModelResidencyPolicy(config: config)
+    }
+    
+    public static func unloadLocalModel(config: Config? = nil) async throws {
+        let resolvedConfig = try config ?? ConfigLoader.load()
+        let localEngine = STTEngineFactory.makeLocalEngine(config: resolvedConfig.stt)
+        let modelID = resolvedConfig.stt.local.preferredModel ?? resolvedConfig.stt.model ?? ""
+        await FluidAudioSTT.unloadAllModels()
+        let message = "STT local model force-unloaded. engine=\(localEngine.id) model=\(modelID)"
+        logger.info("\(message, privacy: .public)")
+        PerformanceLog.record(category: "STTRouter", message: message)
     }
     
     public static func transcribe(_ audio: AudioData, config: Config? = nil) async throws -> Transcript {

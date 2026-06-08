@@ -7,16 +7,53 @@ import OSLog
 final class SettingsWindowCoordinator {
     static let shared = SettingsWindowCoordinator()
     var open: ((String?) -> Void)?
+    weak var window: NSWindow?
     private init() {}
+    
+    func openSettings(tab: String?) {
+        if let tab {
+            UserDefaults.standard.set(tab, forKey: "settings.selectedTab")
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        if let open {
+            open(tab)
+        } else {
+            _ = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            self.bringToFront()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            self.bringToFront()
+        }
+    }
+    
+    func bringToFront() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window {
+            window.identifier = NSUserInterfaceItemIdentifier("settings-window")
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+            return
+        }
+        if let fallback = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings-window" || $0.title == "Settings" }) {
+            self.window = fallback
+            fallback.makeKeyAndOrderFront(nil)
+            fallback.orderFrontRegardless()
+        }
+    }
 }
 
 @MainActor
-final class LocalSTTResidencyCoordinator {
+final class LocalSTTResidencyCoordinator: ObservableObject {
     static let shared = LocalSTTResidencyCoordinator()
+    
+    @Published private(set) var warmingModelID: String?
     
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "LocalSTTResidency")
     private var busyCancellable: AnyCancellable?
     private var pendingConfig: Config?
+    private var debugNextWarmupDelay: Duration?
     
     private init() {
         busyCancellable = RecordingSession.shared.$isBusy
@@ -43,13 +80,77 @@ final class LocalSTTResidencyCoordinator {
         apply(config: config)
     }
     
+    func requiresWarmupGate(config: Config) async -> Bool {
+        guard config.stt.mode == .localFirst else { return false }
+        guard let modelID = config.stt.local.preferredModel ?? config.stt.model, modelID.isEmpty == false else { return false }
+        guard LocalSTTModelCatalog.isDownloaded(id: modelID) else { return false }
+        if warmingModelID == modelID {
+            return true
+        }
+        return await FluidAudioSTT.isModelReady(modelID) == false
+    }
+    
+    func waitUntilLocalModelReady(config: Config) async throws {
+        guard config.stt.mode == .localFirst else { return }
+        guard let modelID = config.stt.local.preferredModel ?? config.stt.model, modelID.isEmpty == false else { return }
+        warmingModelID = modelID
+        let debugDelay = debugNextWarmupDelay
+        debugNextWarmupDelay = nil
+        defer {
+            if warmingModelID == modelID {
+                warmingModelID = nil
+            }
+        }
+        if let debugDelay {
+            try await Task.sleep(for: debugDelay)
+        }
+        try await ConfiguredSTTRouter.prewarmLocalModel(config: config)
+    }
+    
+    func prepareWarmupGateTest(config: Config, delay: Duration = .seconds(5)) {
+        guard let modelID = config.stt.local.preferredModel ?? config.stt.model, modelID.isEmpty == false else { return }
+        debugNextWarmupDelay = delay
+        warmingModelID = nil
+        Task(priority: .utility) {
+            do {
+                try await ConfiguredSTTRouter.unloadLocalModel(config: config)
+                await MainActor.run {
+                    self.logger.info("Prepared local STT warmup gate test. model=\(modelID, privacy: .public)")
+                }
+            } catch {
+                await MainActor.run {
+                    self.logger.error("Failed to prepare warmup gate test: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
+    }
+    
     private func apply(config: Config) {
+        let modelID = config.stt.local.preferredModel ?? config.stt.model
+        let shouldWarm = config.stt.mode == .localFirst || config.stt.local.keepModelWarmedInRemoteFirst
+        
+        if shouldWarm {
+            warmingModelID = modelID
+        } else {
+            warmingModelID = nil
+        }
+        
         Task(priority: .utility) {
             do {
                 try await ConfiguredSTTRouter.applyLocalModelResidencyPolicy(config: config)
-                self.logger.info("Applied local STT residency policy")
+                await MainActor.run {
+                    if self.warmingModelID == modelID {
+                        self.warmingModelID = nil
+                    }
+                    self.logger.info("Applied local STT residency policy")
+                }
             } catch {
-                self.logger.error("Failed to apply local STT residency policy: \(error.localizedDescription, privacy: .public)")
+                await MainActor.run {
+                    if self.warmingModelID == modelID {
+                        self.warmingModelID = nil
+                    }
+                    self.logger.error("Failed to apply local STT residency policy: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }
@@ -138,23 +239,41 @@ private struct SettingsWindowRoot: View {
     var body: some View {
         SettingsView()
             .environment(\.locale, locale)
+            .background(SettingsWindowAccessor())
             .onAppear {
-                SettingsWindowCoordinator.shared.open = { tab in
-                    if let tab {
-                        UserDefaults.standard.set(tab, forKey: "settings.selectedTab")
-                    }
+                SettingsWindowCoordinator.shared.open = { _ in
                     openWindow(id: "settings-window")
                 }
             }
     }
 }
 
-private struct OpenSettingsMenuButton: View {
-    @Environment(\.openWindow) private var openWindow
+private struct SettingsWindowAccessor: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let window = view.window {
+                window.identifier = NSUserInterfaceItemIdentifier("settings-window")
+                SettingsWindowCoordinator.shared.window = window
+            }
+        }
+        return view
+    }
     
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            if let window = nsView.window {
+                window.identifier = NSUserInterfaceItemIdentifier("settings-window")
+                SettingsWindowCoordinator.shared.window = window
+            }
+        }
+    }
+}
+
+private struct OpenSettingsMenuButton: View {
     var body: some View {
         Button(L10n.Menu.settings) {
-            openWindow(id: "settings-window")
+            SettingsWindowCoordinator.shared.openSettings(tab: nil)
         }
     }
 }
@@ -163,11 +282,18 @@ private struct SettingsCommands: Commands {
     @Environment(\.openWindow) private var openWindow
     
     var body: some Commands {
+        let _ = installOpenHandler()
         CommandGroup(replacing: .appSettings) {
             Button(L10n.Menu.settings) {
-                openWindow(id: "settings-window")
+                SettingsWindowCoordinator.shared.openSettings(tab: nil)
             }
             .keyboardShortcut(",", modifiers: .command)
+        }
+    }
+    
+    private func installOpenHandler() {
+        SettingsWindowCoordinator.shared.open = { _ in
+            openWindow(id: "settings-window")
         }
     }
 }

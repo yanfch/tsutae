@@ -24,6 +24,7 @@ final class RecordingSession: ObservableObject {
     
     private var hasShownAccessibilityPermissionCompanionThisLaunch = false
     private var hasShownClipboardFallbackCompanionThisLaunch = false
+    private var activeWarmupTask: Task<Void, Never>?
     private var activeTranscriptionTask: Task<Void, Never>?
     private var activeOperationID = UUID()
     
@@ -40,6 +41,8 @@ final class RecordingSession: ObservableObject {
     func cancel() {
         logger.info("Cancelling current recording/transcription session")
         activeOperationID = UUID()
+        activeWarmupTask?.cancel()
+        activeWarmupTask = nil
         activeTranscriptionTask?.cancel()
         activeTranscriptionTask = nil
         audioInput.cancelRecording()
@@ -57,24 +60,55 @@ final class RecordingSession: ObservableObject {
         
         isBusy = true
         statusText = "requesting microphone permission"
+        let operationID = UUID()
+        activeOperationID = operationID
+        activeWarmupTask?.cancel()
         
-        Task {
+        activeWarmupTask = Task {
+            defer {
+                if self.activeOperationID == operationID {
+                    self.activeWarmupTask = nil
+                }
+            }
+            
             do {
+                let config = (try? ConfigLoader.load()) ?? .default
+                if await LocalSTTResidencyCoordinator.shared.requiresWarmupGate(config: config) {
+                    self.statusText = "warming local model"
+                    FloatingRecordingBar.shared.show(state: .idle)
+                    self.presentCompanion(
+                        title: L10n.RecordingCompanion.preparingLocalModelTitle,
+                        message: L10n.RecordingCompanion.preparingLocalModelMessage,
+                        tone: .info,
+                        displayState: .waiting
+                    )
+                    try await LocalSTTResidencyCoordinator.shared.waitUntilLocalModelReady(config: config)
+                    try Task.checkCancellation()
+                    guard self.activeOperationID == operationID else { return }
+                }
+                
                 try Paths.ensureDirectories()
                 try await audioInput.startRecording()
-                lastError = nil
-                isRecording = true
-                statusText = "recording"
-                startRecordingProgressPolling()
+                try Task.checkCancellation()
+                guard self.activeOperationID == operationID else {
+                    audioInput.cancelRecording()
+                    return
+                }
+                self.lastError = nil
+                self.isRecording = true
+                self.statusText = "recording"
+                self.startRecordingProgressPolling()
                 FloatingRecordingBar.shared.show(state: .listening)
-                logger.info("Recording started")
+                self.logger.info("Recording started")
+            } catch is CancellationError {
+                self.logger.info("Recording start cancelled before microphone capture began")
             } catch {
-                isBusy = false
-                isRecording = false
-                statusText = "start failed"
-                lastError = error.localizedDescription
-                presentStartError(error)
-                logger.error("Failed to start recording: \(error.localizedDescription, privacy: .public)")
+                self.isBusy = false
+                self.isRecording = false
+                self.statusText = "start failed"
+                self.lastError = error.localizedDescription
+                self.presentStartError(error)
+                self.logger.error("Failed to start recording: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -222,13 +256,15 @@ final class RecordingSession: ObservableObject {
                 presentCompanion(
                     title: L10n.RecordingCompanion.microphoneAccessRequiredTitle,
                     message: L10n.RecordingCompanion.microphoneAccessRequiredMessage,
-                    primaryAction: .init(title: L10n.Common.openSystemSettings, style: .primary) {
+                    tone: .warning,
+                    primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
                         FloatingRecordingBar.shared.dismissCompanion()
-                        FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Microphone")
+                        FloatingRecordingBar.shared.openAppSettings(tab: "permissions", focus: "microphone")
                     },
                     secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
                         FloatingRecordingBar.shared.dismissCompanion()
-                    }
+                    },
+                    displayState: .warning
                 )
                 return
             case .noInputDevice:
@@ -338,7 +374,40 @@ final class RecordingSession: ObservableObject {
             }
         }
         
-        if error is FluidAudioSTTError || error is AppleSpeechSTTError {
+        if let appleSpeechError = error as? AppleSpeechSTTError {
+            switch appleSpeechError {
+            case .authorizationDenied, .authorizationPending:
+                presentCompanion(
+                    title: L10n.RecordingCompanion.speechRecognitionAccessRequiredTitle,
+                    message: L10n.RecordingCompanion.speechRecognitionAccessRequiredMessage,
+                    tone: .warning,
+                    primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
+                        FloatingRecordingBar.shared.dismissCompanion()
+                        FloatingRecordingBar.shared.openAppSettings(tab: "permissions", focus: "speechRecognition")
+                    },
+                    secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
+                        FloatingRecordingBar.shared.dismissCompanion()
+                    },
+                    displayState: .warning
+                )
+                return
+            case .recognizerUnavailable, .recognitionTimedOut, .missingUsageDescription:
+                presentCompanion(
+                    title: L10n.RecordingCompanion.sttConfigurationErrorTitle,
+                    message: appleSpeechError.localizedDescription,
+                    primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
+                        FloatingRecordingBar.shared.dismissCompanion()
+                        FloatingRecordingBar.shared.openAppSettings(tab: "stt")
+                    },
+                    secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
+                        FloatingRecordingBar.shared.dismissCompanion()
+                    }
+                )
+                return
+            }
+        }
+        
+        if error is FluidAudioSTTError {
             presentCompanion(
                 title: L10n.RecordingCompanion.sttConfigurationErrorTitle,
                 message: error.localizedDescription,
@@ -375,15 +444,16 @@ final class RecordingSession: ObservableObject {
                     presentCompanion(
                         title: L10n.RecordingCompanion.accessibilityAccessRequiredTitle,
                         message: L10n.RecordingCompanion.accessibilityAccessRequiredMessage,
-                        primaryAction: .init(title: L10n.Common.openAccessibilitySettings, style: .primary) {
+                        tone: .warning,
+                        primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
                             _ = FocusedTextInjector.requestAccessibilityPermission()
                             FloatingRecordingBar.shared.dismissCompanion()
-                            FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Accessibility")
+                            FloatingRecordingBar.shared.openAppSettings(tab: "permissions", focus: "accessibility")
                         },
                         secondaryAction: .init(title: L10n.Common.notNow, style: .secondary) {
                             FloatingRecordingBar.shared.dismissCompanion()
                         },
-                        displayState: .idle
+                        displayState: .warning
                     )
                 } else if !hasShownClipboardFallbackCompanionThisLaunch {
                     hasShownClipboardFallbackCompanionThisLaunch = true
@@ -422,7 +492,8 @@ final class RecordingSession: ObservableObject {
     private func presentCompanion(
         title: String,
         message: String,
-        primaryAction: RecordingBarCompanionAction,
+        tone: RecordingBarCompanion.Tone = .danger,
+        primaryAction: RecordingBarCompanionAction? = nil,
         secondaryAction: RecordingBarCompanionAction? = nil,
         autoDismissAfter: TimeInterval? = nil,
         displayState: RecordingBarVisualState = .failed
@@ -431,6 +502,7 @@ final class RecordingSession: ObservableObject {
             RecordingBarCompanion(
                 title: title,
                 message: message,
+                tone: tone,
                 primaryAction: primaryAction,
                 secondaryAction: secondaryAction,
                 autoDismissAfter: autoDismissAfter

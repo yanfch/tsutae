@@ -1,7 +1,10 @@
+import AVFoundation
 import Combine
 import Foundation
+import Speech
 import SwiftUI
 import TsutaeCore
+import UserNotifications
 
 // MARK: - Settings View
 
@@ -16,6 +19,8 @@ struct SettingsView: View {
     @AppStorage("settings.appearanceMode") private var appearanceMode = "system"
     @AppStorage(L10n.appLanguageDefaultsKey) private var appLanguage = L10n.AppLanguage.system.rawValue
     @AppStorage("settings.selectedTab") private var selectedTabRaw = SettingsTab.general.rawValue
+    @StateObject private var sttStore = STTSettingsStore()
+    @State private var selectedTabState: SettingsTab = .general
     @State private var titlebarCompensation: CGFloat = 0
     
     var body: some View {
@@ -30,6 +35,18 @@ struct SettingsView: View {
             colorScheme: resolvedColorScheme
         )
         .id(appLanguage)
+        .onAppear {
+            selectedTabState = SettingsTab(rawValue: selectedTabRaw) ?? .general
+        }
+        .onChange(of: selectedTabState) { newValue in
+            selectedTabRaw = newValue.rawValue
+        }
+        .onChange(of: selectedTabRaw) { newValue in
+            let resolved = SettingsTab(rawValue: newValue) ?? .general
+            if resolved != selectedTabState {
+                selectedTabState = resolved
+            }
+        }
     }
     
     private var settingsShell: some View {
@@ -83,26 +100,32 @@ struct SettingsView: View {
         case .general:
             GeneralSettingsPage()
         case .stt:
-            STTSettingsPage()
+            STTSettingsPage(store: sttStore)
         case .tts:
             TTSSettingsPage()
         case .server:
             ServerSettingsPage()
         case .permissions:
             PermissionsSettingsPage()
+        case .developer:
+            DeveloperToolsPage(store: sttStore)
         default:
             SettingsPlaceholderView(tab: selectedTab)
         }
     }
     
     private var selectedTab: SettingsTab {
-        SettingsTab(rawValue: selectedTabRaw) ?? .general
+        selectedTabState
     }
     
     private var selectedTabBinding: Binding<SettingsTab> {
         Binding(
-            get: { selectedTab },
-            set: { selectedTabRaw = $0.rawValue }
+            get: { selectedTabState },
+            set: { newValue in
+                withAnimation(.snappy(duration: 0.18, extraBounce: 0)) {
+                    selectedTabState = newValue
+                }
+            }
         )
     }
     
@@ -124,11 +147,18 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     case recipes
     case secrets
     case about
+    case developer
     
     var id: String { rawValue }
     
     static let primaryTabs: [SettingsTab] = [.general, .stt, .tts, .server, .permissions]
-    static let secondaryTabs: [SettingsTab] = [.vad, .hotkeys, .recipes, .secrets, .about]
+    static var secondaryTabs: [SettingsTab] {
+        #if DEBUG
+        return [.vad, .hotkeys, .recipes, .secrets, .about, .developer]
+        #else
+        return [.vad, .hotkeys, .recipes, .secrets, .about]
+        #endif
+    }
     
     var title: String {
         switch self {
@@ -142,6 +172,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .recipes: return L10n.Settings.tabRecipes
         case .secrets: return L10n.Settings.tabSecrets
         case .about: return L10n.Settings.tabAbout
+        case .developer: return "Developer"
         }
     }
     
@@ -167,6 +198,8 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
             return "Store keys and tokens used by engines and services."
         case .about:
             return "Version details, diagnostics, and product information."
+        case .developer:
+            return "Debug-only tools for warmup, runtime state, and test flows."
         }
     }
     
@@ -184,6 +217,8 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
             return "Review"
         case .vad, .hotkeys, .recipes, .secrets, .about:
             return "Prototype"
+        case .developer:
+            return "Debug"
         }
     }
     
@@ -199,6 +234,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .recipes: return "clipboard"
         case .secrets: return "key"
         case .about: return "info.circle"
+        case .developer: return "hammer"
         }
     }
 }
@@ -385,7 +421,6 @@ private struct GeneralSettingsPage: View {
 private struct GeneralSettingsView: View {
     
     @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @AppStorage("settings.themeMode") private var themeMode = "defaultBlue"
     @AppStorage("settings.appearanceMode") private var appearanceMode = "system"
     @AppStorage(L10n.appLanguageDefaultsKey) private var appLanguage = L10n.AppLanguage.system.rawValue
     @AppStorage("settings.defaultAction") private var defaultAction = "injectFocusedApp"
@@ -396,26 +431,6 @@ private struct GeneralSettingsView: View {
         VStack(alignment: .leading, spacing: 22) {
             // 外观分组
             SettingsSection(title: L10n.Settings.sectionAppearance) {
-                // 主题色
-                SettingsRow(label: L10n.Settings.themeColorLabel) {
-                    Picker("", selection: $themeMode) {
-                        Text(L10n.Settings.themeDefaultBlue).tag("defaultBlue")
-                        Text(L10n.Settings.themeFollowSystem).tag("system")
-                        Text(L10n.Settings.themeCustom).tag("custom")
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 330)
-                }
-                
-                SettingsDivider()
-                
-                // 主题色预览
-                SettingsRow(label: L10n.Settings.themePreviewLabel) {
-                    ThemeColorPicker(selectedTheme: $themeMode)
-                }
-                
-                SettingsDivider()
-                
                 // 外观
                 SettingsRow(label: L10n.Settings.appearanceModeLabel) {
                     Picker("", selection: $appearanceMode) {
@@ -493,10 +508,9 @@ private struct GeneralSettingsView: View {
                 
                 SettingsDivider()
                 
-                // 辅助功能权限
-                SettingsRow(label: L10n.Settings.accessibilityPermissionLabel) {
-                    Button(L10n.Settings.openSystemSettingsButton) {
-                        FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Accessibility")
+                SettingsRow(label: L10n.Settings.permissionsEntryLabel) {
+                    Button(L10n.Settings.permissionsEntryButton) {
+                        FloatingRecordingBar.shared.openAppSettings(tab: "permissions")
                     }
                     .buttonStyle(.bordered)
                 }
@@ -520,92 +534,10 @@ private struct GeneralSettingsView: View {
     
     private func resetDefaults() {
         launchAtLogin = false
-        themeMode = "defaultBlue"
         appearanceMode = "system"
         appLanguage = L10n.AppLanguage.system.rawValue
         defaultAction = "injectFocusedApp"
         transcriptionLanguage = "auto"
-    }
-}
-
-// MARK: - Theme Color Picker
-
-private struct ThemeColorPicker: View {
-    
-    @Binding var selectedTheme: String
-    
-    var body: some View {
-        HStack(spacing: 18) {
-            ForEach(ThemeSwatch.allCases) { swatch in
-                ThemeSwatchButton(
-                    swatch: swatch,
-                    isSelected: swatch.id == selectedTheme
-                ) {
-                    selectedTheme = swatch.id
-                }
-            }
-        }
-    }
-}
-
-private struct ThemeSwatchButton: View {
-    
-    let swatch: ThemeSwatch
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Circle()
-                .fill(swatch.color)
-                .frame(width: 30, height: 30)
-                .overlay {
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .overlay {
-                    Circle()
-                        .strokeBorder(
-                            isSelected ? swatch.color.opacity(0.4) : Color.clear,
-                            lineWidth: 8
-                        )
-                }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private enum ThemeSwatch: CaseIterable, Identifiable {
-    case blue
-    case orange
-    case pink
-    case purple
-    case green
-    case gray
-    
-    var id: String {
-        switch self {
-        case .blue: return "defaultBlue"
-        case .orange: return "orange"
-        case .pink: return "pink"
-        case .purple: return "purple"
-        case .green: return "green"
-        case .gray: return "gray"
-        }
-    }
-    
-    var color: Color {
-        switch self {
-        case .blue: return DS.color.brandBlue
-        case .orange: return .orange
-        case .pink: return .pink
-        case .purple: return .purple
-        case .green: return DS.color.accent  // 松针绿
-        case .gray: return .gray
-        }
     }
 }
 
@@ -614,8 +546,19 @@ private enum STTSettingsScreen {
     case localModels
 }
 
+private struct LocalModelDialog: Identifiable {
+    enum Kind {
+        case confirmDelete(LocalSTTModelDescriptor)
+        case error(String)
+    }
+    
+    let id = UUID()
+    let kind: Kind
+}
+
 private struct STTSettingsPage: View {
-    @StateObject private var store = STTSettingsStore()
+    @ObservedObject var store: STTSettingsStore
+    @ObservedObject private var residencyCoordinator = LocalSTTResidencyCoordinator.shared
     @State private var screen: STTSettingsScreen = .overview
     @State private var isRemoteConfigExpanded = false
     @State private var remoteDraftBaseURL = ""
@@ -626,6 +569,7 @@ private struct STTSettingsPage: View {
     @State private var initialRemoteDraftSignature = ""
     @State private var lastSuccessfulRemoteTestSignature: String?
     @State private var remoteSavedDismissTask: Task<Void, Never>?
+    @State private var localModelDialog: LocalModelDialog?
     
     var body: some View {
         Group {
@@ -639,6 +583,27 @@ private struct STTSettingsPage: View {
         .onAppear {
             isRemoteConfigExpanded = false
             syncRemoteDraftFromStore()
+        }
+        .alert(item: $localModelDialog) { dialog in
+            switch dialog.kind {
+            case .confirmDelete(let descriptor):
+                return Alert(
+                    title: Text(deleteAlertTitle(for: descriptor)),
+                    message: Text(deleteAlertMessage(for: descriptor)),
+                    primaryButton: .destructive(Text(deleteAlertPrimaryActionTitle(for: descriptor))) {
+                        Task {
+                            await confirmDeleteModel(descriptor.id)
+                        }
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .error(let message):
+                return Alert(
+                    title: Text("Couldn’t Delete Model"),
+                    message: Text(message),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
         }
     }
     
@@ -697,6 +662,7 @@ private struct STTSettingsPage: View {
                     
                     HStack(spacing: 10) {
                         Button("Manage Models") {
+                            store.prepareLocalModelsPresentation()
                             withAnimation(.easeInOut(duration: 0.18)) {
                                 screen = .localModels
                             }
@@ -716,6 +682,13 @@ private struct STTSettingsPage: View {
                         badgeTitle: store.keepLocalWarmedInRemoteFirstBadgeTitle,
                         badgeTone: store.config.stt.local.keepModelWarmedInRemoteFirst ? .active : .neutral
                     )
+                    
+                    if residencyCoordinator.warmingModelID == store.selectedModelID {
+                        SettingsInlineStatusMessage(
+                            text: "Warming \(store.selectedModelTitle)…",
+                            tone: .info
+                        )
+                    }
                 }
             }
             
@@ -777,7 +750,12 @@ private struct STTSettingsPage: View {
                                     text: $remoteDraftAPIKey,
                                     isRevealed: $isRemoteAPIKeyRevealed,
                                     placeholder: remoteAPIKeyPlaceholder,
-                                    width: 500
+                                    width: 500,
+                                    onReveal: {
+                                        if remoteDraftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                            remoteDraftAPIKey = store.loadRemoteAPIKey() ?? ""
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -841,7 +819,7 @@ private struct STTSettingsPage: View {
                 ServerStatusCapsule(title: store.selectedModelTitle, tone: .active)
             }
             
-            SettingsDashboardCard(title: "Local Models", subtitle: "Browse the on-device library here. Rough size and RAM numbers are planning values for now; later we will replace them with measured values.") {
+            SettingsDashboardCard(title: "Local Models", subtitle: "Browse the on-device library here. Use Downloaded to quickly filter what is already on this Mac. Rough size and RAM numbers are planning values for now; later we will replace them with measured values.") {
                 VStack(alignment: .leading, spacing: 16) {
                     SettingsKeyValueList(rows: [
                         ("Selected", store.selectedModelTitle),
@@ -877,13 +855,46 @@ private struct STTSettingsPage: View {
                             descriptor: descriptor,
                             state: store.downloadState(for: descriptor.id),
                             isSelected: store.selectedModelID == descriptor.id,
+                            isWarming: residencyCoordinator.warmingModelID == descriptor.id,
                             onDownload: { store.downloadModel(descriptor.id) },
-                            onSelect: { store.selectModel(descriptor.id) }
+                            onSelect: { store.selectModel(descriptor.id) },
+                            onDelete: store.canDeleteModel(descriptor.id) ? {
+                                promptDeleteModel(descriptor.id)
+                            } : nil
                         )
                     }
                 }
             }
         }
+    }
+    
+    private func promptDeleteModel(_ modelID: String) {
+        guard let descriptor = LocalSTTModelCatalog.descriptor(id: modelID) else { return }
+        localModelDialog = .init(kind: .confirmDelete(descriptor))
+    }
+    
+    private func confirmDeleteModel(_ modelID: String) async {
+        do {
+            try await store.deleteModel(modelID)
+        } catch {
+            localModelDialog = .init(kind: .error(error.localizedDescription))
+        }
+    }
+    
+    private func deleteAlertTitle(for descriptor: LocalSTTModelDescriptor) -> String {
+        store.selectedModelID == descriptor.id ? "Delete Current Local Model?" : "Delete Downloaded Model?"
+    }
+    
+    private func deleteAlertPrimaryActionTitle(for descriptor: LocalSTTModelDescriptor) -> String {
+        store.selectedModelID == descriptor.id ? "Delete & Switch" : "Delete"
+    }
+    
+    private func deleteAlertMessage(for descriptor: LocalSTTModelDescriptor) -> String {
+        if store.selectedModelID == descriptor.id {
+            let fallbackTitle = store.replacementModelTitle(afterDeleting: descriptor.id)
+            return "\(descriptor.displayName) is the current default local model. Tsutae will remove its files and switch local selection to \(fallbackTitle)."
+        }
+        return "Remove \(descriptor.displayName) from this Mac? You can download it again later."
     }
     
     private var remoteEnabledBinding: Binding<Bool> {
@@ -1054,37 +1065,53 @@ private final class STTSettingsStore: ObservableObject {
     @Published var isCheckingRemote = false
     
     private var activeDownloads: [String: Task<Void, Never>] = [:]
+    private var modelPresentationOrder: [String: Int] = [:]
     
     init() {
         self.config = (try? ConfigLoader.load()) ?? .default
         refreshDownloadStates()
+        rebuildModelPresentationOrder()
     }
     
     var filteredModels: [LocalSTTModelDescriptor] {
-        LocalSTTModelCatalog.all.filter { descriptor in
-            let matchesFilter: Bool = {
-                switch filter {
-                case .all:
-                    return true
-                case .auto:
-                    return descriptor.group == .auto
-                case .chinese:
-                    return descriptor.group == .chinese
-                case .english:
-                    return descriptor.group == .english
-                case .preview:
-                    return descriptor.group == .preview
+        LocalSTTModelCatalog.all
+            .filter { descriptor in
+                let matchesFilter: Bool = {
+                    switch filter {
+                    case .all:
+                        return true
+                    case .downloaded:
+                        if case .downloaded = downloadStates[descriptor.id] ?? .notStarted {
+                            return true
+                        }
+                        return false
+                    case .auto:
+                        return descriptor.group == .auto
+                    case .chinese:
+                        return descriptor.group == .chinese
+                    case .english:
+                        return descriptor.group == .english
+                    case .preview:
+                        return descriptor.group == .preview
+                    }
+                }()
+                
+                let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+                let matchesSearch: Bool = query.isEmpty
+                    || descriptor.displayName.localizedCaseInsensitiveContains(query)
+                    || descriptor.summary.localizedCaseInsensitiveContains(query)
+                    || descriptor.tags.joined(separator: " ").localizedCaseInsensitiveContains(query)
+                
+                return matchesFilter && matchesSearch
+            }
+            .sorted { lhs, rhs in
+                let lhsOrder = modelPresentationOrder[lhs.id] ?? Int.max
+                let rhsOrder = modelPresentationOrder[rhs.id] ?? Int.max
+                if lhsOrder != rhsOrder {
+                    return lhsOrder < rhsOrder
                 }
-            }()
-            
-            let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-            let matchesSearch: Bool = query.isEmpty
-                || descriptor.displayName.localizedCaseInsensitiveContains(query)
-                || descriptor.summary.localizedCaseInsensitiveContains(query)
-                || descriptor.tags.joined(separator: " ").localizedCaseInsensitiveContains(query)
-            
-            return matchesFilter && matchesSearch
-        }
+                return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            }
     }
     
     var availableModelCount: Int {
@@ -1219,6 +1246,7 @@ private final class STTSettingsStore: ObservableObject {
     
     func refreshDiskState() {
         refreshDownloadStates()
+        rebuildModelPresentationOrder()
     }
     
     func setFallbackEnabled(_ isEnabled: Bool) {
@@ -1285,6 +1313,22 @@ private final class STTSettingsStore: ObservableObject {
         downloadStates[modelID] ?? .notStarted
     }
     
+    func prepareLocalModelsPresentation() {
+        rebuildModelPresentationOrder()
+    }
+    
+    func canDeleteModel(_ modelID: String) -> Bool {
+        if case .downloaded = downloadStates[modelID] ?? .notStarted {
+            return true
+        }
+        return false
+    }
+    
+    func replacementModelTitle(afterDeleting modelID: String) -> String {
+        let replacementID = replacementModelID(afterDeleting: modelID)
+        return LocalSTTModelCatalog.descriptor(id: replacementID)?.displayName ?? "another model"
+    }
+    
     func selectModel(_ modelID: String) {
         config.stt.engine = "fluidaudio_local"
         config.stt.model = modelID
@@ -1311,9 +1355,11 @@ private final class STTSettingsStore: ObservableObject {
             do {
                 try await LocalSTTModelCatalog.download(id: modelID) { progress in
                     Task { @MainActor [weak self] in
-                        self?.downloadStates[modelID] = .downloading(progress: progress)
+                        self?.updateDownloadProgress(for: modelID, candidate: progress)
                     }
                 }
+                self.updateDownloadProgress(for: modelID, candidate: 1)
+                try? await Task.sleep(for: .milliseconds(900))
                 if self.config.stt.local.downloadedModels.contains(modelID) == false {
                     self.config.stt.local.downloadedModels.append(modelID)
                 }
@@ -1329,6 +1375,33 @@ private final class STTSettingsStore: ObservableObject {
             }
             self.activeDownloads[modelID] = nil
         }
+    }
+    
+    func deleteModel(_ modelID: String) async throws {
+        guard canDeleteModel(modelID) else { return }
+        
+        activeDownloads[modelID]?.cancel()
+        activeDownloads[modelID] = nil
+        
+        let replacementID = replacementModelID(afterDeleting: modelID)
+        try await LocalSTTModelCatalog.delete(id: modelID)
+        
+        config.stt.local.downloadedModels.removeAll { $0 == modelID }
+        if config.stt.local.preferredModel == modelID {
+            config.stt.local.preferredModel = replacementID
+        }
+        if config.stt.model == modelID {
+            config.stt.model = replacementID
+        }
+        if config.stt.local.finalModel == modelID {
+            config.stt.local.finalModel = replacementID
+        }
+        if config.stt.local.previewModel == modelID {
+            config.stt.local.previewModel = replacementID
+        }
+        
+        refreshDownloadStates()
+        save()
     }
     
     func checkRemoteEndpoint(baseURL: String, model: String, requestStyleRawValue: String, apiKey: String, completion: @escaping (Bool) -> Void) {
@@ -1386,22 +1459,104 @@ private final class STTSettingsStore: ObservableObject {
     }
     
     private func refreshDownloadStates() {
+        var resolvedDownloadedModels = config.stt.local.downloadedModels
+        var didChangeDownloadedModels = false
+        
         for descriptor in LocalSTTModelCatalog.all {
             if LocalSTTModelCatalog.isDownloaded(id: descriptor.id) {
                 downloadStates[descriptor.id] = .downloaded
-                if config.stt.local.downloadedModels.contains(descriptor.id) == false {
-                    config.stt.local.downloadedModels.append(descriptor.id)
+                if resolvedDownloadedModels.contains(descriptor.id) == false {
+                    resolvedDownloadedModels.append(descriptor.id)
+                    didChangeDownloadedModels = true
                 }
             } else {
                 downloadStates[descriptor.id] = .notStarted
             }
         }
-        save()
+        
+        if didChangeDownloadedModels {
+            config.stt.local.downloadedModels = resolvedDownloadedModels
+            save()
+        }
+    }
+    
+    private func rebuildModelPresentationOrder() {
+        let orderedIDs = LocalSTTModelCatalog.all
+            .sorted { lhs, rhs in
+                let lhsRank = initialModelSortRank(for: lhs.id)
+                let rhsRank = initialModelSortRank(for: rhs.id)
+                if lhsRank != rhsRank {
+                    return lhsRank < rhsRank
+                }
+                if lhs.isRecommended != rhs.isRecommended {
+                    return lhs.isRecommended && !rhs.isRecommended
+                }
+                return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            }
+            .map(\.id)
+        
+        modelPresentationOrder = Dictionary(
+            uniqueKeysWithValues: orderedIDs.enumerated().map { index, id in (id, index) }
+        )
+    }
+    
+    private func initialModelSortRank(for modelID: String) -> Int {
+        if modelID == selectedModelID {
+            return 0
+        }
+        switch downloadStates[modelID] ?? .notStarted {
+        case .downloaded:
+            return 1
+        case .downloading:
+            return 2
+        case .failed:
+            return 3
+        case .notStarted:
+            return 4
+        }
+    }
+    
+    private func updateDownloadProgress(for modelID: String, candidate: Double) {
+        guard case .downloading(let current) = downloadStates[modelID] ?? .notStarted else { return }
+        let upperBound = candidate >= 1 ? 1.0 : 0.99
+        let clamped = max(0, min(candidate, upperBound))
+        downloadStates[modelID] = .downloading(progress: max(current, clamped))
+    }
+    
+    private func replacementModelID(afterDeleting modelID: String) -> String {
+        let orderedDescriptors = LocalSTTModelCatalog.all.sorted { lhs, rhs in
+            let lhsOrder = modelPresentationOrder[lhs.id] ?? Int.max
+            let rhsOrder = modelPresentationOrder[rhs.id] ?? Int.max
+            if lhsOrder != rhsOrder {
+                return lhsOrder < rhsOrder
+            }
+            return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
+        
+        if let downloadedReplacement = orderedDescriptors.first(where: {
+            guard $0.id != modelID else { return false }
+            if case .downloaded = downloadStates[$0.id] ?? .notStarted {
+                return true
+            }
+            return false
+        }) {
+            return downloadedReplacement.id
+        }
+        
+        if let recommendedReplacement = LocalSTTModelCatalog.all.first(where: { $0.id != modelID && $0.isRecommended }) {
+            return recommendedReplacement.id
+        }
+        
+        return LocalSTTModelCatalog.all.first(where: { $0.id != modelID })?.id ?? modelID
     }
     
     private func save() {
         try? ConfigLoader.save(config)
-        NotificationCenter.default.post(name: .tsutaeConfigDidChange, object: nil)
+        NotificationCenter.default.post(
+            name: .tsutaeConfigDidChange,
+            object: nil,
+            userInfo: ["config": config]
+        )
         LocalSTTResidencyCoordinator.shared.requestApply(config: config)
     }
     
@@ -1421,6 +1576,7 @@ private final class STTSettingsStore: ObservableObject {
 
 private enum LocalSTTModelFilter: String, CaseIterable {
     case all
+    case downloaded
     case auto
     case chinese
     case english
@@ -1430,6 +1586,8 @@ private enum LocalSTTModelFilter: String, CaseIterable {
         switch self {
         case .all:
             return "All Models"
+        case .downloaded:
+            return "Downloaded"
         case .auto:
             return "Auto / Mixed"
         case .chinese:
@@ -1678,6 +1836,7 @@ private struct SettingsSecureRevealField: View {
     @Binding var isRevealed: Bool
     let placeholder: String
     var width: CGFloat = 420
+    var onReveal: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
@@ -1692,7 +1851,11 @@ private struct SettingsSecureRevealField: View {
             .textFieldStyle(.plain)
             
             Button {
-                isRevealed.toggle()
+                let nextValue = !isRevealed
+                if nextValue {
+                    onReveal?()
+                }
+                isRevealed = nextValue
             } label: {
                 Image(systemName: isRevealed ? "eye.slash" : "eye")
                     .font(.system(size: 13, weight: .medium))
@@ -1850,71 +2013,162 @@ private struct STTLocalModelCard: View {
     let descriptor: LocalSTTModelDescriptor
     let state: STTDownloadState
     let isSelected: Bool
+    let isWarming: Bool
     let onDownload: () -> Void
     let onSelect: () -> Void
+    let onDelete: (() -> Void)?
     @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(descriptor.displayName)
-                        .font(.system(size: 20, weight: .semibold))
-                    Text(descriptor.summary)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(colorScheme == .dark ? DS.color.mutedDark : DS.color.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+        ZStack {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(descriptor.displayName)
+                            .font(.system(size: 20, weight: .semibold))
+                        Text(descriptor.summary)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(colorScheme == .dark ? DS.color.mutedDark : DS.color.muted)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(minHeight: 88, alignment: .topLeading)
+                    
+                    ModelStateBadge(title: stateBadgeTitle, tone: stateBadgeTone, icon: stateBadgeIcon)
                 }
                 
-                Spacer(minLength: 12)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        SettingsMetricPill(title: descriptor.runtime)
+                        SettingsMetricPill(title: descriptor.size)
+                        SettingsMetricPill(title: descriptor.memory)
+                    }
+                    
+                    FlowLayout(spacing: 8, lineSpacing: 8) {
+                        SettingsFeatureTag(title: groupBadgeTitle, tone: .group)
+                        if descriptor.isRecommended {
+                            SettingsFeatureTag(title: "Top Pick", tone: .accent)
+                        }
+                        ForEach(displayedTags, id: \.self) { tag in
+                            SettingsFeatureTag(title: tag, tone: tag == "Beta" ? .neutral : .plain)
+                        }
+                    }
+                }
                 
-                if descriptor.isRecommended {
-                    ServerStatusCapsule(title: "Top Pick", tone: .active)
+                Spacer(minLength: 0)
+                
+                Divider()
+                    .overlay(colorScheme == .dark ? Color.white.opacity(0.08) : DS.color.borderSoft.opacity(0.56))
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Text(statusText)
+                            .font(DS.font.mono(size: 11, weight: .regular))
+                            .foregroundStyle(colorScheme == .dark ? DS.color.mutedDark : DS.color.muted)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .layoutPriority(1)
+                        Spacer(minLength: 12)
+                        actionView
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    
+                    if case .downloading(let progress) = state {
+                        STTInlineDownloadProgress(progress: progress)
+                    }
                 }
             }
-            
-            FlowLayout(spacing: 6, lineSpacing: 6) {
-                ServerStatusCapsule(title: descriptor.runtime, tone: .soft)
-                ServerStatusCapsule(title: descriptor.size, tone: .neutral)
-                ServerStatusCapsule(title: descriptor.memory, tone: .neutral)
-                ForEach(descriptor.tags, id: \.self) { tag in
-                    ServerStatusCapsule(title: tag, tone: tag == "Recommended" ? .active : .soft)
-                }
-            }
-            
-            Divider()
-                .overlay(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-            
-            HStack(alignment: .bottom) {
-                Text(statusText)
-                    .font(DS.font.mono(size: 11, weight: .regular))
-                    .foregroundStyle(colorScheme == .dark ? DS.color.mutedDark : DS.color.muted)
-                Spacer(minLength: 12)
-                actionView
-            }
+            .padding(20)
+            .frame(maxWidth: .infinity, minHeight: 244, alignment: .leading)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.04) : Color.white.opacity(0.72))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 1)
-                )
-        )
+        .background(cardBackground)
+        .overlay(cardBorder)
+        .shadow(color: cardShadowColor, radius: 18, x: 0, y: 10)
     }
     
     private var statusText: String {
+        if isWarming {
+            return "Warming local model…"
+        }
         switch state {
         case .notStarted:
             return "Not downloaded"
-        case .downloading(let progress):
-            return "Downloading \(Int(progress * 100))%"
+        case .downloading:
+            return "Preparing files…"
         case .downloaded:
-            return isSelected ? "Ready and selected" : "Downloaded"
-        case .failed(let message):
-            return "Download failed · \(message)"
+            return isSelected ? "Default local model" : "Ready"
+        case .failed:
+            return "Retry download"
+        }
+    }
+    
+    private var displayedTags: [String] {
+        descriptor.tags
+    }
+    
+    private var groupBadgeTitle: String {
+        switch descriptor.group {
+        case .auto:
+            return "Mixed"
+        case .chinese:
+            return "Chinese"
+        case .english:
+            return "English"
+        case .preview:
+            return "Preview"
+        }
+    }
+    
+    private var stateBadgeTitle: String {
+        if isWarming {
+            return "Warming"
+        }
+        if isSelected {
+            return "Using"
+        }
+        switch state {
+        case .notStarted:
+            return "Available"
+        case .downloading:
+            return "Downloading"
+        case .downloaded:
+            return "Downloaded"
+        case .failed:
+            return "Retry"
+        }
+    }
+    
+    private var stateBadgeTone: ServerStatusCapsule.Tone {
+        if isWarming || isSelected {
+            return .active
+        }
+        switch state {
+        case .downloaded:
+            return .soft
+        case .downloading:
+            return .active
+        case .notStarted, .failed:
+            return .neutral
+        }
+    }
+    
+    private var stateBadgeIcon: String {
+        if isWarming {
+            return "clock.fill"
+        }
+        if isSelected {
+            return "checkmark.circle.fill"
+        }
+        switch state {
+        case .notStarted:
+            return "arrow.down.circle"
+        case .downloading:
+            return "arrow.down.circle.fill"
+        case .downloaded:
+            return "checkmark.circle"
+        case .failed:
+            return "exclamationmark.triangle"
         }
     }
     
@@ -1950,31 +2204,357 @@ private struct STTLocalModelCard: View {
         return false
     }
     
+    private var canShowDeleteAction: Bool {
+        onDelete != nil && deleteActionDisabled == false
+    }
+    
+    private var deleteActionDisabled: Bool {
+        isWarming
+    }
+    
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .fill(
+                isSelected
+                    ? (colorScheme == .dark ? DS.color.accentDark.opacity(0.18) : Color.white.opacity(0.97))
+                    : (colorScheme == .dark ? DS.color.surface2Dark.opacity(0.9) : Color.white.opacity(0.95))
+            )
+    }
+    
+    private var cardBorder: some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .strokeBorder(cardBorderColor, lineWidth: cardBorderWidth)
+    }
+    
+    private var cardBorderColor: Color {
+        if isSelected {
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.72) : DS.color.accent.opacity(0.52)
+        }
+        switch state {
+        case .downloading:
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.46) : DS.color.accent.opacity(0.34)
+        case .downloaded:
+            return colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.52) : DS.color.border.opacity(0.42)
+        case .failed:
+            return colorScheme == .dark ? DS.color.warningDark.opacity(0.4) : DS.color.warning.opacity(0.34)
+        case .notStarted:
+            return colorScheme == .dark ? Color.white.opacity(0.13) : DS.color.borderSoft.opacity(0.86)
+        }
+    }
+    
+    private var cardBorderWidth: CGFloat {
+        if isSelected { return 2 }
+        if case .downloading = state { return 1.5 }
+        if case .downloaded = state { return 1.2 }
+        return 1
+    }
+    
+    private var cardShadowColor: Color {
+        if isSelected {
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.14) : DS.shadow.main
+        }
+        if case .downloading = state {
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.08) : DS.shadow.main.opacity(0.75)
+        }
+        return colorScheme == .dark ? Color.black.opacity(0.14) : DS.shadow.soft
+    }
+    
     @ViewBuilder
     private var actionView: some View {
         if isSelected {
-            Text("Using")
-                .font(DS.font.mono(size: 11, weight: .medium))
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-                .background(
-                    Capsule()
-                        .fill(DS.color.accent.opacity(0.18))
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(DS.color.accent.opacity(0.28), lineWidth: 1)
-                        )
-                )
-        } else if primaryActionIsSelect {
-            Button(primaryActionTitle, action: primaryAction)
-                .buttonStyle(SettingsAccentButtonStyle())
+            if let onDelete, canShowDeleteAction {
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
+                .buttonStyle(SettingsDangerButtonStyle())
                 .controlSize(.small)
-                .disabled(primaryActionDisabled)
-        } else {
+                .fixedSize(horizontal: true, vertical: false)
+            }
+        } else if primaryActionIsSelect {
+            HStack(spacing: 8) {
+                if let onDelete, canShowDeleteAction {
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(SettingsDangerIconButtonStyle())
+                    .controlSize(.small)
+                }
+                Button(primaryActionTitle, action: primaryAction)
+                    .buttonStyle(SettingsAccentButtonStyle())
+                    .controlSize(.small)
+                    .frame(minWidth: 116)
+                    .disabled(primaryActionDisabled)
+            }
+        } else if case .downloading = state {
             Button(primaryActionTitle, action: primaryAction)
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .frame(minWidth: 116)
                 .disabled(primaryActionDisabled)
+        } else {
+            Button(primaryActionTitle, action: primaryAction)
+                .buttonStyle(SettingsAccentButtonStyle())
+                .controlSize(.small)
+                .frame(minWidth: 116)
+                .disabled(primaryActionDisabled)
+        }
+    }
+    
+}
+
+private struct ModelStateBadge: View {
+    let title: String
+    let tone: ServerStatusCapsule.Tone
+    let icon: String
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        Label {
+            Text(title)
+                .font(DS.font.mono(size: 11, weight: .medium))
+        } icon: {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(foreground)
+        .padding(.horizontal, 12)
+        .frame(height: 30)
+        .background(background)
+        .overlay(
+            Capsule()
+                .strokeBorder(border, lineWidth: 1)
+        )
+        .clipShape(Capsule())
+    }
+    
+    private var foreground: Color {
+        switch tone {
+        case .active:
+            return colorScheme == .dark ? DS.color.foregroundDark : DS.color.accent
+        case .soft:
+            return colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground
+        case .neutral:
+            return colorScheme == .dark ? DS.color.mutedDark : DS.color.soft
+        }
+    }
+    
+    private var background: Color {
+        switch tone {
+        case .active:
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.24) : DS.color.accent.opacity(0.12)
+        case .soft:
+            return colorScheme == .dark ? DS.color.surface2Dark.opacity(0.94) : Color.white.opacity(0.94)
+        case .neutral:
+            return colorScheme == .dark ? DS.color.surface3Dark.opacity(0.84) : DS.color.surface.opacity(0.96)
+        }
+    }
+    
+    private var border: Color {
+        switch tone {
+        case .active:
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.42) : DS.color.accent.opacity(0.28)
+        case .soft:
+            return colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.44) : DS.color.borderSoft.opacity(0.56)
+        case .neutral:
+            return colorScheme == .dark ? DS.color.borderDark.opacity(0.36) : DS.color.borderSoft.opacity(0.48)
+        }
+    }
+}
+
+private struct SettingsMetricPill: View {
+    let title: String
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        Text(title)
+            .font(DS.font.mono(size: 11, weight: .medium))
+            .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark : DS.color.soft)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(
+                Capsule()
+                    .fill(colorScheme == .dark ? DS.color.surface3Dark.opacity(0.72) : DS.color.surface.opacity(0.92))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.32) : DS.color.borderSoft.opacity(0.48), lineWidth: 1)
+                    )
+            )
+    }
+}
+
+private struct SettingsFeatureTag: View {
+    enum Tone {
+        case group
+        case accent
+        case plain
+        case neutral
+    }
+    
+    let title: String
+    let tone: Tone
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        Text(title)
+            .font(DS.font.mono(size: 10.5, weight: .medium))
+            .foregroundStyle(foreground)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(
+                Capsule()
+                    .fill(background)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(border, lineWidth: 1)
+                    )
+            )
+    }
+    
+    private var foreground: Color {
+        switch tone {
+        case .group:
+            return colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground
+        case .accent:
+            return colorScheme == .dark ? DS.color.foregroundDark : DS.color.accent
+        case .plain:
+            return colorScheme == .dark ? DS.color.mutedDark : DS.color.soft
+        case .neutral:
+            return colorScheme == .dark ? DS.color.warningDark : DS.color.warning
+        }
+    }
+    
+    private var background: Color {
+        switch tone {
+        case .group:
+            return colorScheme == .dark ? DS.color.surface3Dark.opacity(0.78) : DS.color.surface2.opacity(0.88)
+        case .accent:
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.22) : DS.color.accent.opacity(0.1)
+        case .plain:
+            return colorScheme == .dark ? DS.color.surface2Dark.opacity(0.92) : Color.white.opacity(0.92)
+        case .neutral:
+            return colorScheme == .dark ? DS.color.warningDark.opacity(0.16) : DS.color.warning.opacity(0.08)
+        }
+    }
+    
+    private var border: Color {
+        switch tone {
+        case .group:
+            return colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.36) : DS.color.borderSoft.opacity(0.54)
+        case .accent:
+            return colorScheme == .dark ? DS.color.accentDark.opacity(0.34) : DS.color.accent.opacity(0.24)
+        case .plain:
+            return colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.3) : DS.color.borderSoft.opacity(0.46)
+        case .neutral:
+            return colorScheme == .dark ? DS.color.warningDark.opacity(0.32) : DS.color.warning.opacity(0.22)
+        }
+    }
+}
+
+private struct STTInlineDownloadProgress: View {
+    let progress: Double
+    @State private var displayedProgress: Double = 0
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            STTModelDownloadProgressBar(progress: displayedProgress)
+                .frame(height: 8)
+            STTAnimatedDownloadProgressLabel(progress: displayedProgress)
+                .font(DS.font.mono(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 42, alignment: .trailing)
+        }
+        .onAppear {
+            displayedProgress = clamped(progress)
+        }
+        .onChange(of: progress) { newValue in
+            let target = clamped(newValue)
+            let delta = abs(target - displayedProgress)
+            let duration = min(max(0.22, delta * 2.8), 1.8)
+            withAnimation(.linear(duration: duration)) {
+                displayedProgress = target
+            }
+        }
+    }
+    
+    private func clamped(_ value: Double) -> Double {
+        max(0, min(value, 1))
+    }
+}
+
+private struct STTAnimatedDownloadProgressLabel: View, Animatable {
+    var progress: Double
+    
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+    
+    var body: some View {
+        Text(progressLabel)
+    }
+    
+    private var progressLabel: String {
+        let clamped = max(0, min(progress, 1))
+        if clamped == 0 {
+            return "0%"
+        }
+        if clamped < 0.01 {
+            return "<1%"
+        }
+        if clamped < 0.1 {
+            return String(format: "%.1f%%", clamped * 100)
+        }
+        return "\(Int(clamped * 100))%"
+    }
+}
+
+private struct STTModelDownloadProgressBar: View {
+    let progress: Double
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let clamped = max(0, min(progress, 1))
+            let track = Capsule()
+            
+            ZStack(alignment: .leading) {
+                track
+                    .fill(colorScheme == .dark ? Color.white.opacity(0.08) : DS.color.surface3.opacity(0.7))
+                
+                if clamped <= 0 {
+                    TimelineView(.animation) { context in
+                        let segmentWidth = max(geometry.size.width * 0.34, 28)
+                        let cycle = 1.05
+                        let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
+                        let travel = geometry.size.width + segmentWidth
+                        let offset = -segmentWidth + travel * phase
+                        
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        DS.color.accent.opacity(0.08),
+                                        DS.color.accent.opacity(0.9),
+                                        DS.color.accent.opacity(0.08),
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: segmentWidth)
+                            .offset(x: offset)
+                    }
+                } else {
+                    Capsule()
+                        .fill(DS.color.accent)
+                        .frame(width: max(geometry.size.height, geometry.size.width * clamped))
+                }
+            }
+            .clipShape(track)
         }
     }
 }
@@ -1983,12 +2563,55 @@ private struct SettingsAccentButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .frame(height: 36)
             .background(
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .fill(DS.color.accent.opacity(configuration.isPressed ? 0.85 : 1))
+            )
+    }
+}
+
+private struct SettingsDangerButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(colorScheme == .dark ? DS.color.warningDark : DS.color.warning)
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+            .background(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill((colorScheme == .dark ? DS.color.warningDark : DS.color.warning).opacity(configuration.isPressed ? 0.18 : 0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .strokeBorder((colorScheme == .dark ? DS.color.warningDark : DS.color.warning).opacity(0.28), lineWidth: 1)
+            )
+    }
+}
+
+private struct SettingsDangerIconButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(colorScheme == .dark ? DS.color.warningDark : DS.color.warning)
+            .frame(width: 32, height: 32)
+            .background(
+                Circle()
+                    .fill((colorScheme == .dark ? DS.color.warningDark : DS.color.warning).opacity(configuration.isPressed ? 0.18 : 0.1))
+            )
+            .overlay(
+                Circle()
+                    .strokeBorder((colorScheme == .dark ? DS.color.warningDark : DS.color.warning).opacity(0.24), lineWidth: 1)
             )
     }
 }
@@ -2125,16 +2748,120 @@ private struct ServerSettingsPage: View {
 }
 
 private struct PermissionsSettingsPage: View {
+    @State private var snapshot = PermissionStatusSnapshot.placeholder
+    @AppStorage("settings.permissions.focus") private var focusedPermissionRaw = ""
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            PermissionCard(title: "Microphone", status: "Required for recording", actionTitle: "Open System Settings") {
+            PermissionCard(
+                title: "Microphone",
+                status: "Required for recording",
+                badgeTitle: snapshot.microphone.badgeTitle,
+                badgeTone: snapshot.microphone.badgeTone,
+                actionTitle: "Open System Settings",
+                isHighlighted: focusedPermission == .microphone
+            ) {
                 FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Microphone")
             }
-            PermissionCard(title: "Accessibility", status: "Required to insert into the focused app", actionTitle: "Open System Settings") {
+            PermissionCard(
+                title: "Speech Recognition",
+                status: "Required for Apple Speech fallback",
+                badgeTitle: snapshot.speechRecognition.badgeTitle,
+                badgeTone: snapshot.speechRecognition.badgeTone,
+                actionTitle: "Open System Settings",
+                isHighlighted: focusedPermission == .speechRecognition
+            ) {
+                FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_SpeechRecognition")
+            }
+            PermissionCard(
+                title: "Accessibility",
+                status: "Required to insert into the focused app",
+                badgeTitle: snapshot.accessibility.badgeTitle,
+                badgeTone: snapshot.accessibility.badgeTone,
+                actionTitle: "Open System Settings",
+                isHighlighted: focusedPermission == .accessibility
+            ) {
                 FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Accessibility")
             }
-            PermissionCard(title: "Notifications", status: "Optional for status feedback", actionTitle: "Open System Settings") {
+            PermissionCard(
+                title: "Notifications",
+                status: "Optional for status feedback",
+                badgeTitle: snapshot.notifications.badgeTitle,
+                badgeTone: snapshot.notifications.badgeTone,
+                actionTitle: "Open System Settings",
+                isHighlighted: focusedPermission == .notifications
+            ) {
                 FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Notifications")
+            }
+        }
+        .task {
+            await refreshSnapshot()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task {
+                await refreshSnapshot()
+            }
+        }
+        .onDisappear {
+            focusedPermissionRaw = ""
+        }
+    }
+    
+    private var focusedPermission: PermissionKind? {
+        PermissionKind(rawValue: focusedPermissionRaw)
+    }
+    
+    private func refreshSnapshot() async {
+        let latest = await PermissionStatusSnapshot.capture()
+        snapshot = latest
+        if let focusedPermission, latest.state(for: focusedPermission) == .allowed {
+            focusedPermissionRaw = ""
+        }
+    }
+}
+
+private struct DeveloperToolsPage: View {
+    @ObservedObject var store: STTSettingsStore
+    @ObservedObject private var residencyCoordinator = LocalSTTResidencyCoordinator.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            SettingsDashboardCard(title: "Warmup Gate", subtitle: "Reproduce the first-use local model wait state without relying on timing luck.") {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 8) {
+                        ServerStatusCapsule(title: store.selectedModelTitle, tone: .active)
+                        if residencyCoordinator.warmingModelID == store.selectedModelID {
+                            ServerStatusCapsule(title: "Warming", tone: .soft)
+                        }
+                    }
+                    
+                    SettingsKeyValueList(rows: [
+                        ("Mode", store.modeTitle),
+                        ("Selected Model", store.selectedModelTitle),
+                        ("Warm Gate", residencyCoordinator.warmingModelID == store.selectedModelID ? "Armed" : "Idle")
+                    ])
+                    
+                    HStack(spacing: 10) {
+                        Button("Test Warm Gate") {
+                            residencyCoordinator.prepareWarmupGateTest(config: store.config)
+                        }
+                        .buttonStyle(SettingsAccentButtonStyle())
+                        
+                        Button("Refresh Disk State") {
+                            store.refreshDiskState()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+            
+            SettingsDashboardCard(title: "How to Test", subtitle: "Use the button below, then trigger the capsule immediately.") {
+                SettingsKeyValueList(rows: [
+                    ("1", "Keep Local First on"),
+                    ("2", "Click Test Warm Gate"),
+                    ("3", "Trigger the capsule right away"),
+                    ("Expected", "Companion appears first, then Listen")
+                ])
             }
         }
     }
@@ -2245,7 +2972,10 @@ private struct SettingsPageChrome: View {
         let remoteTone: ServerStatusCapsule.Tone
         
         static func load() -> STTSummary {
-            let config = (try? ConfigLoader.load()) ?? .default
+            make(from: (try? ConfigLoader.load()) ?? .default)
+        }
+        
+        static func make(from config: Config) -> STTSummary {
             let modeTitle = config.stt.mode == .remoteFirst ? "Remote First" : "Local First"
             let fallbackEnabled = config.stt.fallbackEngine != nil
             let fallbackTitle = fallbackEnabled ? "Fallback On" : "No Fallback"
@@ -2307,8 +3037,12 @@ private struct SettingsPageChrome: View {
         .onAppear {
             refreshSTTSummary()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .tsutaeConfigDidChange)) { _ in
-            refreshSTTSummary()
+        .onReceive(NotificationCenter.default.publisher(for: .tsutaeConfigDidChange)) { notification in
+            if let config = notification.userInfo?["config"] as? Config {
+                sttSummary = STTSummary.make(from: config)
+            } else {
+                refreshSTTSummary()
+            }
         }
     }
     
@@ -2445,20 +3179,124 @@ private struct WorkflowOverviewRow: View {
     }
 }
 
+private enum PermissionKind: String {
+    case microphone
+    case speechRecognition
+    case accessibility
+    case notifications
+}
+
 private struct PermissionCard: View {
     let title: String
     let status: String
+    let badgeTitle: String
+    let badgeTone: ServerStatusCapsule.Tone
     let actionTitle: String
+    let isHighlighted: Bool
     let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         SettingsDashboardCard(title: title, subtitle: status) {
             HStack {
-                ServerStatusCapsule(title: "Review", tone: .soft)
+                ServerStatusCapsule(title: badgeTitle, tone: badgeTone)
                 Spacer()
                 Button(actionTitle, action: action)
                     .buttonStyle(.bordered)
             }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(isHighlighted ? DS.color.accent.opacity(0.65) : Color.clear, lineWidth: 1.5)
+        }
+        .shadow(color: isHighlighted ? DS.color.accent.opacity(colorScheme == .dark ? 0.2 : 0.14) : .clear, radius: 16, x: 0, y: 6)
+    }
+}
+
+private struct PermissionStatusSnapshot {
+    let microphone: PermissionAccessState
+    let speechRecognition: PermissionAccessState
+    let accessibility: PermissionAccessState
+    let notifications: PermissionAccessState
+    
+    func state(for permission: PermissionKind) -> PermissionAccessState {
+        switch permission {
+        case .microphone:
+            return microphone
+        case .speechRecognition:
+            return speechRecognition
+        case .accessibility:
+            return accessibility
+        case .notifications:
+            return notifications
+        }
+    }
+    
+    static let placeholder = PermissionStatusSnapshot(
+        microphone: .review,
+        speechRecognition: .review,
+        accessibility: .review,
+        notifications: .review
+    )
+    
+    static func capture() async -> PermissionStatusSnapshot {
+        let microphone: PermissionAccessState = switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: .allowed
+        case .notDetermined: .review
+        case .denied, .restricted: .denied
+        @unknown default: .review
+        }
+        
+        let speechRecognition: PermissionAccessState = switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized: .allowed
+        case .notDetermined: .review
+        case .denied, .restricted: .denied
+        @unknown default: .review
+        }
+        
+        let accessibility: PermissionAccessState = AXIsProcessTrusted() ? .allowed : .denied
+        
+        let notificationSettings = await UNUserNotificationCenter.current().notificationSettings()
+        let notifications: PermissionAccessState = switch notificationSettings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral: .allowed
+        case .notDetermined: .review
+        case .denied: .denied
+        @unknown default: .review
+        }
+        
+        return PermissionStatusSnapshot(
+            microphone: microphone,
+            speechRecognition: speechRecognition,
+            accessibility: accessibility,
+            notifications: notifications
+        )
+    }
+}
+
+private enum PermissionAccessState {
+    case allowed
+    case denied
+    case review
+    
+    var badgeTitle: String {
+        switch self {
+        case .allowed:
+            return "Allowed"
+        case .denied:
+            return "Needs Access"
+        case .review:
+            return "Review"
+        }
+    }
+    
+    var badgeTone: ServerStatusCapsule.Tone {
+        switch self {
+        case .allowed:
+            return .active
+        case .denied:
+            return .neutral
+        case .review:
+            return .soft
         }
     }
 }

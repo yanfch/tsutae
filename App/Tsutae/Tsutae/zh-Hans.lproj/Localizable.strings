@@ -15,7 +15,7 @@
 "notification.inserted_text_title" = "已插入文本";
 
 "companion.microphone_access_required_title" = "需要麦克风权限";
-"companion.microphone_access_required_message" = "Tsutae 需要麦克风权限才能开始录音。";
+"companion.microphone_access_required_message" = "打开麦克风权限后才能开始录音。";
 "companion.no_microphone_detected_title" = "未检测到麦克风";
 "companion.no_microphone_detected_message" = "当前没有可用的麦克风输入设备。请检查音频输入后重试。";
 "companion.audio_input_unavailable_title" = "音频输入不可用";
@@ -28,14 +28,18 @@
 "companion.transcription_unreachable_message" = "无法连接转写服务。请检查网络、接口地址或模型设置。";
 "companion.authentication_failed_title" = "鉴权失败";
 "companion.authentication_failed_message" = "请检查 API Key 或服务权限后重试。";
+"companion.speech_recognition_access_required_title" = "需要语音识别权限";
+"companion.speech_recognition_access_required_message" = "打开语音识别权限后，Tsutae 才能使用 Apple fallback。";
 "companion.stt_configuration_error_title" = "STT 配置错误";
 "companion.stt_configuration_error_message" = "请检查转写模型、接口地址或请求设置。";
 "companion.transcription_failed_title" = "转写失败";
 "companion.transcription_failed_message" = "转写服务返回了异常结果。请检查服务设置后重试。";
 "companion.accessibility_access_required_title" = "需要辅助功能权限";
-"companion.accessibility_access_required_message" = "Tsutae 已将转写结果复制到剪贴板。请在“辅助功能”中启用 Tsutae，以便插入到当前输入框。";
+"companion.accessibility_access_required_message" = "打开辅助功能权限后，Tsutae 才能插入到当前输入框。";
 "companion.copied_to_clipboard_title" = "已复制到剪贴板";
 "companion.copied_to_clipboard_message" = "无法插入当前输入框，已复制到剪贴板。";
+"companion.preparing_local_model_title" = "正在准备模型";
+"companion.preparing_local_model_message" = "首次加载可能需要一点时间。";
 
 "settings.window_title" = "tsutae 设置";
 "settings.section_appearance" = "外观";
@@ -50,6 +54,8 @@
 "settings.default_action_label" = "默认动作";
 "settings.transcription_language_label" = "转写语言";
 "settings.accessibility_permission_label" = "辅助功能权限";
+"settings.permissions_entry_label" = "权限";
+"settings.permissions_entry_button" = "查看";
 "settings.open_system_settings_button" = "打开系统设置";
 "settings.reset_defaults_button" = "恢复默认设置";
 "settings.theme_default_blue" = "默认蓝";

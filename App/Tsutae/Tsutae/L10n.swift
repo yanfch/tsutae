@@ -87,8 +87,8 @@ enum L10n {
     }
     
     enum RecordingCompanion {
-        static var microphoneAccessRequiredTitle: String { tr("companion.microphone_access_required_title", default: "Microphone Access Required") }
-        static var microphoneAccessRequiredMessage: String { tr("companion.microphone_access_required_message", default: "Tsutae needs microphone permission to start recording.") }
+        static var microphoneAccessRequiredTitle: String { tr("companion.microphone_access_required_title", default: "Microphone Required") }
+        static var microphoneAccessRequiredMessage: String { tr("companion.microphone_access_required_message", default: "Turn on Microphone to start recording.") }
         static var noMicrophoneDetectedTitle: String { tr("companion.no_microphone_detected_title", default: "No Microphone Detected") }
         static var noMicrophoneDetectedMessage: String { tr("companion.no_microphone_detected_message", default: "No microphone input device is available right now. Check your audio input and try again.") }
         static var audioInputUnavailableTitle: String { tr("companion.audio_input_unavailable_title", default: "Audio Input Unavailable") }
@@ -101,14 +101,18 @@ enum L10n {
         static var transcriptionUnreachableMessage: String { tr("companion.transcription_unreachable_message", default: "Cannot reach the transcription service. Check network, endpoint, or model settings.") }
         static var authenticationFailedTitle: String { tr("companion.authentication_failed_title", default: "Authentication Failed") }
         static var authenticationFailedMessage: String { tr("companion.authentication_failed_message", default: "Check your API key or service permissions before trying again.") }
+        static var speechRecognitionAccessRequiredTitle: String { tr("companion.speech_recognition_access_required_title", default: "Speech Recognition Required") }
+        static var speechRecognitionAccessRequiredMessage: String { tr("companion.speech_recognition_access_required_message", default: "Turn on Speech Recognition to use Apple fallback.") }
         static var sttConfigurationErrorTitle: String { tr("companion.stt_configuration_error_title", default: "STT Configuration Error") }
         static var sttConfigurationErrorMessage: String { tr("companion.stt_configuration_error_message", default: "Check the model, endpoint, or request settings for transcription.") }
         static var transcriptionFailedTitle: String { tr("companion.transcription_failed_title", default: "Transcription Failed") }
         static var transcriptionFailedMessage: String { tr("companion.transcription_failed_message", default: "The transcription service returned an unexpected error. Check your service settings and try again.") }
-        static var accessibilityAccessRequiredTitle: String { tr("companion.accessibility_access_required_title", default: "Accessibility Access Required") }
-        static var accessibilityAccessRequiredMessage: String { tr("companion.accessibility_access_required_message", default: "Tsutae copied the transcript to your clipboard. Enable Tsutae in Accessibility to insert text into the focused app.") }
+        static var accessibilityAccessRequiredTitle: String { tr("companion.accessibility_access_required_title", default: "Accessibility Required") }
+        static var accessibilityAccessRequiredMessage: String { tr("companion.accessibility_access_required_message", default: "Turn on Accessibility so Tsutae can insert text into the focused app.") }
         static var copiedToClipboardTitle: String { tr("companion.copied_to_clipboard_title", default: "Copied to Clipboard") }
         static var copiedToClipboardMessage: String { tr("companion.copied_to_clipboard_message", default: "Couldn’t insert into the focused app. The transcript was copied instead.") }
+        static var preparingLocalModelTitle: String { tr("companion.preparing_local_model_title", default: "Preparing Model") }
+        static var preparingLocalModelMessage: String { tr("companion.preparing_local_model_message", default: "First load may take a moment.") }
     }
     
     enum Settings {
@@ -125,6 +129,8 @@ enum L10n {
         static var defaultActionLabel: String { tr("settings.default_action_label", default: "Default Action") }
         static var transcriptionLanguageLabel: String { tr("settings.transcription_language_label", default: "Transcription Language") }
         static var accessibilityPermissionLabel: String { tr("settings.accessibility_permission_label", default: "Accessibility Permission") }
+        static var permissionsEntryLabel: String { tr("settings.permissions_entry_label", default: "Permissions") }
+        static var permissionsEntryButton: String { tr("settings.permissions_entry_button", default: "Review") }
         static var openSystemSettingsButton: String { tr("settings.open_system_settings_button", default: "Open System Settings") }
         static var resetDefaultsButton: String { tr("settings.reset_defaults_button", default: "Reset to Defaults") }
         static var themeDefaultBlue: String { tr("settings.theme_default_blue", default: "Default Blue") }

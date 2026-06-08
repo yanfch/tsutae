@@ -48,56 +48,56 @@ public enum LocalSTTModelCatalog {
         LocalSTTModelDescriptor(
             id: "sensevoice-small",
             displayName: "SenseVoice Small",
-            summary: "Multilingual local default with broad language coverage.",
-            size: "~225–447 MB",
-            memory: "~0.32–0.54 GB RAM",
-            tags: ["Auto", "Multilingual", "Recommended"],
+            summary: "Balanced local model for mixed Chinese and English speech.",
+            size: "225–447 MB",
+            memory: "0.32–0.54 GB",
+            tags: ["Best for Mixed", "Balanced", "Low Memory"],
             group: .auto,
             isRecommended: true
         ),
         LocalSTTModelDescriptor(
             id: "qwen3-asr-int8",
             displayName: "Qwen3-ASR Int8",
-            summary: "Higher-quality multilingual option with lower memory than full precision.",
-            size: "~179 MB",
-            memory: "~0.73 GB RAM",
-            tags: ["Auto", "Multilingual", "Beta"],
+            summary: "Mixed-language option with better coverage but slower runtime.",
+            size: "179 MB",
+            memory: "0.73 GB",
+            tags: ["Mixed Language", "Higher Memory", "Slower"],
             group: .auto
         ),
         LocalSTTModelDescriptor(
             id: "paraformer-large-zh",
             displayName: "Paraformer Large ZH",
-            summary: "Chinese-focused final transcription model.",
-            size: "~207–411 MB",
-            memory: "~0.24–0.38 GB RAM",
-            tags: ["ZH", "Chinese", "Final"],
+            summary: "Fast local model tuned for Chinese transcription.",
+            size: "207–411 MB",
+            memory: "0.24–0.38 GB",
+            tags: ["Best for Chinese", "Chinese Focused"],
             group: .chinese
         ),
         LocalSTTModelDescriptor(
             id: "parakeet-ctc-zh-cn",
             displayName: "Parakeet CTC Chinese",
-            summary: "Chinese CoreML pipeline tuned for Mandarin transcription.",
-            size: "~0.55–1.1 GB",
-            memory: "~0.8–1.2 GB RAM",
-            tags: ["ZH", "Chinese"],
+            summary: "Mandarin-focused CoreML path with weaker text spacing output.",
+            size: "0.55–1.1 GB",
+            memory: "0.8–1.2 GB",
+            tags: ["Chinese", "Spacing Issues"],
             group: .chinese
         ),
         LocalSTTModelDescriptor(
             id: "parakeet-tdt-v3",
             displayName: "Parakeet TDT v3",
-            summary: "Fast multilingual TDT model, good for English and European languages.",
-            size: "~500 MB",
-            memory: "~0.8–1.0 GB RAM",
-            tags: ["EN", "Multilingual"],
+            summary: "Fast 0.6B model for English and other European languages.",
+            size: "500 MB",
+            memory: "0.8–1.0 GB",
+            tags: ["Best for English", "Fast", "0.6B"],
             group: .english
         ),
         LocalSTTModelDescriptor(
             id: "parakeet-eou",
             displayName: "Parakeet EOU",
-            summary: "Streaming preview candidate for low-latency partials.",
-            size: "~150–250 MB",
-            memory: "~0.3–0.5 GB RAM",
-            tags: ["Preview", "Streaming"],
+            summary: "Preview-only streaming candidate for future partial transcription.",
+            size: "150–250 MB",
+            memory: "0.3–0.5 GB",
+            tags: ["Preview Only"],
             group: .preview
         ),
     ]
@@ -134,8 +134,25 @@ public enum LocalSTTModelCatalog {
     public static func download(id: String, progressHandler: (@Sendable (Double) -> Void)? = nil) async throws {
         let wrappedProgress: DownloadUtils.ProgressHandler?
         if let progressHandler {
+            let totalPasses = progressPassCount(for: id)
+            final class ProgressAccumulator: @unchecked Sendable {
+                let lock = NSLock()
+                var completedPasses = 0
+                var lastFraction = 0.0
+            }
+            let accumulator = ProgressAccumulator()
             wrappedProgress = { progress in
-                progressHandler(progress.fractionCompleted)
+                let fraction = max(0, min(progress.fractionCompleted, 1))
+                accumulator.lock.lock()
+                if totalPasses > 1, fraction + 0.2 < accumulator.lastFraction {
+                    accumulator.completedPasses = min(accumulator.completedPasses + 1, totalPasses - 1)
+                }
+                accumulator.lastFraction = fraction
+                let overall = totalPasses > 1
+                    ? (Double(accumulator.completedPasses) + fraction) / Double(totalPasses)
+                    : fraction
+                accumulator.lock.unlock()
+                progressHandler(min(max(overall, 0), 1))
             }
         } else {
             wrappedProgress = nil
@@ -160,6 +177,70 @@ public enum LocalSTTModelCatalog {
             await manager.cleanup()
         default:
             throw FluidAudioSTTError.unsupportedModel(id)
+        }
+    }
+    
+    public static func delete(id: String) async throws {
+        await FluidAudioSTTRuntime.shared.unload(modelID: id)
+        guard let directory = modelDirectory(for: id) else {
+            throw FluidAudioSTTError.unsupportedModel(id)
+        }
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        try FileManager.default.removeItem(at: directory)
+    }
+    
+    private static func progressPassCount(for id: String) -> Int {
+        switch id {
+        case "parakeet-tdt-v3":
+            return 4
+        default:
+            return 1
+        }
+    }
+    
+    public static func estimatedDownloadBytes(id: String) -> Int64? {
+        switch id {
+        case "sensevoice-small":
+            return 447 * 1_000_000
+        case "qwen3-asr-int8":
+            return 179 * 1_000_000
+        case "paraformer-large-zh":
+            return 411 * 1_000_000
+        case "parakeet-ctc-zh-cn":
+            return 1_100 * 1_000_000
+        case "parakeet-tdt-v3":
+            return 500 * 1_000_000
+        case "parakeet-eou":
+            return 250 * 1_000_000
+        default:
+            return nil
+        }
+    }
+    
+    public static func downloadedByteCount(id: String) -> Int64 {
+        guard let directory = modelDirectory(for: id) else { return 0 }
+        return directoryByteCount(at: directory)
+    }
+    
+    private static func modelDirectory(for id: String) -> URL? {
+        switch id {
+        case "sensevoice-small":
+            return senseVoiceDirectory()
+        case "qwen3-asr-int8":
+            if #available(macOS 15, *) {
+                return Qwen3AsrModels.defaultCacheDirectory(variant: .int8)
+            }
+            return nil
+        case "paraformer-large-zh":
+            return paraformerDirectory()
+        case "parakeet-ctc-zh-cn":
+            return ctcZhCnDirectory()
+        case "parakeet-tdt-v3":
+            return AsrModels.defaultCacheDirectory(for: .v3)
+        case "parakeet-eou":
+            return eouDirectory()
+        default:
+            return nil
         }
     }
     
@@ -194,6 +275,29 @@ public enum LocalSTTModelCatalog {
             .appendingPathComponent(Repo.parakeetEou160.folderName, isDirectory: true)
         ?? FileManager.default.temporaryDirectory
     }
+    
+    private static func directoryByteCount(at directory: URL) -> Int64 {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return 0 }
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return 0
+        }
+        
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            guard
+                let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+                values.isRegularFile == true
+            else {
+                continue
+            }
+            total += Int64(values.fileSize ?? 0)
+        }
+        return total
+    }
 }
 
 private actor FluidAudioSTTRuntime {
@@ -212,6 +316,14 @@ private actor FluidAudioSTTRuntime {
         _ = try await loadedModel(for: modelID)
     }
     
+    func isLoaded(modelID: String) -> Bool {
+        loadedModels[modelID] != nil
+    }
+    
+    func isLoading(modelID: String) -> Bool {
+        loadingTasks[modelID] != nil
+    }
+    
     func transcribe(modelID: String, samples: [Float], language: String?) async throws -> String {
         let loadedModel = try await loadedModel(for: modelID)
         return try await loadedModel.transcribe(samples, language)
@@ -225,6 +337,26 @@ private actor FluidAudioSTTRuntime {
         logger.info("\(message, privacy: .public)")
         PerformanceLog.record(category: "FluidAudioSTT", message: message)
         await loadedModel.cleanup()
+    }
+    
+    func unloadAll(except keptModelID: String? = nil) async {
+        let loadingIDs = Array(loadingTasks.keys)
+        for modelID in loadingIDs where modelID != keptModelID {
+            loadingTasks[modelID]?.cancel()
+            loadingTasks[modelID] = nil
+            let message = "Cancelled local STT model load. model=\(modelID)"
+            logger.info("\(message, privacy: .public)")
+            PerformanceLog.record(category: "FluidAudioSTT", message: message)
+        }
+        
+        let loadedIDs = Array(loadedModels.keys)
+        for modelID in loadedIDs where modelID != keptModelID {
+            guard let loadedModel = loadedModels.removeValue(forKey: modelID) else { continue }
+            let message = "Unloaded local STT model. model=\(modelID)"
+            logger.info("\(message, privacy: .public)")
+            PerformanceLog.record(category: "FluidAudioSTT", message: message)
+            await loadedModel.cleanup()
+        }
     }
     
     private func loadedModel(for modelID: String) async throws -> LoadedModel {
@@ -339,6 +471,14 @@ public final class FluidAudioSTT: STTEngine, @unchecked Sendable {
         self.displayName = LocalSTTModelCatalog.descriptor(id: modelID)?.displayName ?? "FluidAudio Local"
     }
     
+    public static func isModelReady(_ modelID: String) async -> Bool {
+        await FluidAudioSTTRuntime.shared.isLoaded(modelID: modelID)
+    }
+    
+    public static func isModelLoading(_ modelID: String) async -> Bool {
+        await FluidAudioSTTRuntime.shared.isLoading(modelID: modelID)
+    }
+    
     public func load() async throws {
         try await FluidAudioSTTRuntime.shared.preload(modelID: modelID)
     }
@@ -347,6 +487,10 @@ public final class FluidAudioSTT: STTEngine, @unchecked Sendable {
         Task {
             await FluidAudioSTTRuntime.shared.unload(modelID: modelID)
         }
+    }
+    
+    public static func unloadAllModels(except keptModelID: String? = nil) async {
+        await FluidAudioSTTRuntime.shared.unloadAll(except: keptModelID)
     }
     
     public func transcribe(_ audio: AudioData, language: String?) async throws -> Transcript {
