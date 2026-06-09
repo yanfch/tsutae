@@ -12,6 +12,12 @@ public protocol AppControllerProtocol: Sendable {
     /// 当前转写文本
     var currentTranscript: String? { get }
     
+    /// 当前播报文本
+    var currentSpokenText: String? { get }
+    
+    /// 当前播报来源
+    var currentSpeakingSource: String? { get }
+    
     // MARK: - 配置
     
     /// 加载配置
@@ -63,6 +69,14 @@ public protocol AppControllerProtocol: Sendable {
     
     /// 保存快捷键配置
     func saveHotkeys(_ config: HotkeysConfig) throws
+    
+    // MARK: - TTS Playback
+    
+    /// 立即播报文本
+    func speak(_ request: TTSSpeakRequest) async throws -> TTSSpeakResponse
+    
+    /// 停止当前播报
+    func stopSpeaking() async throws
     
     // MARK: - 健康检查
     

@@ -15,6 +15,9 @@ public final class DefaultAppController: AppControllerProtocol, @unchecked Senda
     // MARK: - 状态
     
     public var currentState: AppState {
+        if TTSPlaybackManager.shared.isSpeaking {
+            return .speaking
+        }
         lock.lock()
         defer { lock.unlock() }
         return _currentState
@@ -24,6 +27,14 @@ public final class DefaultAppController: AppControllerProtocol, @unchecked Senda
         lock.lock()
         defer { lock.unlock() }
         return _currentTranscript
+    }
+    
+    public var currentSpokenText: String? {
+        TTSPlaybackManager.shared.snapshot().text
+    }
+    
+    public var currentSpeakingSource: String? {
+        TTSPlaybackManager.shared.snapshot().source
     }
     
     /// 更新状态（内部用）
@@ -104,6 +115,17 @@ public final class DefaultAppController: AppControllerProtocol, @unchecked Senda
     
     public func saveHotkeys(_ config: HotkeysConfig) throws {
         try HotkeysLoader.save(config)
+    }
+    
+    // MARK: - TTS Playback
+    
+    public func speak(_ request: TTSSpeakRequest) async throws -> TTSSpeakResponse {
+        let config = try ConfigLoader.load()
+        return try TTSPlaybackManager.shared.speak(request, config: config.tts)
+    }
+    
+    public func stopSpeaking() async throws {
+        TTSPlaybackManager.shared.stop()
     }
     
     // MARK: - 健康检查

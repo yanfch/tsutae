@@ -52,7 +52,9 @@ public final class HTTPServer: @unchecked Sendable {
         router.get("/v1/state") { [controller] _, _ in
             StateResponse(
                 state: controller.currentState,
-                transcript: controller.currentTranscript
+                transcript: controller.currentTranscript,
+                spokenText: controller.currentSpokenText,
+                speakingSource: controller.currentSpeakingSource
             )
         }
         
@@ -102,14 +104,16 @@ public final class HTTPServer: @unchecked Sendable {
             throw HTTPServerError.notImplemented("Listen not implemented yet")
         }
         
-        // 边车 - 播放 TTS（占位）
-        router.post("/v1/speak") { _, _ -> ErrorResponse in
-            throw HTTPServerError.notImplemented("Speak not implemented yet")
+        // 边车 - 播放 TTS
+        router.post("/v1/speak") { [controller] request, context async throws -> TTSSpeakResponse in
+            let payload = try await request.decode(as: TTSSpeakRequest.self, context: context)
+            return try await controller.speak(payload)
         }
         
-        // 边车 - 停止播放（占位）
-        router.post("/v1/stop") { _, _ -> ErrorResponse in
-            throw HTTPServerError.notImplemented("Stop not implemented yet")
+        // 边车 - 停止播放
+        router.post("/v1/stop") { [controller] _, _ async throws -> TTSStopResponse in
+            try await controller.stopSpeaking()
+            return TTSStopResponse(ok: true, state: .stopping)
         }
         
         return router
@@ -121,6 +125,8 @@ public final class HTTPServer: @unchecked Sendable {
 struct StateResponse: ResponseEncodable, Codable {
     let state: AppState
     let transcript: String?
+    let spokenText: String?
+    let speakingSource: String?
 }
 
 struct ModelsResponse: ResponseEncodable, Codable {
@@ -131,6 +137,13 @@ struct ModelsResponse: ResponseEncodable, Codable {
 
 struct SecretsListResponse: ResponseEncodable, Codable {
     let secrets: [String]
+}
+
+extension TTSSpeakResponse: ResponseEncodable {}
+
+struct TTSStopResponse: ResponseEncodable, Codable {
+    let ok: Bool
+    let state: TTSPlaybackState
 }
 
 // MARK: - HTTP 错误响应

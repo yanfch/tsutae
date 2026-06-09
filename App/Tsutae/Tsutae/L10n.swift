@@ -236,10 +236,25 @@ enum L10n {
         static var ttsVoiceEngineSubtitle: String { tr("settings.tts_voice_engine_subtitle", default: "Prepare synthesis providers and voice routing.") }
         static var ttsPlaybackTitle: String { tr("settings.tts_playback_title", default: "Playback") }
         static var ttsPlaybackSubtitle: String { tr("settings.tts_playback_subtitle", default: "Control how spoken results should behave.") }
+        static var ttsPresentationStyleLabel: String { tr("settings.tts_presentation_style_label", default: "Presentation") }
+        static var ttsStyleStandard: String { tr("settings.tts_style_standard", default: "Standard") }
+        static var ttsStyleMinimal: String { tr("settings.tts_style_minimal", default: "Minimal") }
+        static var ttsInterruptCurrentLabel: String { tr("settings.tts_interrupt_current_label", default: "Interrupt") }
         static var ttsPreviewTitle: String { tr("settings.tts_preview_title", default: "Preview") }
         static var ttsPreviewSubtitle: String { tr("settings.tts_preview_subtitle", default: "This space will host quick synthesis testing.") }
+        static var ttsPreviewTextLabel: String { tr("settings.tts_preview_text_label", default: "Preview Text") }
+        static var ttsPreviewPlaceholder: String { tr("settings.tts_preview_placeholder", default: "Type a short phrase") }
+        static var ttsPreviewPlayButton: String { tr("settings.tts_preview_play_button", default: "Play Preview") }
+        static var ttsPreviewStopButton: String { tr("settings.tts_preview_stop_button", default: "Stop") }
+        static var ttsStatusIdle: String { tr("settings.tts_status_idle", default: "Idle") }
+        static var ttsStatusSpeaking: String { tr("settings.tts_status_speaking", default: "Speaking") }
         static var ttsIntegrationTitle: String { tr("settings.tts_integration_title", default: "Integration") }
         static var ttsIntegrationSubtitle: String { tr("settings.tts_integration_subtitle", default: "TTS will also be available through the local server layer.") }
+        static var developerTTSProbeTitle: String { tr("settings.developer_tts_probe_title", default: "Speak Probe") }
+        static var developerTTSProbeSubtitle: String { tr("settings.developer_tts_probe_subtitle", default: "Type a line and trigger the speaking chip without waiting for an external caller.") }
+        static var developerTTSProbePlaceholder: String { tr("settings.developer_tts_probe_placeholder", default: "Enter debug speech text") }
+        static var developerTTSProbePlay: String { tr("settings.developer_tts_probe_play", default: "Speak") }
+        static var developerTTSProbeStop: String { tr("settings.developer_tts_probe_stop", default: "Stop") }
         static var serverRuntimeTitle: String { tr("settings.server_runtime_title", default: "Server Runtime") }
         static var serverRuntimeSubtitle: String { tr("settings.server_runtime_subtitle", default: "Expose Tsutae capabilities to local tools and external clients.") }
         static var serverCapabilitiesTitle: String { tr("settings.server_capabilities_title", default: "Capabilities") }

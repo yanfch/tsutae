@@ -22,11 +22,15 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
     var loadHotkeysCallCount = 0
     var saveHotkeysCallCount = 0
     var healthCheckCallCount = 0
+    var speakCallCount = 0
+    var stopSpeakingCallCount = 0
     
     // MARK: - 可配置返回值
     
     var stubbedState: AppState = .idle
     var stubbedTranscript: String? = nil
+    var stubbedSpokenText: String? = nil
+    var stubbedSpeakingSource: String? = nil
     
     var stubbedConfig: Config = .default
     var configError: Error?
@@ -50,6 +54,8 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
         version: "0.0.1",
         engines: EngineHealth(stt: 0, tts: 0, vad: 0)
     )
+    var speakError: Error?
+    var stubbedSpeakResponse = TTSSpeakResponse(ok: true, state: .speaking, source: "test")
     
     // MARK: - AppControllerProtocol
     
@@ -59,6 +65,14 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
     
     var currentTranscript: String? {
         stubbedTranscript
+    }
+    
+    var currentSpokenText: String? {
+        stubbedSpokenText
+    }
+    
+    var currentSpeakingSource: String? {
+        stubbedSpeakingSource
     }
     
     func loadConfig() throws -> Config {
@@ -140,6 +154,23 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
         saveHotkeysCallCount += 1
         if let error = hotkeysError { throw error }
         stubbedHotkeys = config
+    }
+    
+    func speak(_ request: TTSSpeakRequest) async throws -> TTSSpeakResponse {
+        speakCallCount += 1
+        if let error = speakError { throw error }
+        stubbedSpokenText = request.text
+        stubbedSpeakingSource = request.source
+        stubbedState = .speaking
+        return stubbedSpeakResponse
+    }
+    
+    func stopSpeaking() async throws {
+        stopSpeakingCallCount += 1
+        if let error = speakError { throw error }
+        stubbedState = .idle
+        stubbedSpokenText = nil
+        stubbedSpeakingSource = nil
     }
     
     func healthCheck() -> HealthStatus {

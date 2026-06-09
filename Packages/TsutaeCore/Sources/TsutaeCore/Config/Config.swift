@@ -223,6 +223,11 @@ public struct Config: Codable, Sendable {
         }
     }
     
+    public enum TTSPresentationStyle: String, Codable, CaseIterable, Sendable {
+        case standard
+        case minimal
+    }
+
     public struct TTSConfig: Codable, Sendable {
         /// 主引擎 ID
         public var engine: String
@@ -232,6 +237,12 @@ public struct Config: Codable, Sendable {
         
         /// 语速 (0.5 ~ 2.0)
         public var rate: Double
+        
+        /// speaking 胶囊展示密度
+        public var presentationStyle: TTSPresentationStyle
+        
+        /// 新播报是否打断当前播放
+        public var interruptCurrent: Bool
         
         /// Premium 引擎 ID
         public var premiumEngine: String?
@@ -249,6 +260,8 @@ public struct Config: Codable, Sendable {
             engine: String = "apple",
             voice: String? = nil,
             rate: Double = 1.0,
+            presentationStyle: TTSPresentationStyle = .standard,
+            interruptCurrent: Bool = true,
             premiumEngine: String? = nil,
             premiumVoice: String? = nil,
             premiumForSpeak: Bool = false,
@@ -257,10 +270,26 @@ public struct Config: Codable, Sendable {
             self.engine = engine
             self.voice = voice
             self.rate = rate
+            self.presentationStyle = presentationStyle
+            self.interruptCurrent = interruptCurrent
             self.premiumEngine = premiumEngine
             self.premiumVoice = premiumVoice
             self.premiumForSpeak = premiumForSpeak
             self.premiumForAPI = premiumForAPI
+        }
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let defaults = TTSConfig()
+            self.engine = try container.decodeIfPresent(String.self, forKey: .engine) ?? defaults.engine
+            self.voice = try container.decodeIfPresent(String.self, forKey: .voice)
+            self.rate = try container.decodeIfPresent(Double.self, forKey: .rate) ?? defaults.rate
+            self.presentationStyle = try container.decodeIfPresent(TTSPresentationStyle.self, forKey: .presentationStyle) ?? defaults.presentationStyle
+            self.interruptCurrent = try container.decodeIfPresent(Bool.self, forKey: .interruptCurrent) ?? defaults.interruptCurrent
+            self.premiumEngine = try container.decodeIfPresent(String.self, forKey: .premiumEngine)
+            self.premiumVoice = try container.decodeIfPresent(String.self, forKey: .premiumVoice)
+            self.premiumForSpeak = try container.decodeIfPresent(Bool.self, forKey: .premiumForSpeak) ?? defaults.premiumForSpeak
+            self.premiumForAPI = try container.decodeIfPresent(Bool.self, forKey: .premiumForAPI) ?? defaults.premiumForAPI
         }
     }
     

@@ -306,18 +306,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var localEscapeMonitor: Any?
     private var globalEscapeMonitor: Any?
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "AppDelegate")
+    private let appController = DefaultAppController()
+    private lazy var httpServer = HTTPServer(controller: appController)
+    private var serverTask: Task<Void, Never>?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         logger.info("applicationDidFinishLaunching")
+        EngineManager.shared.registerTTS(AppleTTSEngine.shared)
         _ = LocalSTTResidencyCoordinator.shared
         setupHotkeys()
         LocalSTTResidencyCoordinator.shared.refreshFromDisk()
+        FloatingSpeakingIndicator.shared.startObserving()
+        startHTTPServerIfNeeded()
     }
     
     func applicationWillTerminate(_ notification: Notification) {
         if let m = localEscapeMonitor { NSEvent.removeMonitor(m) }
         if let m = globalEscapeMonitor { NSEvent.removeMonitor(m) }
         GlobalHotkeyManager.shared.stop()
+        serverTask?.cancel()
+        httpServer.stop()
     }
     
     /// 注册全局快捷键
@@ -344,14 +352,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func handleEscapeKeyEvent(_ event: NSEvent) -> Bool {
-        guard event.keyCode == 53, FloatingRecordingBar.shared.isShowing else {
+        guard event.keyCode == 53 else {
             return false
         }
         
-        logger.info("Escape pressed while recording bar is visible")
-        Task { @MainActor in
-            RecordingSession.shared.cancel()
+        if FloatingRecordingBar.shared.isShowing {
+            logger.info("Escape pressed while recording bar is visible")
+            Task { @MainActor in
+                RecordingSession.shared.cancel()
+            }
+            return true
         }
-        return true
+        
+        if TTSPlaybackManager.shared.isSpeaking {
+            logger.info("Escape pressed while speaking indicator is active")
+            TTSPlaybackManager.shared.stop()
+            return true
+        }
+        
+        return false
+    }
+    
+    private func startHTTPServerIfNeeded() {
+        let config = (try? ConfigLoader.load()) ?? .default
+        guard config.server.autoStart else {
+            logger.info("HTTP server auto-start disabled")
+            return
+        }
+        serverTask?.cancel()
+        serverTask = Task(priority: .utility) { [logger, httpServer] in
+            do {
+                logger.info("Starting HTTP server on \(config.server.bind, privacy: .public):\(config.server.port, privacy: .public)")
+                try await httpServer.start(host: config.server.bind, port: config.server.port)
+            } catch is CancellationError {
+                logger.info("HTTP server task cancelled")
+            } catch {
+                logger.error("Failed to start HTTP server: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 }
