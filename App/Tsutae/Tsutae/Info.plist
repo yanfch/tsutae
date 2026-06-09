@@ -8,10 +8,10 @@
     
     <!-- 麦克风权限描述 -->
     <key>NSMicrophoneUsageDescription</key>
-    <string>tsutae 需要麦克风权限来录制语音</string>
+    <string>Tsutae 需要麦克风权限来录制语音</string>
     
     <!-- 语音识别权限描述 -->
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>tsutae 需要语音识别权限来使用 Apple Speech 作为转写兜底</string>
+    <string>Tsutae 需要语音识别权限来使用 Apple Speech 作为转写兜底</string>
 </dict>
 </plist>

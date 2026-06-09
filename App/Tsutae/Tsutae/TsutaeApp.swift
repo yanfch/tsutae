@@ -167,7 +167,7 @@ struct TsutaeApp: App {
     
     var body: some Scene {
         // 使用自定义品牌图标
-        MenuBarExtra("tsutae", image: "MenuBarIcon") {
+        MenuBarExtra("Tsutae", image: "MenuBarIcon") {
             menuContent
                 .environment(\.locale, currentLocale)
         }
