@@ -51,6 +51,13 @@
 "settings.app_language_label" = "界面语言";
 "settings.recording_capsule_label" = "录音胶囊";
 "settings.launch_at_login_label" = "开机自动启动";
+"settings.recording_shortcut_label" = "呼出快捷键";
+"settings.recording_shortcut_prompt" = "按键";
+"settings.recording_shortcut_record_hint" = "设置";
+"settings.recording_shortcut_cancel_hint" = "Esc";
+"settings.recording_shortcut_modifier_hint" = "至少包含一个修饰键。";
+"settings.toggle_off" = "关";
+"settings.toggle_on" = "开";
 "settings.default_action_label" = "默认动作";
 "settings.transcription_language_label" = "转写语言";
 "settings.accessibility_permission_label" = "辅助功能权限";

@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import ServiceManagement
 import Speech
 import SwiftUI
 import TsutaeCore
@@ -442,11 +443,12 @@ private struct GeneralSettingsPage: View {
 
 private struct GeneralSettingsView: View {
     
+    @ObservedObject private var hotkeyManager = GlobalHotkeyManager.shared
     @AppStorage("launchAtLogin") private var launchAtLogin = false
+    @State private var didSyncLaunchAtLogin = false
     @AppStorage("settings.appearanceMode") private var appearanceMode = "system"
     @AppStorage(L10n.appLanguageDefaultsKey) private var appLanguage = L10n.AppLanguage.system.rawValue
     @AppStorage("settings.defaultAction") private var defaultAction = "injectFocusedApp"
-    @AppStorage("settings.transcriptionLanguage") private var transcriptionLanguage = "auto"
     @AppStorage(DS.recordingBar.presetDefaultsKey) private var recordingBarPreset = DS.recordingBar.defaultPreset.rawValue
     
     private let appearanceOptions = [
@@ -466,23 +468,24 @@ private struct GeneralSettingsView: View {
         SettingsDropdownOption(id: "copyToClipboard", title: L10n.Settings.actionCopyToClipboard)
     ]
     
-    private let transcriptionLanguageOptions = [
-        SettingsDropdownOption(id: "auto", title: L10n.Settings.languageAuto),
-        SettingsDropdownOption(id: "zh", title: L10n.Settings.languageChinese),
-        SettingsDropdownOption(id: "en", title: L10n.Settings.languageEnglish)
-    ]
+    private var launchAtLoginSelection: Binding<String> {
+        Binding(
+            get: { launchAtLogin ? "on" : "off" },
+            set: { updateLaunchAtLogin($0 == "on") }
+        )
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             SettingsSection(title: L10n.Settings.sectionAppearance) {
                 SettingsRow(label: L10n.Settings.appearanceModeLabel) {
-                    SettingsDropdown(selection: $appearanceMode, options: appearanceOptions, width: 150)
+                    SettingsDropdown(selection: $appearanceMode, options: appearanceOptions, width: 132, menuWidth: 156)
                 }
                 
                 SettingsDivider()
                 
                 SettingsRow(label: L10n.Settings.appLanguageLabel) {
-                    SettingsDropdown(selection: $appLanguage, options: languageOptions, width: 150)
+                    SettingsDropdown(selection: $appLanguage, options: languageOptions, width: 132, menuWidth: 156)
                 }
                 
                 SettingsDivider()
@@ -496,21 +499,29 @@ private struct GeneralSettingsView: View {
             }
             
             SettingsSection(title: L10n.Settings.sectionBehavior) {
+                SettingsRow(label: L10n.Settings.recordingShortcutLabel) {
+                    SettingsShortcutRecorderField(
+                        shortcutID: hotkeyManager.toggleRecordingShortcutID,
+                        onChange: { hotkeyManager.updateToggleRecordingShortcut(id: $0) }
+                    )
+                }
+                
+                SettingsDivider()
+                
                 SettingsRow(label: L10n.Settings.launchAtLoginLabel) {
-                    Toggle("", isOn: $launchAtLogin)
-                        .labelsHidden()
+                    SettingsChipSelector(
+                        selection: launchAtLoginSelection,
+                        options: [
+                            ("off", L10n.Settings.toggleOff),
+                            ("on", L10n.Settings.toggleOn)
+                        ]
+                    )
                 }
                 
                 SettingsDivider()
                 
                 SettingsRow(label: L10n.Settings.defaultActionLabel) {
-                    SettingsDropdown(selection: $defaultAction, options: defaultActionOptions, width: 220)
-                }
-                
-                SettingsDivider()
-                
-                SettingsRow(label: L10n.Settings.transcriptionLanguageLabel) {
-                    SettingsDropdown(selection: $transcriptionLanguage, options: transcriptionLanguageOptions, width: 120)
+                    SettingsDropdown(selection: $defaultAction, options: defaultActionOptions, width: 248, menuWidth: 248)
                 }
                 
                 SettingsDivider()
@@ -536,14 +547,42 @@ private struct GeneralSettingsView: View {
                 .frame(height: 52)
             }
         }
+        .onAppear {
+            syncLaunchAtLoginState()
+        }
+    }
+    
+    private func syncLaunchAtLoginState() {
+        guard didSyncLaunchAtLogin == false else { return }
+        didSyncLaunchAtLogin = true
+        guard #available(macOS 13.0, *) else { return }
+        launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+    
+    private func updateLaunchAtLogin(_ newValue: Bool) {
+        guard launchAtLogin != newValue else { return }
+        if #available(macOS 13.0, *) {
+            do {
+                if newValue {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+                launchAtLogin = SMAppService.mainApp.status == .enabled
+            } catch {
+                launchAtLogin = SMAppService.mainApp.status == .enabled
+            }
+        } else {
+            launchAtLogin = newValue
+        }
     }
     
     private func resetDefaults() {
-        launchAtLogin = false
+        updateLaunchAtLogin(false)
         appearanceMode = "system"
         appLanguage = L10n.AppLanguage.system.rawValue
         defaultAction = "injectFocusedApp"
-        transcriptionLanguage = "auto"
+        hotkeyManager.resetToggleRecordingShortcutToDefault()
     }
 }
 
@@ -967,7 +1006,7 @@ private struct STTSettingsPage: View {
     }
     
     private var shouldShowRemoteStatus: Bool {
-        store.isCheckingRemote || store.remoteCheckMessage != "Not tested" || canSaveRemoteDraft
+        store.config.stt.remote.enabled
     }
     
     private var remoteFeedbackText: String {
@@ -975,13 +1014,19 @@ private struct STTSettingsPage: View {
             return "Checking endpoint…"
         }
         if hasRemoteDraftChanges {
-            if canSaveRemoteDraft {
-                return "Reachable · ready to save"
+            if lastSuccessfulRemoteTestSignature == remoteDraftSignature {
+                return "Test passed · ready to save"
             }
-            if store.remoteCheckMessage != "Not tested" && store.remoteCheckMessage != "Saved" {
+            if store.remoteCheckMessage != "Not tested" && store.remoteCheckMessage != "Saved" && store.remoteCheckMessage != "Saved configuration" {
                 return store.remoteCheckMessage
             }
-            return "Test current values before saving"
+            return "Edited · test current values before saving"
+        }
+        if store.remoteCheckMessage == "Saved" {
+            return "Saved"
+        }
+        if store.remoteCheckMessage == "Not tested", store.isRemoteConfigured {
+            return "Saved configuration"
         }
         return store.remoteCheckMessage
     }
@@ -991,10 +1036,10 @@ private struct STTSettingsPage: View {
             return .info
         }
         if hasRemoteDraftChanges {
-            if canSaveRemoteDraft {
+            if lastSuccessfulRemoteTestSignature == remoteDraftSignature {
                 return .success
             }
-            if store.remoteCheckMessage != "Not tested" && store.remoteCheckMessage != "Saved" {
+            if store.remoteCheckMessage != "Not tested" && store.remoteCheckMessage != "Saved" && store.remoteCheckMessage != "Saved configuration" {
                 return .danger
             }
             return .neutral
@@ -1002,7 +1047,7 @@ private struct STTSettingsPage: View {
         if store.remoteCheckMessage == "Saved" || store.remoteCheckMessage.hasPrefix("Reachable") || store.remoteCheckMessage.hasPrefix("Transcription OK") {
             return .success
         }
-        if store.remoteCheckMessage == "Not tested" {
+        if store.remoteCheckMessage == "Not tested" || store.remoteCheckMessage == "Saved configuration" {
             return .neutral
         }
         return .danger
@@ -1021,6 +1066,7 @@ private struct STTSettingsPage: View {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .joined(separator: "|")
         lastSuccessfulRemoteTestSignature = nil
+        store.remoteCheckMessage = store.isRemoteConfigured ? "Saved configuration" : "Not tested"
     }
     
     private func testRemoteDraft() {
@@ -1052,7 +1098,7 @@ private struct STTSettingsPage: View {
                 guard Task.isCancelled == false else { return }
                 guard hasRemoteDraftChanges == false else { return }
                 if store.remoteCheckMessage == "Saved" {
-                    store.remoteCheckMessage = "Not tested"
+                    store.remoteCheckMessage = "Saved configuration"
                 }
             }
         } catch {
@@ -1736,16 +1782,180 @@ private struct SettingsDropdown: View {
 private struct SettingsChipSelector: View {
     let selection: Binding<String>
     let options: [(id: String, title: String)]
+    @State private var optionFrames: [String: CGRect] = [:]
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(options, id: \.id) { option in
-                Button(option.title) {
-                    selection.wrappedValue = option.id
+        ZStack(alignment: .topLeading) {
+            Capsule()
+                .fill(colorScheme == .dark ? DS.color.surface2Dark.opacity(0.9) : Color.white.opacity(0.72))
+                .overlay(
+                    Capsule()
+                        .strokeBorder(idleBorder, lineWidth: 1)
+                )
+            
+            if let frame = optionFrames[selection.wrappedValue] {
+                Capsule()
+                    .fill(colorScheme == .dark ? DS.color.accent.opacity(0.9) : DS.color.accent.opacity(0.92))
+                    .frame(width: frame.width, height: frame.height)
+                    .offset(x: frame.minX, y: frame.minY)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(selectedBorder, lineWidth: 1)
+                            .frame(width: frame.width, height: frame.height)
+                            .offset(x: frame.minX, y: frame.minY)
+                    )
+                    .shadow(color: colorScheme == .dark ? DS.color.accent.opacity(0.18) : DS.color.accent.opacity(0.14), radius: 8, x: 0, y: 1)
+                    .animation(.spring(response: 0.34, dampingFraction: 0.84, blendDuration: 0.12), value: frame)
+            }
+            
+            HStack(spacing: 4) {
+                ForEach(options, id: \.id) { option in
+                    let isSelected = selection.wrappedValue == option.id
+                    Button {
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.84, blendDuration: 0.12)) {
+                            selection.wrappedValue = option.id
+                        }
+                    } label: {
+                        Text(option.title)
+                            .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                            .foregroundStyle(isSelected ? selectedForeground : idleForeground)
+                            .padding(.horizontal, 11)
+                            .frame(height: 28)
+                            .background(
+                                GeometryReader { proxy in
+                                    Color.clear
+                                        .preference(
+                                            key: SettingsChipSelectorFramePreferenceKey.self,
+                                            value: [option.id: proxy.frame(in: .named("settings-chip-selector-space"))]
+                                        )
+                                }
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(SecondaryChipButtonStyle(isSelected: selection.wrappedValue == option.id))
+            }
+            .padding(2)
+        }
+        .fixedSize(horizontal: true, vertical: true)
+        .coordinateSpace(name: "settings-chip-selector-space")
+        .onPreferenceChange(SettingsChipSelectorFramePreferenceKey.self) { frames in
+            optionFrames = frames
+        }
+    }
+    
+    private var selectedForeground: Color {
+        colorScheme == .dark ? Color.white.opacity(0.98) : Color.white
+    }
+    
+    private var idleForeground: Color {
+        colorScheme == .dark ? DS.color.foregroundDark.opacity(0.9) : DS.color.muted
+    }
+    
+    private var selectedBorder: Color {
+        colorScheme == .dark ? DS.color.accent.opacity(0.96) : DS.color.accent.opacity(0.9)
+    }
+    
+    private var idleBorder: Color {
+        colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.42) : Color.black.opacity(0.04)
+    }
+}
+
+private struct SettingsChipSelectorFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+private struct SettingsShortcutRecorderField: View {
+    let shortcutID: String
+    let onChange: (String) -> Void
+    
+    @ObservedObject private var hotkeyManager = GlobalHotkeyManager.shared
+    @State private var isRecording = false
+    @State private var eventMonitor: Any?
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        Button {
+            isRecording.toggle()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "keyboard")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isRecording ? DS.color.accent : .secondary)
+                
+                Group {
+                    if isRecording {
+                        Text(L10n.Settings.recordingShortcutPrompt)
+                            .font(DS.font.mono(size: 12, weight: .medium))
+                            .tracking(0.04)
+                    } else {
+                        Text(hotkeyManager.displayString(forShortcutID: shortcutID))
+                            .font(.system(size: 13.25, weight: .regular, design: .rounded))
+                            .tracking(0.01)
+                            .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark.opacity(0.88) : DS.color.foreground.opacity(0.86))
+                    }
+                }
+                .lineLimit(1)
+                
+                Spacer(minLength: 8)
+                
+                Text(isRecording ? L10n.Settings.recordingShortcutCancelHint : L10n.Settings.recordingShortcutRecordHint)
+                    .font(DS.font.mono(size: 10.5, weight: .medium))
+                    .foregroundStyle(isRecording ? DS.color.accent : .secondary)
+            }
+            .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground)
+            .padding(.horizontal, 13)
+            .frame(width: 172, height: 38, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(isRecording ? (colorScheme == .dark ? DS.color.accentDark.opacity(0.22) : DS.color.accent.opacity(0.12)) : (colorScheme == .dark ? DS.color.surface2Dark.opacity(0.92) : Color.white.opacity(0.88)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .strokeBorder(isRecording ? (colorScheme == .dark ? DS.color.accentDark.opacity(0.48) : DS.color.accent.opacity(0.34)) : (colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.45) : DS.color.borderSoft.opacity(0.52)), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .onChange(of: isRecording) { newValue in
+            if newValue {
+                startRecordingShortcut()
+            } else {
+                stopRecordingShortcut()
             }
         }
+        .onDisappear {
+            stopRecordingShortcut()
+        }
+    }
+    
+    private func startRecordingShortcut() {
+        stopRecordingShortcut()
+        hotkeyManager.beginShortcutCapture()
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 {
+                isRecording = false
+                return nil
+            }
+            guard let shortcut = hotkeyManager.shortcutID(from: event) else {
+                NSSound.beep()
+                return nil
+            }
+            onChange(shortcut)
+            isRecording = false
+            return nil
+        }
+    }
+    
+    private func stopRecordingShortcut() {
+        if let eventMonitor {
+            NSEvent.removeMonitor(eventMonitor)
+            self.eventMonitor = nil
+        }
+        hotkeyManager.endShortcutCapture()
     }
 }
 
@@ -2819,7 +3029,7 @@ private struct PermissionsSettingsPage: View {
                 status: "Required for recording",
                 badgeTitle: snapshot.microphone.badgeTitle,
                 badgeTone: snapshot.microphone.badgeTone,
-                actionTitle: "Open System Settings",
+                actionTitle: snapshot.microphone.actionTitle,
                 isHighlighted: focusedPermission == .microphone
             ) {
                 FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Microphone")
@@ -2829,7 +3039,7 @@ private struct PermissionsSettingsPage: View {
                 status: "Required for Apple Speech fallback",
                 badgeTitle: snapshot.speechRecognition.badgeTitle,
                 badgeTone: snapshot.speechRecognition.badgeTone,
-                actionTitle: "Open System Settings",
+                actionTitle: snapshot.speechRecognition.actionTitle,
                 isHighlighted: focusedPermission == .speechRecognition
             ) {
                 FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_SpeechRecognition")
@@ -2839,7 +3049,7 @@ private struct PermissionsSettingsPage: View {
                 status: "Required to insert into the focused app",
                 badgeTitle: snapshot.accessibility.badgeTitle,
                 badgeTone: snapshot.accessibility.badgeTone,
-                actionTitle: "Open System Settings",
+                actionTitle: snapshot.accessibility.actionTitle,
                 isHighlighted: focusedPermission == .accessibility
             ) {
                 FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Privacy_Accessibility")
@@ -2849,7 +3059,7 @@ private struct PermissionsSettingsPage: View {
                 status: "Optional for status feedback",
                 badgeTitle: snapshot.notifications.badgeTitle,
                 badgeTone: snapshot.notifications.badgeTone,
-                actionTitle: "Open System Settings",
+                actionTitle: snapshot.notifications.actionTitle,
                 isHighlighted: focusedPermission == .notifications
             ) {
                 FloatingRecordingBar.shared.openSystemSettingsPrivacyPane("Notifications")
@@ -3379,6 +3589,15 @@ private enum PermissionAccessState {
     case allowed
     case denied
     case review
+    
+    var actionTitle: String {
+        switch self {
+        case .allowed:
+            return "Review"
+        case .denied, .review:
+            return "Grant"
+        }
+    }
     
     var badgeTitle: String {
         switch self {

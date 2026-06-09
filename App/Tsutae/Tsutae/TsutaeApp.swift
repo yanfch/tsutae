@@ -190,33 +190,34 @@ struct TsutaeApp: App {
     
     @ViewBuilder
     private var menuContent: some View {
-        if let transcript = recordingSession.lastTranscript, !transcript.isEmpty {
-            Text(transcript)
-                .lineLimit(3)
-                .font(.caption)
-            Button(L10n.Menu.copyLatestTranscript) {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(transcript, forType: .string)
-            }
-            Divider()
-        }
-        
-        if let error = recordingSession.lastError {
-            Text(L10n.Menu.error(error))
-                .lineLimit(2)
-                .font(.caption)
-            Divider()
-        }
-        
-        Text(L10n.Menu.shortcut(GlobalHotkeyManager.shared.toggleRecordingShortcutDisplay))
-            .foregroundStyle(.secondary)
-        
+        MenuBarMenuContent(recordingSession: recordingSession, logger: logger)
+    }
+}
+
+private struct MenuBarMenuContent: View {
+    @ObservedObject var recordingSession: RecordingSession
+    @ObservedObject private var hotkeyManager = GlobalHotkeyManager.shared
+    let logger: Logger
+    
+    var body: some View {
         Button(recordingSession.isRecording ? L10n.Menu.stopAndTranscribe : L10n.Menu.startRecording) {
             logger.info("Menu action: toggle recording")
             Task { @MainActor in
                 RecordingSession.shared.toggle()
             }
         }
+        
+        if let transcript = recordingSession.lastTranscript, !transcript.isEmpty {
+            Button(L10n.Menu.copyLatestTranscript) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(transcript, forType: .string)
+            }
+        }
+        
+        Divider()
+        
+        Text(L10n.Menu.shortcut(hotkeyManager.toggleRecordingShortcutDisplay))
+            .foregroundStyle(.secondary)
         
         Divider()
         

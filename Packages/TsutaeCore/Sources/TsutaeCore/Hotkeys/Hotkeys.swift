@@ -180,6 +180,8 @@ public enum ActionBinding: Codable, Sendable {
 
 /// 预定义 action 类型
 public enum PredefinedAction: String, Codable, Sendable {
+    /// 打开或关闭录音胶囊
+    case toggleRecordingBar = "toggle_recording_bar"
     /// 转写到剪贴板
     case transcribeToClipboard = "transcribe_to_clipboard"
     /// 转写注入到焦点 App

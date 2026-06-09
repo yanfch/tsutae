@@ -126,6 +126,13 @@ enum L10n {
         static var appLanguageLabel: String { tr("settings.app_language_label", default: "App Language") }
         static var recordingCapsuleLabel: String { tr("settings.recording_capsule_label", default: "Recording Capsule") }
         static var launchAtLoginLabel: String { tr("settings.launch_at_login_label", default: "Launch at Login") }
+        static var recordingShortcutLabel: String { tr("settings.recording_shortcut_label", default: "Recording Shortcut") }
+        static var recordingShortcutPrompt: String { tr("settings.recording_shortcut_prompt", default: "Press") }
+        static var recordingShortcutRecordHint: String { tr("settings.recording_shortcut_record_hint", default: "Set") }
+        static var recordingShortcutCancelHint: String { tr("settings.recording_shortcut_cancel_hint", default: "Esc") }
+        static var recordingShortcutModifierHint: String { tr("settings.recording_shortcut_modifier_hint", default: "Use at least one modifier.") }
+        static var toggleOff: String { tr("settings.toggle_off", default: "Off") }
+        static var toggleOn: String { tr("settings.toggle_on", default: "On") }
         static var defaultActionLabel: String { tr("settings.default_action_label", default: "Default Action") }
         static var transcriptionLanguageLabel: String { tr("settings.transcription_language_label", default: "Transcription Language") }
         static var accessibilityPermissionLabel: String { tr("settings.accessibility_permission_label", default: "Accessibility Permission") }
