@@ -304,11 +304,36 @@ struct SettingsPageChrome: View {
             )
         }
     }
+
+    private struct ServerSummary {
+        let runtimeTitle: String
+        let runtimeTone: ServerStatusCapsule.Tone
+        let authTitle: String
+        let authTone: ServerStatusCapsule.Tone
+        let clientsTitle: String
+        let clientsTone: ServerStatusCapsule.Tone
+
+        static func load() -> ServerSummary {
+            make(from: (try? ConfigLoader.load()) ?? .default)
+        }
+
+        static func make(from config: Config) -> ServerSummary {
+            ServerSummary(
+                runtimeTitle: config.server.autoStart ? L10n.Settings.serverSummaryRuntimeOn : L10n.Settings.serverSummaryRuntimeOff,
+                runtimeTone: config.server.autoStart ? .active : .neutral,
+                authTitle: config.server.requireToken ? L10n.Settings.serverSummaryTokenRequired : L10n.Settings.serverSummaryLocalOnly,
+                authTone: config.server.requireToken ? .active : .soft,
+                clientsTitle: L10n.Settings.serverClientCount(config.server.clients.count),
+                clientsTone: config.server.clients.isEmpty ? .neutral : .active
+            )
+        }
+    }
     
     let tab: SettingsTab
     @Environment(\.colorScheme) private var colorScheme
     @State private var sttSummary = STTSummary.load()
     @State private var ttsSummary = TTSSummary.load()
+    @State private var serverSummary = ServerSummary.load()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -344,6 +369,7 @@ struct SettingsPageChrome: View {
             if let config = notification.userInfo?["config"] as? Config {
                 sttSummary = STTSummary.make(from: config)
                 ttsSummary = TTSSummary.make(from: config)
+                serverSummary = ServerSummary.make(from: config)
             } else {
                 refreshSummaries()
             }
@@ -362,8 +388,9 @@ struct SettingsPageChrome: View {
             summaryCapsule(title: ttsSummary.routeTitle, tone: ttsSummary.routeTone)
             summaryCapsule(title: ttsSummary.fallbackTitle, tone: ttsSummary.fallbackTone)
         case .server:
-            summaryCapsule(title: L10n.Settings.chromeSTTTTS, tone: .soft)
-            summaryCapsule(title: L10n.Settings.labelHooks, tone: .active)
+            summaryCapsule(title: serverSummary.runtimeTitle, tone: serverSummary.runtimeTone)
+            summaryCapsule(title: serverSummary.authTitle, tone: serverSummary.authTone)
+            summaryCapsule(title: serverSummary.clientsTitle, tone: serverSummary.clientsTone)
         case .permissions:
             summaryCapsule(title: L10n.Settings.statusReview, tone: .soft)
         default:
@@ -398,6 +425,7 @@ struct SettingsPageChrome: View {
     private func refreshSummaries() {
         sttSummary = STTSummary.load()
         ttsSummary = TTSSummary.load()
+        serverSummary = ServerSummary.load()
     }
 }
 

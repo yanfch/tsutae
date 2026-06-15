@@ -374,6 +374,10 @@ enum L10n {
         static var serverRuntimeSubtitle: String { tr("settings.server_runtime_subtitle", default: "Expose Tsutae capabilities to local tools and external clients.") }
         static var serverRuntimeConfigureButton: String { tr("settings.server_runtime_configure_button", default: "Configure") }
         static var serverRuntimeCollapseButton: String { tr("settings.server_runtime_collapse_button", default: "Collapse") }
+        static var serverSummaryRuntimeOn: String { tr("settings.server_summary_runtime_on", default: "Runtime On") }
+        static var serverSummaryRuntimeOff: String { tr("settings.server_summary_runtime_off", default: "Runtime Off") }
+        static var serverSummaryTokenRequired: String { tr("settings.server_summary_token_required", default: "Token Required") }
+        static var serverSummaryLocalOnly: String { tr("settings.server_summary_local_only", default: "Localhost") }
         static var serverCapabilitiesTitle: String { tr("settings.server_capabilities_title", default: "Capabilities") }
         static var serverCapabilitiesSubtitle: String { tr("settings.server_capabilities_subtitle", default: "Choose what the local server can provide.") }
         static var serverAccessTitle: String { tr("settings.server_access_title", default: "Access") }
@@ -412,9 +416,16 @@ enum L10n {
         static var serverClientBackButton: String { tr("settings.server_client_back_button", default: "Applications") }
         static var serverClientPermissionsTitle: String { tr("settings.server_client_permissions_title", default: "API Access") }
         static var serverClientPermissionsSubtitle: String { tr("settings.server_client_permissions_subtitle", default: "Choose which HTTP APIs this app token can call. Hooks are configured below.") }
-        static var serverClientAdvancedScopesTitle: String { tr("settings.server_client_advanced_scopes_title", default: "Advanced / Planned Access") }
+        static var serverClientCommonScopesTitle: String { tr("settings.server_client_common_scopes_title", default: "Common API Access") }
+        static var serverClientAdvancedScopesTitle: String { tr("settings.server_client_advanced_scopes_title", default: "Advanced / Sensitive Access") }
+        static var serverClientAdvancedScopesNote: String { tr("settings.server_client_advanced_scopes_note", default: "Grant these only to trusted apps. They expose configuration, recipe, secret-name, or future live-listening surfaces.") }
         static var serverClientShowAdvancedScopes: String { tr("settings.server_client_show_advanced_scopes", default: "Show Advanced") }
         static var serverClientHideAdvancedScopes: String { tr("settings.server_client_hide_advanced_scopes", default: "Hide Advanced") }
+        static var serverClientUsageTitle: String { tr("settings.server_client_usage_title", default: "Usage Example") }
+        static var serverClientUsageSubtitle: String { tr("settings.server_client_usage_subtitle", default: "Copy a starter request for this app token.") }
+        static var serverClientCopyExampleButton: String { tr("settings.server_client_copy_example_button", default: "Copy Example") }
+        static var serverClientExampleCopiedStatus: String { tr("settings.server_client_example_copied_status", default: "Example copied") }
+        static var serverClientExampleTokenUnavailable: String { tr("settings.server_client_example_token_unavailable", default: "Regenerate the token to show a complete Bearer value. Existing tokens are stored as hashes.") }
         static var serverClientHooksNote: String { tr("settings.server_client_hooks_note", default: "Hooks are callbacks from Tsutae to this app. They are not API-call permissions.") }
         static var serverClientSelectLabel: String { tr("settings.server_client_select_label", default: "Selected") }
         static var serverClientNewNameLabel: String { tr("settings.server_client_new_name_label", default: "New Client") }
@@ -440,6 +451,22 @@ enum L10n {
         static func serverClientScopeCount(_ count: Int) -> String {
             String(format: tr("settings.server_client_scope_count_format", default: "%d scopes"), count)
         }
+        static var serverClientScopeModelsTitle: String { tr("settings.server_client_scope_models_title", default: "Models and Voices") }
+        static var serverClientScopeListenTitle: String { tr("settings.server_client_scope_listen_title", default: "Listen (Planned)") }
+        static var serverClientScopeRecipesTitle: String { tr("settings.server_client_scope_recipes_title", default: "Recipes") }
+        static var serverClientScopeSecretsTitle: String { tr("settings.server_client_scope_secrets_title", default: "Secret Names") }
+        static var serverClientScopeConfigReadTitle: String { tr("settings.server_client_scope_config_read_title", default: "Configuration Read") }
+        static var serverClientScopeStateDescription: String { tr("settings.server_client_scope_state_description", default: "Read current app state, latest transcript, and speaking status.") }
+        static var serverClientScopeModelsDescription: String { tr("settings.server_client_scope_models_description", default: "List available STT/TTS engines and TTS voices.") }
+        static var serverClientScopeTranscribeDescription: String { tr("settings.server_client_scope_transcribe_description", default: "Upload audio to /v1/audio/transcriptions.") }
+        static var serverClientScopeAudioSpeechDescription: String { tr("settings.server_client_scope_audio_speech_description", default: "Generate audio through /v1/audio/speech.") }
+        static var serverClientScopeSpeakDescription: String { tr("settings.server_client_scope_speak_description", default: "Ask Tsutae to speak text on this Mac.") }
+        static var serverClientScopeNotifyDescription: String { tr("settings.server_client_scope_notify_description", default: "Send system notifications, spoken alerts, or both.") }
+        static var serverClientScopeStopDescription: String { tr("settings.server_client_scope_stop_description", default: "Stop current TTS playback.") }
+        static var serverClientScopeListenDescription: String { tr("settings.server_client_scope_listen_description", default: "Reserved for future live listening control.") }
+        static var serverClientScopeRecipesDescription: String { tr("settings.server_client_scope_recipes_description", default: "Read saved automation recipes when recipe APIs are enabled.") }
+        static var serverClientScopeSecretsDescription: String { tr("settings.server_client_scope_secrets_description", default: "List secret reference names only. Secret values are never returned.") }
+        static var serverClientScopeConfigReadDescription: String { tr("settings.server_client_scope_config_read_description", default: "Read Tsutae configuration. Use only for trusted local tools.") }
         static var serverHealthTitle: String { tr("settings.server_health_title", default: "Health") }
         static var serverHealthSubtitle: String { tr("settings.server_health_subtitle", default: "Operational visibility for the service layer.") }
         static var serverAutostartTitle: String { tr("settings.server_autostart_title", default: "Start Local Server") }
