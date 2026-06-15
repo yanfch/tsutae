@@ -43,6 +43,18 @@ public struct LocalSTTModelDescriptor: Identifiable, Equatable, Sendable {
     }
 }
 
+public struct LocalSTTRecordingGuidance: Equatable, Sendable {
+    public let warningSeconds: Int
+    public let recommendedMaximumSeconds: Int
+    public let isEstimated: Bool
+
+    public init(warningSeconds: Int, recommendedMaximumSeconds: Int, isEstimated: Bool = true) {
+        self.warningSeconds = warningSeconds
+        self.recommendedMaximumSeconds = recommendedMaximumSeconds
+        self.isEstimated = isEstimated
+    }
+}
+
 public enum LocalSTTModelCatalog {
     public static let all: [LocalSTTModelDescriptor] = [
         LocalSTTModelDescriptor(
@@ -104,6 +116,21 @@ public enum LocalSTTModelCatalog {
     
     public static func descriptor(id: String) -> LocalSTTModelDescriptor? {
         all.first(where: { $0.id == id })
+    }
+
+    public static func recordingGuidance(for id: String?) -> LocalSTTRecordingGuidance {
+        switch id {
+        case "paraformer-large-zh":
+            return LocalSTTRecordingGuidance(warningSeconds: 25, recommendedMaximumSeconds: 30, isEstimated: false)
+        case "qwen3-asr-int8":
+            return LocalSTTRecordingGuidance(warningSeconds: 30, recommendedMaximumSeconds: 35, isEstimated: false)
+        case "sensevoice-small":
+            return LocalSTTRecordingGuidance(warningSeconds: 25, recommendedMaximumSeconds: 30, isEstimated: false)
+        case "parakeet-ctc-zh-cn", "parakeet-tdt-v3":
+            return LocalSTTRecordingGuidance(warningSeconds: 30, recommendedMaximumSeconds: 35)
+        default:
+            return LocalSTTRecordingGuidance(warningSeconds: 30, recommendedMaximumSeconds: 35)
+        }
     }
     
     public static func isDownloaded(id: String) -> Bool {

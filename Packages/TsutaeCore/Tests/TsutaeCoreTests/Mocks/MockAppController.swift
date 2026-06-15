@@ -11,6 +11,7 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
     var saveConfigCallCount = 0
     var listSTTEnginesCallCount = 0
     var listTTSEnginesCallCount = 0
+    var listTTSVoicesCallCount = 0
     var listVADEnginesCallCount = 0
     var setSecretCallCount = 0
     var getSecretCallCount = 0
@@ -22,8 +23,12 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
     var loadHotkeysCallCount = 0
     var saveHotkeysCallCount = 0
     var healthCheckCallCount = 0
+    var transcribeCallCount = 0
     var speakCallCount = 0
+    var notifyCallCount = 0
     var stopSpeakingCallCount = 0
+    var runServerHookCallCount = 0
+    var testServerHookCallCount = 0
     
     // MARK: - 可配置返回值
     
@@ -31,12 +36,14 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
     var stubbedTranscript: String? = nil
     var stubbedSpokenText: String? = nil
     var stubbedSpeakingSource: String? = nil
+    var stubbedTTSPlaybackSnapshot: TTSPlaybackSnapshot = .idle
     
     var stubbedConfig: Config = .default
     var configError: Error?
     
     var stubbedSTTEngines: [EngineInfo] = []
     var stubbedTTSEngines: [EngineInfo] = []
+    var stubbedTTSVoices: [TTSVoiceEngineInfo] = []
     var stubbedVADEngines: [EngineInfo] = []
     
     var secrets: [String: String] = [:]
@@ -54,8 +61,14 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
         version: "0.0.1",
         engines: EngineHealth(stt: 0, tts: 0, vad: 0)
     )
+    var transcribeError: Error?
+    var stubbedTranscription = Transcript(text: "mock transcription", language: "en", durationMs: 1000, confidence: nil, isFinal: true)
     var speakError: Error?
     var stubbedSpeakResponse = TTSSpeakResponse(ok: true, state: .speaking, source: "test")
+    var notifyError: Error?
+    var stubbedNotifyResponse = TTSNotifyResponse(ok: true, spoken: true, notificationDelivered: false, fallbackUsed: false, level: .info, state: .speaking)
+    var stubbedServerHookResult = ServerHookResult(ok: true, event: .onTranscribed, statusCode: 204)
+    var lastClient: Config.ServerClientConfig?
     
     // MARK: - AppControllerProtocol
     
@@ -73,6 +86,10 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
     
     var currentSpeakingSource: String? {
         stubbedSpeakingSource
+    }
+
+    var ttsPlaybackSnapshot: TTSPlaybackSnapshot {
+        stubbedTTSPlaybackSnapshot
     }
     
     func loadConfig() throws -> Config {
@@ -95,6 +112,14 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
     func listTTSEngines() -> [EngineInfo] {
         listTTSEnginesCallCount += 1
         return stubbedTTSEngines
+    }
+
+    func listTTSVoices(engineID: String?) -> [TTSVoiceEngineInfo] {
+        listTTSVoicesCallCount += 1
+        guard let engineID = engineID?.trimmingCharacters(in: .whitespacesAndNewlines), engineID.isEmpty == false else {
+            return stubbedTTSVoices
+        }
+        return stubbedTTSVoices.filter { $0.engine.id == engineID }
     }
     
     func listVADEngines() -> [EngineInfo] {
@@ -155,14 +180,36 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
         if let error = hotkeysError { throw error }
         stubbedHotkeys = config
     }
+
+    func transcribe(_ request: STTTranscriptionRequest, client: Config.ServerClientConfig?) async throws -> Transcript {
+        transcribeCallCount += 1
+        lastClient = client
+        if let error = transcribeError { throw error }
+        stubbedTranscript = stubbedTranscription.text
+        stubbedState = .idle
+        return stubbedTranscription
+    }
     
-    func speak(_ request: TTSSpeakRequest) async throws -> TTSSpeakResponse {
+    func speak(_ request: TTSSpeakRequest, client: Config.ServerClientConfig?) async throws -> TTSSpeakResponse {
         speakCallCount += 1
+        lastClient = client
         if let error = speakError { throw error }
         stubbedSpokenText = request.text
         stubbedSpeakingSource = request.source
         stubbedState = .speaking
         return stubbedSpeakResponse
+    }
+
+    func notify(_ request: TTSNotifyRequest, client: Config.ServerClientConfig?) async throws -> TTSNotifyResponse {
+        notifyCallCount += 1
+        lastClient = client
+        if let error = notifyError { throw error }
+        if request.speak {
+            stubbedSpokenText = request.message
+            stubbedSpeakingSource = request.title
+            stubbedState = .speaking
+        }
+        return stubbedNotifyResponse
     }
     
     func stopSpeaking() async throws {
@@ -171,6 +218,22 @@ final class MockAppController: AppControllerProtocol, @unchecked Sendable {
         stubbedState = .idle
         stubbedSpokenText = nil
         stubbedSpeakingSource = nil
+    }
+
+    func runServerHook(_ event: Config.ServerHookEvent, payload: ServerHookPayload, client: Config.ServerClientConfig?) async -> ServerHookResult {
+        runServerHookCallCount += 1
+        lastClient = client
+        return ServerHookResult(
+            ok: stubbedServerHookResult.ok,
+            event: event,
+            statusCode: stubbedServerHookResult.statusCode,
+            error: stubbedServerHookResult.error
+        )
+    }
+
+    func testServerHook(_ event: Config.ServerHookEvent, client: Config.ServerClientConfig?) async -> ServerHookResult {
+        testServerHookCallCount += 1
+        return await runServerHook(event, payload: .test(event: event), client: client)
     }
     
     func healthCheck() -> HealthStatus {

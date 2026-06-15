@@ -17,6 +17,9 @@ public protocol AppControllerProtocol: Sendable {
     
     /// 当前播报来源
     var currentSpeakingSource: String? { get }
+
+    /// 当前 TTS 播放快照
+    var ttsPlaybackSnapshot: TTSPlaybackSnapshot { get }
     
     // MARK: - 配置
     
@@ -33,6 +36,9 @@ public protocol AppControllerProtocol: Sendable {
     
     /// 列出所有 TTS 引擎
     func listTTSEngines() -> [EngineInfo]
+
+    /// 列出 TTS 音色
+    func listTTSVoices(engineID: String?) -> [TTSVoiceEngineInfo]
     
     /// 列出所有 VAD 引擎
     func listVADEngines() -> [EngineInfo]
@@ -71,12 +77,26 @@ public protocol AppControllerProtocol: Sendable {
     func saveHotkeys(_ config: HotkeysConfig) throws
     
     // MARK: - TTS Playback
+
+    /// 一次性转写音频
+    func transcribe(_ request: STTTranscriptionRequest, client: Config.ServerClientConfig?) async throws -> Transcript
     
     /// 立即播报文本
-    func speak(_ request: TTSSpeakRequest) async throws -> TTSSpeakResponse
+    func speak(_ request: TTSSpeakRequest, client: Config.ServerClientConfig?) async throws -> TTSSpeakResponse
+
+    /// 接收外部通知
+    func notify(_ request: TTSNotifyRequest, client: Config.ServerClientConfig?) async throws -> TTSNotifyResponse
     
     /// 停止当前播报
     func stopSpeaking() async throws
+
+    // MARK: - Server Hooks
+
+    /// 触发服务 hook
+    func runServerHook(_ event: Config.ServerHookEvent, payload: ServerHookPayload, client: Config.ServerClientConfig?) async -> ServerHookResult
+
+    /// 使用示例 payload 测试服务 hook
+    func testServerHook(_ event: Config.ServerHookEvent, client: Config.ServerClientConfig?) async -> ServerHookResult
     
     // MARK: - 健康检查
     
@@ -116,4 +136,26 @@ public enum AppState: String, Codable, Sendable {
     case listening
     case thinking
     case speaking
+}
+
+public extension AppControllerProtocol {
+    func transcribe(_ request: STTTranscriptionRequest) async throws -> Transcript {
+        try await transcribe(request, client: nil)
+    }
+
+    func speak(_ request: TTSSpeakRequest) async throws -> TTSSpeakResponse {
+        try await speak(request, client: nil)
+    }
+
+    func notify(_ request: TTSNotifyRequest) async throws -> TTSNotifyResponse {
+        try await notify(request, client: nil)
+    }
+
+    func runServerHook(_ event: Config.ServerHookEvent, payload: ServerHookPayload) async -> ServerHookResult {
+        await runServerHook(event, payload: payload, client: nil)
+    }
+
+    func testServerHook(_ event: Config.ServerHookEvent) async -> ServerHookResult {
+        await testServerHook(event, client: nil)
+    }
 }

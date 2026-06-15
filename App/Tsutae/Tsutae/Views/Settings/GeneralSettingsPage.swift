@@ -65,8 +65,9 @@ struct GeneralSettingsView: View {
                 
                 SettingsRow(label: L10n.Settings.recordingCapsuleLabel) {
                     SettingsChipSelector(selection: $recordingBarPreset, options: DS.recordingBar.Preset.allCases.map { ($0.rawValue, $0.title) })
-                        .onChange(of: recordingBarPreset) { _, _ in
+                        .onChange(of: recordingBarPreset) { _, newValue in
                             FloatingRecordingBar.shared.reloadIfShowing()
+                            TTSGeneralPresentationStyle.syncConfigDefault(toRecordingBarPresetRawValue: newValue)
                         }
                 }
             }
@@ -122,6 +123,7 @@ struct GeneralSettingsView: View {
         }
         .onAppear {
             syncLaunchAtLoginState()
+            TTSGeneralPresentationStyle.syncConfigDefaultToCurrent()
         }
     }
     
@@ -154,8 +156,9 @@ struct GeneralSettingsView: View {
         updateLaunchAtLogin(false)
         appearanceMode = "system"
         appLanguage = L10n.AppLanguage.system.rawValue
+        recordingBarPreset = DS.recordingBar.defaultPreset.rawValue
+        TTSGeneralPresentationStyle.syncConfigDefault(toRecordingBarPresetRawValue: recordingBarPreset)
         defaultAction = "injectFocusedApp"
         hotkeyManager.resetToggleRecordingShortcutToDefault()
     }
 }
-

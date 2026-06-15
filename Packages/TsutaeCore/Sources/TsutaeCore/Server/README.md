@@ -10,6 +10,7 @@ Hummingbird HTTP server exposing tsutae's API. See workspace doc `01-voicebar.md
 - `Routes/Notify.swift` — Inbound notifications: `POST /v1/notify` (other tools push messages here).
 - `Routes/Health.swift` — `GET /health` (status of each engine + uptime).
 - `Routes/Config.swift` — `GET /v1/config`, `PUT /v1/config`, `POST /v1/diagnose`, `POST /v1/recipes/:name/test`.
+- `ServerHooks.swift` — outbound `onTranscribed` / `onError` webhook delivery for local automation.
 
 ## Constraints
 

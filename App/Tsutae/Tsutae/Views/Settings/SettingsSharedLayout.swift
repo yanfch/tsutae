@@ -384,6 +384,20 @@ struct SettingsFormRow<Content: View>: View {
     }
 }
 
+struct SettingsStackedControlRow<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            content
+        }
+    }
+}
+
 struct SettingsHelpButton: View {
     let text: String
     @State private var isPresented = false

@@ -24,6 +24,7 @@ final class RecordingSession: ObservableObject {
     
     private var hasShownAccessibilityPermissionCompanionThisLaunch = false
     private var hasShownClipboardFallbackCompanionThisLaunch = false
+    private var hasShownLongRecordingWarning = false
     private var activeWarmupTask: Task<Void, Never>?
     private var activeTranscriptionTask: Task<Void, Never>?
     private var activeOperationID = UUID()
@@ -49,6 +50,7 @@ final class RecordingSession: ObservableObject {
         FloatingRecordingBar.shared.hide()
         isBusy = false
         isRecording = false
+        hasShownLongRecordingWarning = false
         liveRecordedBytes = 0
         statusText = "cancelled"
     }
@@ -95,6 +97,7 @@ final class RecordingSession: ObservableObject {
                     return
                 }
                 self.lastError = nil
+                self.hasShownLongRecordingWarning = false
                 self.isRecording = true
                 self.statusText = "recording"
                 self.startRecordingProgressPolling()
@@ -218,8 +221,8 @@ final class RecordingSession: ObservableObject {
                 }
                 self.lastError = error.localizedDescription
                 self.statusText = "transcription failed"
-                self.presentTranscriptionError(error)
-                let transcriptionFailedMessage = "Transcription failed: \(error.localizedDescription) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                self.presentTranscriptionError(error, audio: audio)
+                let transcriptionFailedMessage = "Transcription failed: \(error.localizedDescription) audio_seconds=\(self.audioDurationSeconds(audio)) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
                 self.logger.error("\(transcriptionFailedMessage, privacy: .public)")
                 PerformanceLog.record(category: "RecordingSession", message: transcriptionFailedMessage)
             }
@@ -227,12 +230,45 @@ final class RecordingSession: ObservableObject {
     }
     
     private func startRecordingProgressPolling() {
+        let operationID = activeOperationID
         Task {
             while audioInput.recording {
                 liveRecordedBytes = audioInput.recordedByteCount
+                if activeOperationID == operationID {
+                    maybePresentLongRecordingWarning(recordedBytes: liveRecordedBytes)
+                }
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }
+    }
+
+    private func maybePresentLongRecordingWarning(recordedBytes: Int) {
+        guard hasShownLongRecordingWarning == false else { return }
+        guard let context = currentLocalRecordingGuidanceContext() else { return }
+        let seconds = Int(recordingDurationSeconds(sampleBytes: recordedBytes).rounded(.down))
+        guard seconds >= context.guidance.warningSeconds else { return }
+
+        hasShownLongRecordingWarning = true
+        let message = "Long recording warning shown. model=\(context.modelID) audio_seconds=\(seconds) warning_seconds=\(context.guidance.warningSeconds) recommended_max_seconds=\(context.guidance.recommendedMaximumSeconds) estimated=\(context.guidance.isEstimated)"
+        logger.info("\(message, privacy: .public)")
+        PerformanceLog.record(category: "RecordingSession", message: message)
+
+        presentCompanion(
+            title: L10n.RecordingCompanion.longRecordingWarningTitle,
+            message: L10n.RecordingCompanion.longRecordingWarningMessage(
+                seconds: seconds,
+                modelName: context.modelName,
+                limitSeconds: context.guidance.recommendedMaximumSeconds
+            ),
+            tone: .warning,
+            primaryAction: .init(title: L10n.Menu.stopAndTranscribe, style: .primary) {
+                self.stopAndTranscribe()
+            },
+            secondaryAction: .init(title: L10n.RecordingCompanion.longRecordingKeepGoing, style: .secondary) {
+                FloatingRecordingBar.shared.update(state: .listening)
+            },
+            displayState: .warning
+        )
     }
     
     private func saveDebugWAV(_ audio: AudioData) {
@@ -247,6 +283,36 @@ final class RecordingSession: ObservableObject {
             lastError = "Failed to save debug recording: \(error.localizedDescription)"
             logger.error("Failed to save debug recording: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    private struct LocalRecordingGuidanceContext {
+        let modelID: String
+        let modelName: String
+        let guidance: LocalSTTRecordingGuidance
+    }
+
+    private func currentLocalRecordingGuidanceContext() -> LocalRecordingGuidanceContext? {
+        let config = (try? ConfigLoader.load()) ?? .default
+        guard config.stt.mode == .localFirst else { return nil }
+        let modelID = config.stt.local.preferredModel ?? config.stt.model ?? "parakeet-tdt-v3"
+        let descriptor = LocalSTTModelCatalog.descriptor(id: modelID)
+        return LocalRecordingGuidanceContext(
+            modelID: modelID,
+            modelName: descriptor?.displayName ?? modelID,
+            guidance: LocalSTTModelCatalog.recordingGuidance(for: modelID)
+        )
+    }
+
+    private func remoteRetryConfig() -> Config? {
+        var config = (try? ConfigLoader.load()) ?? .default
+        guard config.stt.remote.enabled,
+              config.stt.remote.baseURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+              config.stt.remote.model?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        else {
+            return nil
+        }
+        config.stt.mode = .remoteFirst
+        return config
     }
     
     private func presentStartError(_ error: Error) {
@@ -308,8 +374,127 @@ final class RecordingSession: ObservableObject {
             }
         )
     }
+
+    private func presentLongTranscriptionFailure(audio: AudioData?) {
+        let primaryAction: RecordingBarCompanionAction
+        if let audio, remoteRetryConfig() != nil {
+            primaryAction = .init(title: L10n.RecordingCompanion.retryRemoteTranscription, style: .primary) {
+                self.retryTranscriptionWithRemote(audio: audio)
+            }
+        } else {
+            primaryAction = .init(title: L10n.Common.openSettings, style: .primary) {
+                FloatingRecordingBar.shared.dismissCompanion()
+                FloatingRecordingBar.shared.openAppSettings(tab: "stt")
+            }
+        }
+
+        presentCompanion(
+            title: L10n.RecordingCompanion.longTranscriptionFailedTitle,
+            message: L10n.RecordingCompanion.longTranscriptionFailedMessage,
+            tone: .warning,
+            primaryAction: primaryAction,
+            secondaryAction: .init(title: L10n.Common.dismiss, style: .secondary) {
+                FloatingRecordingBar.shared.dismissCompanion()
+            },
+            displayState: .warning
+        )
+    }
+
+    private func retryTranscriptionWithRemote(audio: AudioData) {
+        guard let config = remoteRetryConfig() else {
+            FloatingRecordingBar.shared.openAppSettings(tab: "stt")
+            return
+        }
+
+        let operationID = UUID()
+        activeOperationID = operationID
+        activeTranscriptionTask?.cancel()
+        isBusy = true
+        isRecording = false
+        liveRecordedBytes = 0
+        statusText = "retrying remote transcription"
+        lastError = nil
+        FloatingRecordingBar.shared.update(state: .thinking)
+
+        let retryMessage = "Remote STT retry started. audio_seconds=\(audioDurationSeconds(audio)) audio_bytes=\(audio.samples.count) remote_model=\(config.stt.remote.model ?? "")"
+        logger.info("\(retryMessage, privacy: .public)")
+        PerformanceLog.record(category: "RecordingSession", message: retryMessage)
+
+        activeTranscriptionTask = Task {
+            let transcriptionStartedAt = CFAbsoluteTimeGetCurrent()
+            defer {
+                if self.activeOperationID == operationID {
+                    self.activeTranscriptionTask = nil
+                    self.isBusy = false
+                }
+            }
+
+            do {
+                let transcript = try await ConfiguredSTTRouter.transcribe(audio, config: config)
+                let doneMessage = "Remote STT retry finished. chars=\(transcript.text.count) audio_seconds=\(self.audioDurationSeconds(audio)) elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                self.logger.info("\(doneMessage, privacy: .public)")
+                PerformanceLog.record(category: "RecordingSession", message: doneMessage)
+                guard !Task.isCancelled, self.activeOperationID == operationID else { return }
+
+                self.lastTranscript = transcript.text
+                self.lastError = nil
+                self.statusText = "done"
+                FloatingRecordingBar.shared.update(state: .idle)
+
+                do {
+                    let injectStartedAt = CFAbsoluteTimeGetCurrent()
+                    try FocusedTextInjector.inject(transcript.text)
+                    guard !Task.isCancelled, self.activeOperationID == operationID else { return }
+                    FloatingRecordingBar.shared.hide()
+                    self.notify(title: L10n.Notification.insertedTextTitle, body: transcript.text)
+                    let injectDoneMessage = "Remote retry transcription injected. chars=\(transcript.text.count) inject_elapsed_ms=\(self.formatElapsedMs(since: injectStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                    self.logger.info("\(injectDoneMessage, privacy: .public)")
+                    PerformanceLog.record(category: "RecordingSession", message: injectDoneMessage)
+                } catch {
+                    guard !Task.isCancelled, self.activeOperationID == operationID else { return }
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(transcript.text, forType: .string)
+                    self.lastError = "Inject failed, copied to clipboard: \(error.localizedDescription)"
+                    self.statusText = "inject failed"
+                    self.presentInjectionError(error)
+                }
+            } catch {
+                guard !Task.isCancelled, self.activeOperationID == operationID else { return }
+                self.lastError = error.localizedDescription
+                self.statusText = "transcription failed"
+                self.presentTranscriptionError(error)
+                let failedMessage = "Remote STT retry failed: \(error.localizedDescription) audio_seconds=\(self.audioDurationSeconds(audio)) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                self.logger.error("\(failedMessage, privacy: .public)")
+                PerformanceLog.record(category: "RecordingSession", message: failedMessage)
+            }
+        }
+    }
     
-    private func presentTranscriptionError(_ error: Error) {
+    private func presentTranscriptionError(_ error: Error, audio: AudioData? = nil) {
+        if let sttError = error as? STTTranscriptionError {
+            logTranscriptionFailure(error: sttError, audio: audio)
+
+            if sttError.isLikelyLongAudioLimit {
+                presentLongTranscriptionFailure(audio: audio)
+                return
+            }
+
+            presentCompanion(
+                title: L10n.RecordingCompanion.emptyTranscriptTitle,
+                message: L10n.RecordingCompanion.emptyTranscriptMessage,
+                tone: .warning,
+                primaryAction: .init(title: L10n.Common.openSettings, style: .primary) {
+                    FloatingRecordingBar.shared.dismissCompanion()
+                    FloatingRecordingBar.shared.openAppSettings(tab: "stt")
+                },
+                secondaryAction: .init(title: L10n.Common.dismiss, style: .secondary) {
+                    FloatingRecordingBar.shared.dismissCompanion()
+                },
+                displayState: .warning
+            )
+            return
+        }
+
         if let urlError = error as? URLError {
             let message: String
             switch urlError.code {
@@ -513,6 +698,24 @@ final class RecordingSession: ObservableObject {
     
     private func formatElapsedMs(since startedAt: CFAbsoluteTime) -> String {
         String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - startedAt) * 1000)
+    }
+
+    private func recordingDurationSeconds(sampleBytes: Int, sampleRate: Int = 16_000, channels: Int = 1) -> Double {
+        guard sampleRate > 0, channels > 0 else { return 0 }
+        return Double(sampleBytes) / Double(sampleRate * channels * 2)
+    }
+
+    private func audioDurationSeconds(_ audio: AudioData) -> String {
+        String(format: "%.1f", recordingDurationSeconds(sampleBytes: audio.samples.count, sampleRate: audio.sampleRate, channels: audio.channels))
+    }
+
+    private func logTranscriptionFailure(error: STTTranscriptionError, audio: AudioData?) {
+        let config = (try? ConfigLoader.load()) ?? .default
+        let modelID = config.stt.local.preferredModel ?? config.stt.model ?? "unknown"
+        let guidance = LocalSTTModelCatalog.recordingGuidance(for: modelID)
+        let message = "STT failure classified. model=\(modelID) mode=\(config.stt.mode.rawValue) audio_seconds=\(audio.map(audioDurationSeconds) ?? "unknown") audio_bytes=\(audio?.samples.count ?? 0) warning_seconds=\(guidance.warningSeconds) recommended_max_seconds=\(guidance.recommendedMaximumSeconds) likely_long_audio=\(error.isLikelyLongAudioLimit) error=\(error.localizedDescription)"
+        logger.error("\(message, privacy: .public)")
+        PerformanceLog.record(category: "RecordingSession", message: message)
     }
     
     private func notify(title: String, body: String) {

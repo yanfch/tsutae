@@ -254,10 +254,61 @@ struct SettingsPageChrome: View {
             )
         }
     }
+
+    private struct TTSSummary {
+        let providerTitle: String
+        let routeTitle: String
+        let fallbackTitle: String
+        let providerTone: ServerStatusCapsule.Tone
+        let routeTone: ServerStatusCapsule.Tone
+        let fallbackTone: ServerStatusCapsule.Tone
+
+        static func load() -> TTSSummary {
+            make(from: (try? ConfigLoader.load()) ?? .default)
+        }
+
+        static func make(from config: Config) -> TTSSummary {
+            let remoteReady = config.tts.remote.enabled
+                && (config.tts.remote.baseURL?.isEmpty == false)
+                && (config.tts.remote.model?.isEmpty == false)
+            let providerTitle: String
+            let providerTone: ServerStatusCapsule.Tone
+            let routeTitle: String
+            let routeTone: ServerStatusCapsule.Tone
+
+            if config.tts.engine == FluidAudioLocalTTSEngine.shared.id {
+                providerTitle = L10n.Settings.ttsProviderLocal
+                providerTone = config.tts.local.enabled ? .active : .soft
+                routeTitle = config.tts.local.enabled ? L10n.Settings.valueLocal : L10n.Settings.sttOffShort
+                routeTone = config.tts.local.enabled ? .active : .neutral
+            } else if config.tts.engine == OpenAICompatibleRemoteTTSEngine.shared.id {
+                providerTitle = L10n.Settings.ttsProviderRemote
+                providerTone = remoteReady ? .active : .soft
+                routeTitle = remoteReady ? L10n.Settings.sttRemoteReady : L10n.Settings.sttNeedsSetup
+                routeTone = remoteReady ? .active : .neutral
+            } else {
+                providerTitle = L10n.Settings.ttsProviderApple
+                providerTone = .neutral
+                routeTitle = L10n.Settings.valueSystem
+                routeTone = .neutral
+            }
+
+            let fallbackEnabled = config.tts.fallbackEngine == AppleTTSEngine.shared.id
+            return TTSSummary(
+                providerTitle: providerTitle,
+                routeTitle: routeTitle,
+                fallbackTitle: fallbackEnabled ? L10n.Settings.sttFallbackOn : L10n.Settings.sttNoFallback,
+                providerTone: providerTone,
+                routeTone: routeTone,
+                fallbackTone: fallbackEnabled ? .active : .neutral
+            )
+        }
+    }
     
     let tab: SettingsTab
     @Environment(\.colorScheme) private var colorScheme
     @State private var sttSummary = STTSummary.load()
+    @State private var ttsSummary = TTSSummary.load()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -292,8 +343,9 @@ struct SettingsPageChrome: View {
         .onReceive(NotificationCenter.default.publisher(for: .tsutaeConfigDidChange)) { notification in
             if let config = notification.userInfo?["config"] as? Config {
                 sttSummary = STTSummary.make(from: config)
+                ttsSummary = TTSSummary.make(from: config)
             } else {
-                refreshSTTSummary()
+                refreshSummaries()
             }
         }
     }
@@ -306,11 +358,12 @@ struct SettingsPageChrome: View {
             summaryCapsule(title: sttSummary.fallbackTitle, tone: sttSummary.fallbackTone)
             summaryCapsule(title: sttSummary.remoteTitle, tone: sttSummary.remoteTone)
         case .tts:
-            summaryCapsule(title: L10n.Settings.chromePlayback, tone: .soft)
-            summaryCapsule(title: L10n.Settings.chromeCloudOptional, tone: .neutral)
+            summaryCapsule(title: ttsSummary.providerTitle, tone: ttsSummary.providerTone)
+            summaryCapsule(title: ttsSummary.routeTitle, tone: ttsSummary.routeTone)
+            summaryCapsule(title: ttsSummary.fallbackTitle, tone: ttsSummary.fallbackTone)
         case .server:
             summaryCapsule(title: L10n.Settings.chromeSTTTTS, tone: .soft)
-            summaryCapsule(title: L10n.Settings.chromeHooksPlanned, tone: .active)
+            summaryCapsule(title: L10n.Settings.labelHooks, tone: .active)
         case .permissions:
             summaryCapsule(title: L10n.Settings.statusReview, tone: .soft)
         default:
@@ -339,7 +392,12 @@ struct SettingsPageChrome: View {
     }
     
     private func refreshSTTSummary() {
+        refreshSummaries()
+    }
+
+    private func refreshSummaries() {
         sttSummary = STTSummary.load()
+        ttsSummary = TTSSummary.load()
     }
 }
 

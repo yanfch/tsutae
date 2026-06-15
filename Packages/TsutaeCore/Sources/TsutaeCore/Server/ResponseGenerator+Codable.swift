@@ -26,5 +26,6 @@ extension HotkeysConfig: ResponseGenerator {}
 extension HealthStatus: ResponseGenerator {}
 extension StateResponse: ResponseGenerator {}
 extension ModelsResponse: ResponseGenerator {}
+extension TTSNotifyResponse: ResponseGenerator {}
 extension SecretsListResponse: ResponseGenerator {}
 extension ErrorResponse: ResponseGenerator {}

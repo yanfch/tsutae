@@ -171,6 +171,42 @@ public enum AppleSpeechSTTError: LocalizedError {
     }
 }
 
+public enum STTTranscriptionError: LocalizedError, Sendable {
+    case emptyTranscript(engine: String)
+    case allRoutesFailed(primaryEngine: String, primaryError: String, fallbackEngine: String?, fallbackError: String?)
+
+    public var errorDescription: String? {
+        switch self {
+        case .emptyTranscript(let engine):
+            return "STT engine returned an empty transcript. engine=\(engine)"
+        case .allRoutesFailed(let primaryEngine, let primaryError, let fallbackEngine, let fallbackError):
+            var message = "STT failed. primary=\(primaryEngine): \(primaryError)"
+            if let fallbackEngine, let fallbackError {
+                message += "; fallback=\(fallbackEngine): \(fallbackError)"
+            }
+            return message
+        }
+    }
+
+    public var isLikelyLongAudioLimit: Bool {
+        switch self {
+        case .emptyTranscript:
+            return false
+        case .allRoutesFailed(_, let primaryError, _, let fallbackError):
+            return Self.isLikelyLongAudioLimit(primaryError)
+                || fallbackError.map(Self.isLikelyLongAudioLimit) == true
+        }
+    }
+
+    private static func isLikelyLongAudioLimit(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        return normalized.contains("cache capacity")
+            || normalized.contains("prompt length")
+            || normalized.contains("allowed range")
+            || normalized.contains("too long")
+    }
+}
+
 public enum STTEngineFactory {
     public static func makePrimaryEngine(config: Config.STTConfig) throws -> STTEngine {
         switch config.mode {
@@ -284,7 +320,10 @@ public enum ConfiguredSTTRouter {
         let primary = try STTEngineFactory.makePrimaryEngine(config: resolvedConfig.stt)
         let fallback = try STTEngineFactory.makeFallbackEngine(config: resolvedConfig.stt)
         let language = normalizedLanguage(resolvedConfig.stt.language)
-        let startMessage = "STT transcription started. mode=\(resolvedConfig.stt.mode.rawValue) primary=\(primary.id) fallback=\(fallback?.id ?? "none") language=\(language ?? "auto") audio_bytes=\(audio.samples.count)"
+        let localModelID = resolvedConfig.stt.local.preferredModel ?? resolvedConfig.stt.model ?? "unknown"
+        let guidance = LocalSTTModelCatalog.recordingGuidance(for: localModelID)
+        let routeContext = "mode=\(resolvedConfig.stt.mode.rawValue) primary=\(primary.id) fallback=\(fallback?.id ?? "none") language=\(language ?? "auto") local_model=\(localModelID) remote_model=\(resolvedConfig.stt.remote.model ?? "none") audio_bytes=\(audio.samples.count) audio_seconds=\(audioDurationSeconds(audio)) local_warning_seconds=\(guidance.warningSeconds) local_recommended_max_seconds=\(guidance.recommendedMaximumSeconds) local_guidance_estimated=\(guidance.isEstimated)"
+        let startMessage = "STT transcription started. \(routeContext)"
         logger.info("\(startMessage, privacy: .public)")
         PerformanceLog.record(category: "STTRouter", message: startMessage)
         
@@ -296,32 +335,74 @@ public enum ConfiguredSTTRouter {
             PerformanceLog.record(category: "STTRouter", message: primaryLoadMessage)
             
             let primaryTranscribeStartedAt = CFAbsoluteTimeGetCurrent()
-            let transcript = try await primary.transcribe(audio, language: language)
-            let primaryDoneMessage = "STT primary transcription finished. engine=\(primary.id) text_chars=\(transcript.text.count) elapsed_ms=\(formatElapsedMs(since: primaryTranscribeStartedAt)) total_elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
+            let transcript = try validateTranscript(
+                try await primary.transcribe(audio, language: language),
+                engineID: primary.id
+            )
+            let primaryDoneMessage = "STT primary transcription finished. engine=\(primary.id) model=\(modelID(for: primary.id, config: resolvedConfig.stt)) text_chars=\(transcript.text.count) audio_seconds=\(audioDurationSeconds(audio)) elapsed_ms=\(formatElapsedMs(since: primaryTranscribeStartedAt)) total_elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
             logger.info("\(primaryDoneMessage, privacy: .public)")
             PerformanceLog.record(category: "STTRouter", message: primaryDoneMessage)
             return transcript
         } catch {
-            let primaryFailedMessage = "STT primary failed. engine=\(primary.id) error=\(error.localizedDescription) elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
+            let primaryError = error
+            let primaryFailedMessage = "STT primary failed. engine=\(primary.id) model=\(modelID(for: primary.id, config: resolvedConfig.stt)) audio_seconds=\(audioDurationSeconds(audio)) error=\(error.localizedDescription) elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
             logger.error("\(primaryFailedMessage, privacy: .public)")
             PerformanceLog.record(category: "STTRouter", message: primaryFailedMessage)
             guard let fallback, fallback.id != primary.id else {
                 throw error
             }
-            
-            let fallbackLoadStartedAt = CFAbsoluteTimeGetCurrent()
-            try await fallback.load()
-            let fallbackLoadMessage = "STT fallback load finished. engine=\(fallback.id) elapsed_ms=\(formatElapsedMs(since: fallbackLoadStartedAt))"
-            logger.info("\(fallbackLoadMessage, privacy: .public)")
-            PerformanceLog.record(category: "STTRouter", message: fallbackLoadMessage)
-            
-            let fallbackTranscribeStartedAt = CFAbsoluteTimeGetCurrent()
-            let transcript = try await fallback.transcribe(audio, language: language)
-            let fallbackDoneMessage = "STT fallback transcription finished. engine=\(fallback.id) text_chars=\(transcript.text.count) elapsed_ms=\(formatElapsedMs(since: fallbackTranscribeStartedAt)) total_elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
-            logger.info("\(fallbackDoneMessage, privacy: .public)")
-            PerformanceLog.record(category: "STTRouter", message: fallbackDoneMessage)
-            return transcript
+
+            do {
+                let fallbackLoadStartedAt = CFAbsoluteTimeGetCurrent()
+                try await fallback.load()
+                let fallbackLoadMessage = "STT fallback load finished. engine=\(fallback.id) elapsed_ms=\(formatElapsedMs(since: fallbackLoadStartedAt))"
+                logger.info("\(fallbackLoadMessage, privacy: .public)")
+                PerformanceLog.record(category: "STTRouter", message: fallbackLoadMessage)
+
+                let fallbackTranscribeStartedAt = CFAbsoluteTimeGetCurrent()
+                let transcript = try validateTranscript(
+                    try await fallback.transcribe(audio, language: language),
+                    engineID: fallback.id
+                )
+                let fallbackDoneMessage = "STT fallback transcription finished. engine=\(fallback.id) model=\(modelID(for: fallback.id, config: resolvedConfig.stt)) text_chars=\(transcript.text.count) audio_seconds=\(audioDurationSeconds(audio)) elapsed_ms=\(formatElapsedMs(since: fallbackTranscribeStartedAt)) total_elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
+                logger.info("\(fallbackDoneMessage, privacy: .public)")
+                PerformanceLog.record(category: "STTRouter", message: fallbackDoneMessage)
+                return transcript
+            } catch {
+                let fallbackFailedMessage = "STT fallback failed. engine=\(fallback.id) model=\(modelID(for: fallback.id, config: resolvedConfig.stt)) audio_seconds=\(audioDurationSeconds(audio)) error=\(error.localizedDescription) total_elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
+                logger.error("\(fallbackFailedMessage, privacy: .public)")
+                PerformanceLog.record(category: "STTRouter", message: fallbackFailedMessage)
+                throw STTTranscriptionError.allRoutesFailed(
+                    primaryEngine: primary.id,
+                    primaryError: primaryError.localizedDescription,
+                    fallbackEngine: fallback.id,
+                    fallbackError: error.localizedDescription
+                )
+            }
         }
+    }
+
+    private static func validateTranscript(_ transcript: Transcript, engineID: String) throws -> Transcript {
+        guard transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            throw STTTranscriptionError.emptyTranscript(engine: engineID)
+        }
+        return transcript
+    }
+
+    private static func modelID(for engineID: String, config: Config.STTConfig) -> String {
+        switch engineID {
+        case "openai_compatible":
+            return config.remote.model ?? "unknown"
+        case "apple_speech":
+            return "apple_speech"
+        default:
+            return config.local.preferredModel ?? config.model ?? "unknown"
+        }
+    }
+
+    private static func audioDurationSeconds(_ audio: AudioData) -> String {
+        guard audio.sampleRate > 0, audio.channels > 0 else { return "0.0" }
+        return String(format: "%.1f", Double(audio.samples.count) / Double(audio.sampleRate * audio.channels * 2))
     }
     
     private static func formatElapsedMs(since startedAt: CFAbsoluteTime) -> String {

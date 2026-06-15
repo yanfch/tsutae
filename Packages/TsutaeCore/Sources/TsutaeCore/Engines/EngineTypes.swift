@@ -34,9 +34,16 @@ public struct EngineInfo: Codable, Sendable {
 
 // MARK: - STT 类型
 
+public enum AudioContainerFormat: String, Codable, Sendable {
+    case pcm16
+    case wav
+    case mp3
+    case m4a
+}
+
 /// 音频数据
 public struct AudioData: Sendable {
-    /// PCM 数据（16-bit, mono）
+    /// 音频数据；本地 STT/TTS 默认是 PCM，远程 TTS 也可返回带容器的数据（如 wav/mp3）
     public let samples: Data
     
     /// 采样率
@@ -45,10 +52,14 @@ public struct AudioData: Sendable {
     /// 通道数
     public let channels: Int
     
-    public init(samples: Data, sampleRate: Int = 16000, channels: Int = 1) {
+    /// 容器格式
+    public let container: AudioContainerFormat
+
+    public init(samples: Data, sampleRate: Int = 16000, channels: Int = 1, container: AudioContainerFormat = .pcm16) {
         self.samples = samples
         self.sampleRate = sampleRate
         self.channels = channels
+        self.container = container
     }
 }
 
@@ -163,6 +174,16 @@ public struct Voice: Codable, Sendable, Identifiable {
         self.displayName = displayName
         self.language = language
         self.isPremium = isPremium
+    }
+}
+
+public struct TTSVoiceEngineInfo: Codable, Sendable {
+    public let engine: EngineInfo
+    public let voices: [Voice]
+
+    public init(engine: EngineInfo, voices: [Voice]) {
+        self.engine = engine
+        self.voices = voices
     }
 }
 

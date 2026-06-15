@@ -1,0 +1,1742 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tsutae macOS concept</title>
+  <style>
+    :root {
+      --bg: oklch(97% 0.018 70);
+      --surface: oklch(99% 0.008 70);
+      --surface-2: #f2f1df;
+      --surface-3: #e7e4d0;
+      --fg: #1f2a24;
+      --muted: #66756b;
+      --soft: #4b5b51;
+      --border: #97a391;
+      --border-soft: #c3c9bf;
+      --accent: #2f6b5f;
+      --accent-light: #4b8579;
+      --success: #2d6e10;
+      --warning: #a16207;
+      --danger: #d44010;
+      --shadow: 0 18px 50px rgba(47, 107, 95, 0.08);
+      --shadow-soft: 0 8px 20px rgba(47, 107, 95, 0.05);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+      --font-display: "Iowan Old Style", "Charter", "Newsreader", Georgia, serif;
+      --font-body: "SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--font-body);
+      color: var(--fg);
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.9), transparent 34%),
+        linear-gradient(180deg, #fffdf3 0%, #f4f1e5 48%, #ece7d8 100%);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    .page {
+      width: min(1480px, calc(100vw - 64px));
+      margin: 0 auto;
+      padding: 40px 0 72px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 28px;
+      align-items: stretch;
+      margin-bottom: 34px;
+    }
+
+    .panel {
+      background: color-mix(in oklab, var(--surface) 90%, white 10%);
+      border: 1px solid rgba(151, 163, 145, 0.4);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-copy {
+      padding: 34px 34px 30px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 280px;
+    }
+
+    .eyebrow, .mini-label, .chip, .token {
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      margin-bottom: 16px;
+    }
+
+    h1, h2, h3, h4, p { margin: 0; }
+
+    h1 {
+      font-family: var(--font-display);
+      font-size: clamp(52px, 5vw, 72px);
+      line-height: 0.98;
+      letter-spacing: -0.03em;
+      max-width: 10ch;
+      margin-bottom: 20px;
+    }
+
+    .lede {
+      max-width: 60ch;
+      font-size: 18px;
+      line-height: 1.65;
+      color: var(--soft);
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+
+    .chip {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(235, 235, 200, 0.8);
+      border: 1px solid rgba(151, 163, 145, 0.35);
+      color: var(--soft);
+      font-family: var(--font-mono);
+    }
+
+    .hero-side {
+      padding: 28px;
+      display: grid;
+      gap: 18px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.5), rgba(255,255,255,0.15)),
+        #f7f4e7;
+    }
+
+    .brand-card {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 18px;
+      padding: 18px;
+      border-radius: 18px;
+      background: rgba(255,253,243,0.9);
+      border: 1px solid rgba(151, 163, 145, 0.35);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .icon-stack {
+      display: grid;
+      place-items: center;
+      border-radius: 24px;
+      background: #eeebdb;
+      border: 1px solid rgba(151, 163, 145, 0.35);
+      min-height: 92px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .logo-mark {
+      width: 52px;
+      height: 52px;
+      border-radius: 18px;
+      background: linear-gradient(145deg, #2f6b5f, #4b8579);
+      position: relative;
+      box-shadow: 0 10px 24px rgba(47, 107, 95, 0.18);
+    }
+
+    .logo-mark::before,
+    .logo-mark::after {
+      content: "";
+      position: absolute;
+      background: #fffdf3;
+      border-radius: 999px;
+    }
+
+    .logo-mark::before {
+      width: 10px;
+      height: 30px;
+      left: 16px;
+      top: 11px;
+      transform: rotate(18deg);
+    }
+
+    .logo-mark::after {
+      width: 26px;
+      height: 10px;
+      right: 9px;
+      bottom: 12px;
+    }
+
+    .brand-card h3 {
+      font-size: 22px;
+      line-height: 1.15;
+      margin-bottom: 8px;
+    }
+
+    .brand-card p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--soft);
+    }
+
+    .token-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .token {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.55);
+      border: 1px solid rgba(151, 163, 145, 0.28);
+      color: var(--soft);
+      font-family: var(--font-mono);
+    }
+
+    section {
+      margin-top: 38px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    .section-head h2 {
+      font-family: var(--font-display);
+      font-size: 40px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .section-head p {
+      max-width: 66ch;
+      color: var(--soft);
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    .bar-grid,
+    .extension-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .mock-card {
+      padding: 24px;
+      background: rgba(255,255,255,0.62);
+      border: 1px solid rgba(151, 163, 145, 0.32);
+      border-radius: 26px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .mock-stage {
+      height: 292px;
+      border-radius: 20px;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(255,255,255,0.8), transparent 30%),
+        linear-gradient(180deg, #f7f4e7, #efebdc);
+      border: 1px solid rgba(151, 163, 145, 0.26);
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      margin-bottom: 18px;
+    }
+
+    .voicebar {
+      min-width: 380px;
+      padding: 14px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(151, 163, 145, 0.4);
+      background: rgba(255, 253, 243, 0.92);
+      box-shadow:
+        0 10px 30px rgba(47, 107, 95, 0.08),
+        inset 0 1px 0 rgba(255,255,255,0.5);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .voicebar-compact {
+      min-width: 250px;
+      padding: 10px 12px;
+      gap: 10px;
+      border-radius: 18px;
+      box-shadow:
+        0 8px 22px rgba(47, 107, 95, 0.06),
+        inset 0 1px 0 rgba(255,255,255,0.55);
+    }
+
+    .voicebar-compact .waveform {
+      min-width: 78px;
+      height: 22px;
+      gap: 4px;
+      flex: none;
+    }
+
+    .voicebar-compact .waveform span {
+      width: 4px;
+    }
+
+    .voicebar-compact .voicebar-copy strong {
+      font-size: 13px;
+    }
+
+    .voicebar-compact .keycap {
+      padding: 6px 8px;
+      font-size: 10px;
+    }
+
+    .voicebar-expanded {
+      width: 470px;
+      border-radius: 28px;
+      overflow: hidden;
+      background: rgba(255, 253, 243, 0.94);
+      border: 1px solid rgba(151, 163, 145, 0.42);
+      box-shadow: 0 18px 44px rgba(47, 107, 95, 0.1);
+    }
+
+    .voicebar-top {
+      padding: 16px 18px 14px;
+      border-bottom: 1px solid rgba(151, 163, 145, 0.22);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 8px rgba(47, 107, 95, 0.08);
+      flex: none;
+    }
+
+    .status-dot.success {
+      background: var(--success);
+      box-shadow: 0 0 0 8px rgba(45, 110, 16, 0.08);
+    }
+
+    .status-meta {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .waveform {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex: 1;
+      min-width: 120px;
+      height: 26px;
+    }
+
+    .waveform span {
+      width: 4px;
+      background: var(--accent);
+      border-radius: 999px;
+      animation: wave 1.1s ease-in-out infinite;
+      opacity: 0.85;
+    }
+
+    .waveform.success span {
+      background: var(--success);
+    }
+
+    .waveform span:nth-child(1) { height: 10px; animation-delay: 0s; }
+    .waveform span:nth-child(2) { height: 18px; animation-delay: 0.08s; }
+    .waveform span:nth-child(3) { height: 13px; animation-delay: 0.16s; }
+    .waveform span:nth-child(4) { height: 22px; animation-delay: 0.24s; }
+    .waveform span:nth-child(5) { height: 14px; animation-delay: 0.32s; }
+    .waveform span:nth-child(6) { height: 20px; animation-delay: 0.4s; }
+    .waveform span:nth-child(7) { height: 12px; animation-delay: 0.48s; }
+    .waveform span:nth-child(8) { height: 16px; animation-delay: 0.56s; }
+    .waveform span:nth-child(9) { height: 11px; animation-delay: 0.64s; }
+
+    @keyframes wave {
+      0%, 100% { transform: scaleY(0.7); opacity: 0.55; }
+      50% { transform: scaleY(1.18); opacity: 1; }
+    }
+
+    .voicebar-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .voicebar-copy strong {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .voicebar-copy span {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .keycap {
+      padding: 7px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(151, 163, 145, 0.38);
+      background: rgba(255,255,255,0.55);
+      font-size: 11px;
+      color: var(--soft);
+      font-family: var(--font-mono);
+      flex: none;
+    }
+
+    .voicebar-body {
+      padding: 16px 18px 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .partial {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.5);
+      border: 1px solid rgba(151, 163, 145, 0.25);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: 24px 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(151, 163, 145, 0.2);
+      background: rgba(255,255,255,0.34);
+    }
+
+    .action-row.active {
+      background: rgba(47, 107, 95, 0.08);
+      border-color: rgba(47, 107, 95, 0.3);
+    }
+
+    .action-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      background: rgba(255,255,255,0.7);
+      color: var(--accent);
+      border: 1px solid rgba(151, 163, 145, 0.2);
+    }
+
+    .action-main {
+      min-width: 0;
+    }
+
+    .action-main strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .action-main span {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .meter {
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(151, 163, 145, 0.18);
+      overflow: hidden;
+    }
+
+    .meter > span {
+      display: block;
+      width: 72%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-light));
+      border-radius: inherit;
+    }
+
+    .caption-block h3 {
+      font-size: 19px;
+      margin-bottom: 8px;
+    }
+
+    .caption-block p {
+      color: var(--soft);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .settings-shell {
+      padding: 22px;
+      background: rgba(255,255,255,0.6);
+      border-radius: 30px;
+      border: 1px solid rgba(151, 163, 145, 0.3);
+      box-shadow: var(--shadow);
+    }
+
+    .settings-window {
+      min-height: 760px;
+      display: grid;
+      grid-template-columns: 250px 1fr;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid rgba(151, 163, 145, 0.32);
+      background: #f2f1df;
+    }
+
+    .sidebar {
+      padding: 22px 16px 18px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.44), rgba(255,255,255,0.18)),
+        #f7f4e7;
+      border-right: 1px solid rgba(151, 163, 145, 0.26);
+    }
+
+    .traffic {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+      padding-inline: 4px;
+    }
+
+    .traffic span {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #e1c5b7;
+      border: 1px solid rgba(24, 30, 56, 0.08);
+    }
+
+    .traffic span:nth-child(2) { background: #e6d4a8; }
+    .traffic span:nth-child(3) { background: #b6d0b2; }
+
+    .sidebar-brand {
+      padding: 10px 12px 18px;
+      border-bottom: 1px solid rgba(151, 163, 145, 0.2);
+      margin-bottom: 16px;
+    }
+
+    .sidebar-brand strong {
+      display: block;
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+
+    .sidebar-brand span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .nav-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      color: var(--soft);
+      font-size: 15px;
+      border: 1px solid transparent;
+    }
+
+    .nav-item.active {
+      color: white;
+      background: var(--accent);
+      box-shadow: 0 8px 22px rgba(47, 107, 95, 0.18);
+    }
+
+    .nav-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.75;
+    }
+
+    .settings-main {
+      background: #f2f1df;
+      padding: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .titlebar {
+      padding: 22px 30px 18px;
+      border-bottom: 1px solid rgba(151, 163, 145, 0.22);
+      background: rgba(255,253,243,0.6);
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 24px;
+    }
+
+    .titlebar h3 {
+      font-size: 28px;
+      margin-bottom: 5px;
+    }
+
+    .titlebar p {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .titlebar .summary {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .summary .pill {
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(151, 163, 145, 0.3);
+      background: rgba(255,255,255,0.55);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--soft);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .content {
+      padding: 26px 28px 28px;
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 20px;
+      align-content: start;
+    }
+
+    .column {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .card {
+      background: #fffdf3;
+      border-radius: 18px;
+      border: 1px solid rgba(151, 163, 145, 0.33);
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .card-head {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid rgba(151, 163, 145, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 16px;
+    }
+
+    .card-head h4 {
+      font-size: 19px;
+      margin-bottom: 6px;
+    }
+
+    .card-head p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .tag {
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(47, 107, 95, 0.08);
+      color: var(--accent);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .rows {
+      padding: 6px 18px 12px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 170px 1fr auto;
+      gap: 14px;
+      align-items: center;
+      min-height: 52px;
+      padding: 10px 2px;
+      border-bottom: 1px solid rgba(151, 163, 145, 0.14);
+    }
+
+    .row:last-child { border-bottom: 0; }
+
+    .row-label {
+      font-size: 13px;
+      color: var(--soft);
+    }
+
+    .fake-input,
+    .fake-select,
+    .fake-button,
+    .fake-toggle {
+      border-radius: 10px;
+      border: 1px solid rgba(151, 163, 145, 0.34);
+      background: rgba(255,255,255,0.78);
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 13px;
+      color: var(--fg);
+    }
+
+    .fake-select::after {
+      content: "▾";
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .fake-button {
+      background: var(--accent);
+      color: white;
+      justify-content: center;
+      min-width: 92px;
+      font-weight: 600;
+    }
+
+    .fake-button.ghost {
+      background: rgba(255,255,255,0.65);
+      color: var(--accent);
+      border-color: rgba(47, 107, 95, 0.22);
+    }
+
+    .fake-toggle {
+      width: 50px;
+      padding: 4px;
+      justify-content: flex-end;
+      background: rgba(47, 107, 95, 0.1);
+    }
+
+    .fake-toggle::before {
+      content: "";
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: block;
+      box-shadow: 0 2px 6px rgba(47, 107, 95, 0.18);
+    }
+
+    .engine-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 0 18px 18px;
+    }
+
+    .engine-tile {
+      border-radius: 16px;
+      padding: 14px;
+      border: 1px solid rgba(151, 163, 145, 0.24);
+      background: rgba(255,255,255,0.42);
+    }
+
+    .engine-tile.active {
+      background: rgba(47, 107, 95, 0.08);
+      border-color: rgba(47, 107, 95, 0.28);
+    }
+
+    .engine-tile strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    .engine-tile span {
+      display: block;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .download-state {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(151, 163, 145, 0.14);
+      font-size: 12px;
+      color: var(--soft);
+      display: grid;
+      gap: 8px;
+    }
+
+    .progress {
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(151, 163, 145, 0.18);
+      overflow: hidden;
+    }
+
+    .progress span {
+      display: block;
+      width: 48%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-light));
+    }
+
+    .status-list {
+      padding: 0 18px 18px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .status-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.42);
+      border: 1px solid rgba(151, 163, 145, 0.18);
+      font-size: 13px;
+    }
+
+    .status-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 6px 8px;
+      border-radius: 999px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .status-badge.ready {
+      color: var(--success);
+      background: rgba(45, 110, 16, 0.08);
+    }
+
+    .status-badge.local {
+      color: var(--accent);
+      background: rgba(47, 107, 95, 0.08);
+    }
+
+    .status-badge.fallback {
+      color: var(--warning);
+      background: rgba(161, 98, 7, 0.08);
+    }
+
+    .dark-preview {
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.05), transparent 25%),
+        #16201c;
+      color: #f2f2e9;
+    }
+
+    .dark-preview .voicebar,
+    .dark-preview .voicebar-expanded {
+      background: rgba(27, 37, 33, 0.9);
+      border-color: rgba(195, 201, 191, 0.18);
+      box-shadow: 0 16px 36px rgba(0,0,0,0.28);
+    }
+
+    .dark-preview .voicebar-copy span,
+    .dark-preview .status-meta,
+    .dark-preview .partial,
+    .dark-preview .action-main span {
+      color: #b8c9c0;
+    }
+
+    .dark-preview .partial,
+    .dark-preview .action-row,
+    .dark-preview .keycap,
+    .dark-preview .action-icon {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(195, 201, 191, 0.16);
+    }
+
+    .dark-preview .meter {
+      background: rgba(255,255,255,0.08);
+    }
+
+    .notification-shell {
+      width: 430px;
+      border-radius: 22px;
+      padding: 10px;
+      background: rgba(246, 244, 234, 0.88);
+      border: 1px solid rgba(151, 163, 145, 0.28);
+      box-shadow:
+        0 24px 50px rgba(47, 107, 95, 0.12),
+        inset 0 1px 0 rgba(255,255,255,0.7);
+      backdrop-filter: blur(18px);
+    }
+
+    .notification-card {
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(255,253,243,0.95);
+      border: 1px solid rgba(151, 163, 145, 0.18);
+    }
+
+    .notification-appicon {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, #2f6b5f, #4b8579);
+      color: #fffdf3;
+      font-size: 18px;
+      box-shadow: 0 8px 18px rgba(47, 107, 95, 0.18);
+    }
+
+    .notification-meta strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .notification-meta span,
+    .notification-meta p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .notification-meta p {
+      margin-top: 6px;
+      color: var(--fg);
+      font-size: 13px;
+    }
+
+    .notification-time {
+      color: var(--muted);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      padding-top: 2px;
+    }
+
+    .hotkey-strip {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .shortcut-token,
+    .shortcut-pill,
+    .shortcut-state {
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .shortcut-token {
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(151, 163, 145, 0.24);
+      color: var(--soft);
+    }
+
+    .hotkey-panel,
+    .recipe-panel {
+      background: #fffdf3;
+      border-radius: 22px;
+      border: 1px solid rgba(151, 163, 145, 0.28);
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .hotkey-panel .card-head,
+    .recipe-panel .card-head {
+      padding: 18px 20px 14px;
+    }
+
+    .shortcut-board {
+      padding: 0 20px 20px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .shortcut-row {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.5);
+      border: 1px solid rgba(151, 163, 145, 0.18);
+    }
+
+    .shortcut-row strong,
+    .recipe-step strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 3px;
+    }
+
+    .shortcut-row span,
+    .recipe-step span {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .shortcut-pill {
+      justify-self: start;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(47, 107, 95, 0.08);
+      border: 1px solid rgba(47, 107, 95, 0.18);
+      color: var(--accent);
+    }
+
+    .shortcut-state {
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.78);
+      border: 1px solid rgba(151, 163, 145, 0.2);
+      color: var(--soft);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .recipe-stage {
+      padding: 0 20px 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .recipe-canvas {
+      padding: 16px;
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.35)),
+        #f4f2e7;
+      border: 1px solid rgba(151, 163, 145, 0.22);
+      display: grid;
+      gap: 12px;
+    }
+
+    .recipe-step {
+      padding: 13px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.74);
+      border: 1px solid rgba(151, 163, 145, 0.18);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .recipe-index {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(47, 107, 95, 0.1);
+      color: var(--accent);
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .recipe-output {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: #f0eee0;
+      border: 1px dashed rgba(151, 163, 145, 0.4);
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--soft);
+    }
+
+    .footer-note {
+      margin-top: 22px;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .footer-note strong {
+      color: var(--fg);
+      font-weight: 600;
+    }
+
+    @media (max-width: 1180px) {
+      .hero,
+      .bar-grid,
+      .extension-grid,
+      .content {
+        grid-template-columns: 1fr;
+      }
+
+      .settings-window {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        border-right: 0;
+        border-bottom: 1px solid rgba(151, 163, 145, 0.26);
+      }
+
+      .page {
+        width: min(100vw - 28px, 1480px);
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page { padding-top: 18px; }
+      .hero-copy, .hero-side, .mock-card, .settings-shell { padding: 18px; }
+      h1 { font-size: 44px; }
+      .voicebar, .voicebar-expanded, .voicebar-compact, .notification-shell { min-width: 0; width: calc(100% - 28px); }
+      .mock-stage { height: auto; min-height: 260px; padding: 26px 0; }
+      .row { grid-template-columns: 1fr; }
+      .shortcut-row, .recipe-step { grid-template-columns: 1fr; }
+      .section-head { align-items: start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <article class="panel hero-copy">
+        <div>
+          <div class="eyebrow">tsutae / macOS concept / warm-soft japanese utility</div>
+          <h1>让语音像快捷键一样安静地工作。</h1>
+          <p class="lede">
+            这版不是“AI 工具感”的发光玻璃，而是偏纸感、低饱和、安静克制的 macOS sidecar。重点放在两处：热键触发后的 voice bar，
+            以及 STT / TTS / fallback 这类工程配置在设置页里的可读性。
+          </p>
+        </div>
+        <div class="meta-row">
+          <span class="chip">Voice → any system</span>
+          <span class="chip">Hotkey first</span>
+          <span class="chip">Bilingual copy</span>
+          <span class="chip">No glass</span>
+        </div>
+      </article>
+
+      <aside class="panel hero-side">
+        <div class="brand-card">
+          <div class="icon-stack">
+            <div class="logo-mark" aria-hidden="true"></div>
+          </div>
+          <div>
+            <h3>品牌语义</h3>
+            <p>
+              图标不是麦克风直译，而是“声波被折成一笔，送往别处”的动作感。读起来像一个安静的工具，而不是聊天入口。
+            </p>
+          </div>
+        </div>
+        <div class="token-grid">
+          <div class="token">accent / #2f6b5f</div>
+          <div class="token">surface / #fffdf3</div>
+          <div class="token">border / #97a391</div>
+          <div class="token">text / #1f2a24</div>
+          <div class="token">radius / 12, 20, pill</div>
+          <div class="token">fonts / SF Pro + serif headline</div>
+        </div>
+      </aside>
+    </header>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">01 / Voice Bar</div>
+          <h2>核心浮窗只保留必要信息。</h2>
+        </div>
+        <p>
+          折叠态只表达“正在听”和“已经完成”。这次额外补一个更短的一行版 A 态，以及浅色完成态和系统通知态。
+          展开态才暴露 routing、fallback、目标动作。这样它更像系统层 HUD，而不是一个迷你聊天框。
+        </p>
+      </div>
+
+      <div class="bar-grid">
+        <article class="mock-card">
+          <div class="mock-stage">
+            <div class="voicebar" data-od-id="voicebar-listening">
+              <span class="status-dot" aria-hidden="true"></span>
+              <div class="waveform" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span>
+              </div>
+              <div class="voicebar-copy">
+                <strong>Listening</strong>
+                <span>⌥R held · zh / en auto · default route</span>
+              </div>
+              <span class="keycap">Esc cancel</span>
+            </div>
+          </div>
+          <div class="caption-block">
+            <h3>状态 A · 识别中</h3>
+            <p>
+              默认是单行胶囊，不加大段文案。波形承担“正在录”的反馈，右侧只保留最少的语言和路由信息。
+              这会比完整小窗更安静，也更像 macOS 全局快捷操作。
+            </p>
+          </div>
+        </article>
+
+        <article class="mock-card">
+          <div class="mock-stage">
+            <div class="voicebar voicebar-compact">
+              <span class="status-dot" aria-hidden="true"></span>
+              <div class="waveform" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span>
+              </div>
+              <div class="voicebar-copy">
+                <strong>Listening</strong>
+              </div>
+              <span class="keycap">⌥R</span>
+            </div>
+          </div>
+          <div class="caption-block">
+            <h3>状态 A2 · 极简一行稿</h3>
+            <p>
+              保留 A 的核心气质，但去掉第二行解释，改成更轻的“一行状态词 + 波形 + 热键”。
+              圆点和 A 完全一致，只压缩整体宽度和信息密度。
+            </p>
+          </div>
+        </article>
+
+        <article class="mock-card">
+          <div class="mock-stage dark-preview">
+            <div class="voicebar-expanded" data-od-id="voicebar-complete">
+              <div class="voicebar-top">
+                <span class="status-dot success" aria-hidden="true"></span>
+                <div class="waveform success" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span>
+                </div>
+                <div class="voicebar-copy">
+                  <strong>Dispatched</strong>
+                  <span>Sent to clipboard and hook</span>
+                </div>
+                <span class="keycap">↩ dispatch</span>
+              </div>
+              <div class="voicebar-body">
+                <div class="partial">
+                  “把今天 tracing 的问题整理成三条，发给 orchestrator，并且保留一份到 clipboard。”
+                </div>
+                <div class="action-row active">
+                  <div class="action-icon">⌘</div>
+                  <div class="action-main">
+                    <strong>Default action · Send to focused app</strong>
+                    <span>Paste into current editor or input field</span>
+                  </div>
+                  <span class="status-badge ready">done</span>
+                  <span class="keycap">V</span>
+                </div>
+                <div class="action-row">
+                  <div class="action-icon">⎘</div>
+                  <div class="action-main">
+                    <strong>Fallback · Clipboard copy</strong>
+                    <span>Keep safe when direct injection fails</span>
+                  </div>
+                  <span class="status-badge local">copied</span>
+                  <span class="keycap">C</span>
+                </div>
+                <div class="action-row">
+                  <div class="action-icon">↗</div>
+                  <div class="action-main">
+                    <strong>Hook app · Orchestrator inbox</strong>
+                    <span>POST via recipe with OpenTelemetry trace id</span>
+                  </div>
+                  <span class="status-badge fallback">queued</span>
+                  <span class="keycap">T</span>
+                </div>
+                <div class="meter"><span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="caption-block">
+            <h3>状态 B · 完成并派发</h3>
+            <p>
+              完成态不只是“成功”提示，而是明确展示结果去了哪里：当前焦点、剪贴板兜底、以及 hook app。
+              这正好对应 `tsutae` 的产品差异，不会被误解成普通转写器。
+            </p>
+          </div>
+        </article>
+
+        <article class="mock-card">
+          <div class="mock-stage">
+            <div class="voicebar-expanded">
+              <div class="voicebar-top">
+                <span class="status-dot success" aria-hidden="true"></span>
+                <div class="voicebar-copy">
+                  <strong>Delivered</strong>
+                  <span>Clipboard and hook are ready</span>
+                </div>
+                <span class="keycap">done</span>
+              </div>
+              <div class="voicebar-body">
+                <div class="partial">
+                  “把今天的 release note 摘成三条，再发到 Slack draft。”
+                </div>
+                <div class="action-row active">
+                  <div class="action-icon">⎘</div>
+                  <div class="action-main">
+                    <strong>Clipboard fallback</strong>
+                    <span>Safe copy is ready for manual paste</span>
+                  </div>
+                  <span class="status-badge local">copied</span>
+                  <span class="keycap">C</span>
+                </div>
+                <div class="action-row">
+                  <div class="action-icon">↗</div>
+                  <div class="action-main">
+                    <strong>Hook app dispatch</strong>
+                    <span>Draft posted to your selected recipe</span>
+                  </div>
+                  <span class="status-badge ready">sent</span>
+                  <span class="keycap">T</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="caption-block">
+            <h3>状态 B2 · 完成浅色稿</h3>
+            <p>
+              这一张更适合默认主题。成功反馈仍然明确，但没有深色 HUD 那么强的介入感，更像温和的系统结果面板。
+            </p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">02 / System Notification</div>
+          <h2>结果也可以退成系统通知，而不是总回到大浮窗。</h2>
+        </div>
+        <p>
+          当用户只关心“已经完成并投递成功”，通知是更轻的反馈层。这里沿用 `2` 版的奶油纸感和松针绿，而不是做成高对比的悬浮信息块。
+        </p>
+      </div>
+
+      <div class="bar-grid">
+        <article class="mock-card">
+          <div class="mock-stage">
+            <div class="notification-shell">
+              <div class="notification-card">
+                <div class="notification-appicon">伝</div>
+                <div class="notification-meta">
+                  <strong>tsutae</strong>
+                  <span>Voice dispatched successfully</span>
+                  <p>已发送到 Drafts recipe，并保留一份到剪贴板。</p>
+                </div>
+                <div class="notification-time">now</div>
+              </div>
+            </div>
+          </div>
+          <div class="caption-block">
+            <h3>通知稿 · 成功回执</h3>
+            <p>
+              信息压缩成“来源、结果、去向”三件事，够确认，也不会把用户重新拖回大面板。
+            </p>
+          </div>
+        </article>
+
+        <article class="mock-card">
+          <div class="mock-stage">
+            <div class="notification-shell">
+              <div class="notification-card">
+                <div class="notification-appicon" style="background:linear-gradient(145deg,#6d7a46,#87955a);">⌥</div>
+                <div class="notification-meta">
+                  <strong>tsutae hotkey changed</strong>
+                  <span>Leader updated in settings</span>
+                  <p>Press <b>⌥ Space</b> to invoke, then tap <b>R</b> for direct transcription.</p>
+                </div>
+                <div class="notification-time">prefs</div>
+              </div>
+            </div>
+          </div>
+          <div class="caption-block">
+            <h3>通知稿 · 设置确认</h3>
+            <p>
+              热键和 provider 这种关键改动，也可以给一个轻确认，不用再额外弹出层。
+            </p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">03 / Settings Window</div>
+          <h2>设置页是“工程配置可读”，不是表单堆砌。</h2>
+        </div>
+        <p>
+          视觉骨架沿用你现有 SwiftUI 方向：左侧轻材质导航，右侧不透明内容卡。主界面先给 General / STT / TTS 的核心结构，
+          把 primary engine、fallback chain、模型状态、密钥与测试动作放到同一信息节奏里。
+        </p>
+      </div>
+
+      <div class="settings-shell" data-od-id="settings-window">
+        <div class="settings-window">
+          <aside class="sidebar">
+            <div class="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="sidebar-brand">
+              <strong>tsutae</strong>
+              <span>Voice sidecar for macOS. Quiet routing, local and cloud fallback.</span>
+            </div>
+            <nav class="nav-list" aria-label="Settings navigation">
+              <div class="nav-item"><span class="nav-dot"></span>General</div>
+              <div class="nav-item active"><span class="nav-dot"></span>STT</div>
+              <div class="nav-item"><span class="nav-dot"></span>TTS</div>
+              <div class="nav-item"><span class="nav-dot"></span>VAD &amp; Behavior</div>
+              <div class="nav-item"><span class="nav-dot"></span>Hotkeys</div>
+              <div class="nav-item"><span class="nav-dot"></span>Recipes</div>
+              <div class="nav-item"><span class="nav-dot"></span>Secrets</div>
+              <div class="nav-item"><span class="nav-dot"></span>Server</div>
+              <div class="nav-item"><span class="nav-dot"></span>About</div>
+            </nav>
+          </aside>
+
+          <section class="settings-main">
+            <div class="titlebar">
+              <div>
+                <h3>Speech engines</h3>
+                <p>Primary and fallback chains for transcription and playback. Config saved to `~/.tsutae/config.yml`.</p>
+              </div>
+              <div class="summary">
+                <span class="pill">STT 3 ready</span>
+                <span class="pill">TTS 2 local / 2 cloud</span>
+                <span class="pill">TraceLocal on</span>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="column">
+                <article class="card">
+                  <div class="card-head">
+                    <div>
+                      <h4>STT</h4>
+                      <p>即时转写优先本地或兼容 OpenAI 的端点，失败后回退 Apple Speech。保留中英自动检测。</p>
+                    </div>
+                    <span class="tag">primary chain</span>
+                  </div>
+                  <div class="rows">
+                    <div class="row">
+                      <div class="row-label">Primary provider</div>
+                      <div class="fake-select">OpenAI Compatible STT</div>
+                      <div class="status-badge ready">ready</div>
+                    </div>
+                    <div class="row">
+                      <div class="row-label">Model</div>
+                      <div class="fake-select">xiaomi / mimo-v2.5</div>
+                      <div class="fake-button ghost">Change</div>
+                    </div>
+                    <div class="row">
+                      <div class="row-label">Language</div>
+                      <div class="fake-select">Auto detect · zh-CN / en-US</div>
+                      <div class="status-badge local">bilingual</div>
+                    </div>
+                    <div class="row">
+                      <div class="row-label">Base URL</div>
+                      <div class="fake-input">http://127.0.0.1:1337/v1/audio/transcriptions</div>
+                      <div class="fake-button">Test</div>
+                    </div>
+                    <div class="row">
+                      <div class="row-label">Fallback</div>
+                      <div class="fake-select">Apple Speech</div>
+                      <div class="status-badge fallback">fallback</div>
+                    </div>
+                  </div>
+                  <div class="engine-grid">
+                    <div class="engine-tile active">
+                      <strong>WhisperKit</strong>
+                      <span>Local, lower latency for focused dictation.</span>
+                      <div class="download-state">
+                        <span>Model state · Downloading 1.2 GB / 2.4 GB</span>
+                        <div class="progress"><span></span></div>
+                      </div>
+                    </div>
+                    <div class="engine-tile">
+                      <strong>FluidAudio</strong>
+                      <span>Phase 2 local engine for better mixed-language audio.</span>
+                      <div class="download-state">
+                        <span>Model state · Not installed</span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="card">
+                  <div class="card-head">
+                    <div>
+                      <h4>TTS</h4>
+                      <p>系统播报默认走 Apple TTS。高质量长句可以单独切到 ElevenLabs 或 Kokoro-MLX。</p>
+                    </div>
+                    <span class="tag">playback</span>
+                  </div>
+                  <div class="rows">
+                    <div class="row">
+                      <div class="row-label">Primary provider</div>
+                      <div class="fake-select">Apple TTS</div>
+                      <div class="status-badge ready">local</div>
+                    </div>
+                    <div class="row">
+                      <div class="row-label">Voice</div>
+                      <div class="fake-select">Tingting · Mandarin / English</div>
+                      <div class="fake-button ghost">Preview</div>
+                    </div>
+                    <div class="row">
+                      <div class="row-label">Speaking rate</div>
+                      <div class="fake-input">0.48 · calm, slightly concise</div>
+                      <div class="status-badge local">sf voice</div>
+                    </div>
+                    <div class="row">
+                      <div class="row-label">Premium fallback</div>
+                      <div class="fake-select">ElevenLabs</div>
+                      <div class="status-badge fallback">cloud</div>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <div class="column">
+                <article class="card">
+                  <div class="card-head">
+                    <div>
+                      <h4>Runtime health</h4>
+                      <p>把用户最关心的运行态直接放到右列，少翻页。</p>
+                    </div>
+                    <span class="tag">overview</span>
+                  </div>
+                  <div class="status-list">
+                    <div class="status-line">
+                      <span>Focused app injection</span>
+                      <span class="status-badge ready">allowed</span>
+                    </div>
+                    <div class="status-line">
+                      <span>Microphone permission</span>
+                      <span class="status-badge ready">granted</span>
+                    </div>
+                    <div class="status-line">
+                      <span>Hook server</span>
+                      <span class="status-badge local">127.0.0.1:1338</span>
+                    </div>
+                    <div class="status-line">
+                      <span>OpenTelemetry trace</span>
+                      <span class="status-badge ready">jsonl writing</span>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="card">
+                  <div class="card-head">
+                    <div>
+                      <h4>Default route</h4>
+                      <p>一段式直发，二段式改投递目标。这里把默认路径说清楚。</p>
+                    </div>
+                    <span class="tag">leader</span>
+                  </div>
+                  <div class="rows">
+                    <div class="row">
+                      <div class="row-label">Leader key</div>
+                      <div class="fake-input">⌥ Space</div>
+                      <div class="status-badge local">hud</div>
+                    </div>
+                    <div class="row">
+                      <div class="row-label">Default action</div>
+                      <div class="fake-select">Send to focused app</div>
+                      <div class="fake-toggle"></div>
+                    </div>
+                    <div class="row">
+                      <div class="row-label">Dispatch timeout</div>
+                      <div class="fake-input">1500 ms</div>
+                      <div class="status-badge fallback">esc cancels</div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="card">
+                  <div class="card-head">
+                    <div>
+                      <h4>视觉落点</h4>
+                      <p>把这版风格压实到几个不会漂的规则上。</p>
+                    </div>
+                  </div>
+                  <div class="status-list">
+                    <div class="status-line"><span>大面积纯色背景，不做玻璃和高饱和渐变</span></div>
+                    <div class="status-line"><span>细线框 + 纸感表面，标题比正文更有温度</span></div>
+                    <div class="status-line"><span>强调色只给 active item、button、recording 状态</span></div>
+                  </div>
+                </article>
+
+                <article class="card" style="background:#1d2823;color:#f3f1e8;border-color:rgba(195,201,191,0.18);">
+                  <div class="card-head" style="border-color:rgba(195,201,191,0.14);">
+                    <div>
+                      <h4 style="color:#f3f1e8;">Dark appearance</h4>
+                      <p style="color:#b8c9c0;">暗色不换设计语言，只把层级切到松烟墨纸面。</p>
+                    </div>
+                    <span class="tag" style="background:rgba(47,107,95,0.22);color:#dce9e1;">dark</span>
+                  </div>
+                  <div class="status-list">
+                    <div class="status-line" style="background:rgba(255,255,255,0.04);border-color:rgba(195,201,191,0.12);color:#e4e8df;">
+                      <span>Window background · charcoal green, not graphite blue</span>
+                    </div>
+                    <div class="status-line" style="background:rgba(255,255,255,0.04);border-color:rgba(195,201,191,0.12);color:#e4e8df;">
+                      <span>Card background · opaque panels, no translucency</span>
+                    </div>
+                    <div class="status-line" style="background:rgba(255,255,255,0.04);border-color:rgba(195,201,191,0.12);color:#e4e8df;">
+                      <span>Accent moves to muted pine green, with lighter sage edge on hover</span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        <div><strong>这版新增：</strong>A 的迷你一行稿、B 的浅色完成稿、系统通知稿，以及 `Hotkeys / Recipes` 两个扩展页面方向。</div>
+        <div><strong>实现方向：</strong>SwiftUI 里继续保留现有 split view 骨架，把这套稿拆成 `VoiceBar`、`ResultNotification`、`HotkeyEditorCard`、`RecipeTestModal` 四个组件就够了。</div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">04 / Workflow Extensions</div>
+          <h2>把 Hotkeys 和 Recipes 也补成同一套语言。</h2>
+        </div>
+        <p>
+          这两个页面最能拉开 `tsutae` 和普通 dictation app 的差异。我保留设置页的纸感组件系统，只把交互重点换成快捷键编排和 recipe 测试。
+        </p>
+      </div>
+
+      <div class="extension-grid">
+        <article class="hotkey-panel">
+          <div class="card-head">
+            <div>
+              <h4>Hotkeys editor</h4>
+              <p>把 leader、press-and-hold、二段动作拆开写清楚，避免用户只会“开关”而不会“编排”。</p>
+            </div>
+            <span class="tag">key flow</span>
+          </div>
+          <div class="shortcut-board">
+            <div class="shortcut-row">
+              <div>
+                <strong>Invoke voice bar</strong>
+                <span>Global leader that calls the quiet HUD anywhere in macOS.</span>
+              </div>
+              <div class="shortcut-pill">⌥ Space</div>
+              <div class="shortcut-state">global</div>
+            </div>
+            <div class="shortcut-row">
+              <div>
+                <strong>Hold to dictate</strong>
+                <span>Press-and-hold path for short transient transcription.</span>
+              </div>
+              <div class="shortcut-pill">Hold R</div>
+              <div class="shortcut-state">push</div>
+            </div>
+            <div class="shortcut-row">
+              <div>
+                <strong>Route to recipe</strong>
+                <span>Second-stage dispatch for the current transcript buffer.</span>
+              </div>
+              <div class="shortcut-pill">⌘ ↩</div>
+              <div class="shortcut-state">dispatch</div>
+            </div>
+            <div class="hotkey-strip">
+              <span class="shortcut-token">Conflict check · clean</span>
+              <span class="shortcut-token">Accessibility hook · allowed</span>
+              <span class="shortcut-token">Clipboard fallback · on</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="recipe-panel">
+          <div class="card-head">
+            <div>
+              <h4>Recipes test modal</h4>
+              <p>不是单纯 endpoint 表单，而是把测试输入、模板体、发送结果放在一张试验台上。</p>
+            </div>
+            <span class="tag">sandbox</span>
+          </div>
+          <div class="recipe-stage">
+            <div class="recipe-canvas">
+              <div class="recipe-step">
+                <div class="recipe-index">01</div>
+                <div>
+                  <strong>Input transcript</strong>
+                  <span>Use live capture or paste an existing dictation block.</span>
+                </div>
+                <span class="shortcut-state">buffer</span>
+              </div>
+              <div class="recipe-step">
+                <div class="recipe-index">02</div>
+                <div>
+                  <strong>Apply body template</strong>
+                  <span>`{{transcript}}` + metadata + selected route headers.</span>
+                </div>
+                <span class="shortcut-state">templated</span>
+              </div>
+              <div class="recipe-step">
+                <div class="recipe-index">03</div>
+                <div>
+                  <strong>POST to hook app</strong>
+                  <span>Preview status, latency, and trace id before saving as default.</span>
+                </div>
+                <span class="shortcut-state">test run</span>
+              </div>
+            </div>
+            <div class="recipe-output">
+              Response preview · `202 Accepted` · trace id `tsu_01JX...` · draft created in orchestrator inbox and copied to clipboard as safe fallback.
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -526,12 +526,30 @@ private struct SpeakingChipView: View {
     }
 
     private var sourceSlot: some View {
-        Text(formattedSource(snapshot.source ?? "Tsutae"))
-            .font(DS.font.mono(size: layout.sourceFontSize, weight: .regular))
-            .tracking(0.02)
-            .foregroundStyle(foregroundColor)
-            .lineLimit(1)
-            .truncationMode(.tail)
+        HStack(spacing: 6) {
+            Text(formattedSource(snapshot.source ?? "Tsutae"))
+                .font(DS.font.mono(size: layout.sourceFontSize, weight: .regular))
+                .tracking(0.02)
+                .foregroundStyle(foregroundColor)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            if snapshot.queueLength > 0 {
+                Text("+\(snapshot.queueLength)")
+                    .font(DS.font.mono(size: 10, weight: .medium))
+                    .foregroundStyle(isDarkMode ? DS.color.accentDark : DS.color.accent)
+                    .padding(.horizontal, 5)
+                    .frame(height: 18)
+                    .background(
+                        Capsule()
+                            .fill(isDarkMode ? DS.color.accentDark.opacity(0.14) : DS.color.accent.opacity(0.1))
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(isDarkMode ? DS.color.accentDark.opacity(0.24) : DS.color.accent.opacity(0.18), lineWidth: 1)
+                            )
+                    )
+            }
+        }
     }
 
     private var actionSlot: some View {
@@ -780,4 +798,3 @@ private func formattedSource(_ source: String) -> String {
     guard let first = source.first else { return source }
     return String(first).uppercased() + source.dropFirst()
 }
-

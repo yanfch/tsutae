@@ -74,6 +74,7 @@ struct SettingsView: View {
                         
                         ScrollView {
                             currentTabView
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
                                 .padding(.horizontal, 28)
                                 .padding(.top, 18)
                                 .padding(.bottom, 24)

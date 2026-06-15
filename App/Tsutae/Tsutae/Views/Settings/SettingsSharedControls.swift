@@ -19,6 +19,7 @@ struct SettingsDropdown: View {
     var tone: SettingsDropdownTone = .soft
     var width: CGFloat? = nil
     var menuWidth: CGFloat? = nil
+    var maxMenuHeight: CGFloat? = nil
     @State private var isPresented = false
     @State private var hoveredOptionID: String?
     @Environment(\.colorScheme) private var colorScheme
@@ -50,38 +51,14 @@ struct SettingsDropdown: View {
         }
         .buttonStyle(.plain)
         .popover(isPresented: $isPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(options) { option in
-                    Button {
-                        guard option.isDisabled == false else { return }
-                        selection.wrappedValue = option.id
-                        isPresented = false
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: selection.wrappedValue == option.id ? "checkmark" : "circle")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(selection.wrappedValue == option.id ? DS.color.accent : .secondary)
-                            Text(option.title)
-                                .lineLimit(1)
-                            Spacer(minLength: 8)
-                        }
-                        .font(.system(size: 13, weight: selection.wrappedValue == option.id ? .semibold : .regular))
-                        .foregroundStyle(option.isDisabled ? .secondary.opacity(0.65) : (colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground))
-                        .padding(.horizontal, 12)
-                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill((selection.wrappedValue == option.id || hoveredOptionID == option.id) ? DS.color.accent.opacity(0.12) : Color.clear)
-                        )
+            Group {
+                if let maxMenuHeight {
+                    ScrollView {
+                        optionsList
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .disabled(option.isDisabled)
-                    .opacity(option.isDisabled ? 0.45 : 1)
-                    .onHover { isHovering in
-                        hoveredOptionID = isHovering ? option.id : nil
-                    }
+                    .frame(maxHeight: maxMenuHeight)
+                } else {
+                    optionsList
                 }
             }
             .padding(8)
@@ -97,6 +74,44 @@ struct SettingsDropdown: View {
             .padding(8)
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var optionsList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(options) { option in
+                Button {
+                    guard option.isDisabled == false else { return }
+                    selection.wrappedValue = option.id
+                    isPresented = false
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: selection.wrappedValue == option.id ? "checkmark" : "circle")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(selection.wrappedValue == option.id ? DS.color.accent : .secondary)
+                        Text(option.title)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                    }
+                    .font(.system(size: 13, weight: selection.wrappedValue == option.id ? .semibold : .regular))
+                    .foregroundStyle(option.isDisabled ? .secondary.opacity(0.65) : (colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground))
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill((selection.wrappedValue == option.id || hoveredOptionID == option.id) ? DS.color.accent.opacity(0.12) : Color.clear)
+                    )
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .disabled(option.isDisabled)
+                .opacity(option.isDisabled ? 0.45 : 1)
+                .onHover { isHovering in
+                    hoveredOptionID = isHovering ? option.id : nil
+                }
+            }
+        }
     }
     
     private var selectedTitle: String {
@@ -149,7 +164,7 @@ struct SettingsChipSelector: View {
                             .offset(x: frame.minX, y: frame.minY)
                     )
                     .shadow(color: colorScheme == .dark ? DS.color.accent.opacity(0.18) : DS.color.accent.opacity(0.14), radius: 8, x: 0, y: 1)
-                    .animation(.spring(response: 0.34, dampingFraction: 0.84, blendDuration: 0.12), value: frame)
+                    .animation(.spring(response: 0.34, dampingFraction: 0.84, blendDuration: 0.12), value: selection.wrappedValue)
             }
             
             HStack(spacing: 4) {

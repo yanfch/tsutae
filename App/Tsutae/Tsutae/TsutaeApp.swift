@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import TsutaeCore
 import OSLog
+import UserNotifications
 
 @MainActor
 final class SettingsWindowCoordinator {
@@ -9,7 +10,7 @@ final class SettingsWindowCoordinator {
     var open: ((String?) -> Void)?
     weak var window: NSWindow?
     private init() {}
-    
+
     func openSettings(tab: String?) {
         if let tab {
             UserDefaults.standard.set(tab, forKey: "settings.selectedTab")
@@ -27,7 +28,7 @@ final class SettingsWindowCoordinator {
             self.bringToFront()
         }
     }
-    
+
     func bringToFront() {
         NSApp.activate(ignoringOtherApps: true)
         if let window {
@@ -47,14 +48,14 @@ final class SettingsWindowCoordinator {
 @MainActor
 final class LocalSTTResidencyCoordinator: ObservableObject {
     static let shared = LocalSTTResidencyCoordinator()
-    
+
     @Published private(set) var warmingModelID: String?
-    
+
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "LocalSTTResidency")
     private var busyCancellable: AnyCancellable?
     private var pendingConfig: Config?
     private var debugNextWarmupDelay: Duration?
-    
+
     private init() {
         busyCancellable = RecordingSession.shared.$isBusy
             .removeDuplicates()
@@ -65,12 +66,12 @@ final class LocalSTTResidencyCoordinator: ObservableObject {
                 self.apply(config: pendingConfig)
             }
     }
-    
+
     func refreshFromDisk() {
         let config = (try? ConfigLoader.load()) ?? .default
         requestApply(config: config)
     }
-    
+
     func requestApply(config: Config) {
         if RecordingSession.shared.isBusy {
             pendingConfig = config
@@ -79,7 +80,7 @@ final class LocalSTTResidencyCoordinator: ObservableObject {
         }
         apply(config: config)
     }
-    
+
     func requiresWarmupGate(config: Config) async -> Bool {
         guard config.stt.mode == .localFirst else { return false }
         guard let modelID = config.stt.local.preferredModel ?? config.stt.model, modelID.isEmpty == false else { return false }
@@ -89,7 +90,7 @@ final class LocalSTTResidencyCoordinator: ObservableObject {
         }
         return await FluidAudioSTT.isModelReady(modelID) == false
     }
-    
+
     func waitUntilLocalModelReady(config: Config) async throws {
         guard config.stt.mode == .localFirst else { return }
         guard let modelID = config.stt.local.preferredModel ?? config.stt.model, modelID.isEmpty == false else { return }
@@ -106,7 +107,7 @@ final class LocalSTTResidencyCoordinator: ObservableObject {
         }
         try await ConfiguredSTTRouter.prewarmLocalModel(config: config)
     }
-    
+
     func prepareWarmupGateTest(config: Config, delay: Duration = .seconds(5)) {
         guard let modelID = config.stt.local.preferredModel ?? config.stt.model, modelID.isEmpty == false else { return }
         debugNextWarmupDelay = delay
@@ -124,17 +125,17 @@ final class LocalSTTResidencyCoordinator: ObservableObject {
             }
         }
     }
-    
+
     private func apply(config: Config) {
         let modelID = config.stt.local.preferredModel ?? config.stt.model
         let shouldWarm = config.stt.mode == .localFirst || config.stt.local.keepModelWarmedInRemoteFirst
-        
+
         if shouldWarm {
             warmingModelID = modelID
         } else {
             warmingModelID = nil
         }
-        
+
         Task(priority: .utility) {
             do {
                 try await ConfiguredSTTRouter.applyLocalModelResidencyPolicy(config: config)
@@ -156,15 +157,154 @@ final class LocalSTTResidencyCoordinator: ObservableObject {
     }
 }
 
+@MainActor
+final class LocalTTSResidencyCoordinator: ObservableObject {
+    static let shared = LocalTTSResidencyCoordinator()
+
+    @Published private(set) var warmingVoiceID: String?
+    @Published private(set) var readyVoiceIDs: Set<String> = []
+    @Published private(set) var lastError: String?
+
+    private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "LocalTTSResidency")
+    private var warmTask: Task<Void, Never>?
+
+    private init() {}
+
+    func refreshFromDisk() {
+        let config = (try? ConfigLoader.load()) ?? .default
+        requestApply(config: config)
+        refreshReadyState()
+    }
+
+    func requestApply(config: Config) {
+        guard config.tts.engine == FluidAudioLocalTTSEngine.shared.id, config.tts.local.enabled else {
+            warmingVoiceID = nil
+            lastError = nil
+            return
+        }
+        requestWarm(voiceID: config.tts.voice)
+    }
+
+    func requestWarm(voiceID: String?) {
+        let resolvedVoiceID = LocalTTSModelCatalog.descriptor(voiceID: voiceID)?.voiceID
+            ?? LocalTTSModelCatalog.all.first?.voiceID
+        guard let resolvedVoiceID else { return }
+
+        warmTask?.cancel()
+        warmingVoiceID = resolvedVoiceID
+        lastError = nil
+
+        warmTask = Task(priority: .utility) { [weak self] in
+            do {
+                let warmedVoiceID = try await FluidAudioLocalTTSEngine.shared.prewarm(voiceID: resolvedVoiceID)
+                await MainActor.run {
+                    guard let self else { return }
+                    self.readyVoiceIDs.insert(warmedVoiceID)
+                    if self.warmingVoiceID == warmedVoiceID {
+                        self.warmingVoiceID = nil
+                    }
+                    self.logger.info("Applied local TTS residency policy. voice=\(warmedVoiceID, privacy: .public)")
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    guard let self else { return }
+                    if self.warmingVoiceID == resolvedVoiceID {
+                        self.warmingVoiceID = nil
+                    }
+                    self.logger.debug("Cancelled local TTS warmup. voice=\(resolvedVoiceID, privacy: .public)")
+                }
+            } catch {
+                if Self.isCancellationLike(error) {
+                    await MainActor.run {
+                        guard let self else { return }
+                        if self.warmingVoiceID == resolvedVoiceID {
+                            self.warmingVoiceID = nil
+                        }
+                        self.logger.debug("Cancelled local TTS warmup. voice=\(resolvedVoiceID, privacy: .public)")
+                    }
+                    return
+                }
+                await MainActor.run {
+                    guard let self else { return }
+                    if self.warmingVoiceID == resolvedVoiceID {
+                        self.warmingVoiceID = nil
+                    }
+                    self.lastError = error.localizedDescription
+                    self.logger.error("Failed to apply local TTS residency policy: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
+    }
+
+    private static func isCancellationLike(_ error: Error) -> Bool {
+        let message = error.localizedDescription
+        return message.contains("CancellationError") || message.contains("cancelled") || message.contains("canceled")
+    }
+
+    func refreshReadyState() {
+        Task(priority: .utility) { [weak self] in
+            var ready: Set<String> = []
+            for descriptor in LocalTTSModelCatalog.all {
+                if await FluidAudioLocalTTSEngine.shared.isVoiceReady(descriptor.voiceID) {
+                    ready.insert(descriptor.voiceID)
+                }
+            }
+            await MainActor.run {
+                self?.readyVoiceIDs = ready
+            }
+        }
+    }
+}
+
+enum TTSGeneralPresentationStyle {
+    static var current: Config.TTSPresentationStyle {
+        fromRecordingBarPresetRawValue(UserDefaults.standard.string(forKey: DS.recordingBar.presetDefaultsKey))
+    }
+
+    static func fromRecordingBarPresetRawValue(_ rawValue: String?) -> Config.TTSPresentationStyle {
+        switch rawValue {
+        case Config.TTSPresentationStyle.minimal.rawValue, DS.recordingBar.Preset.minimal.rawValue:
+            return .minimal
+        default:
+            return .standard
+        }
+    }
+
+    static func applyCurrent(to config: inout Config.TTSConfig) {
+        config.presentationStyle = current
+    }
+
+    static func syncConfigDefaultToCurrent(notify: Bool = true) {
+        syncConfigDefault(to: current, notify: notify)
+    }
+
+    static func syncConfigDefault(toRecordingBarPresetRawValue rawValue: String, notify: Bool = true) {
+        syncConfigDefault(to: fromRecordingBarPresetRawValue(rawValue), notify: notify)
+    }
+
+    private static func syncConfigDefault(to style: Config.TTSPresentationStyle, notify: Bool) {
+        do {
+            var config = try ConfigLoader.load()
+            guard config.tts.presentationStyle != style else { return }
+            config.tts.presentationStyle = style
+            try ConfigLoader.save(config)
+            guard notify else { return }
+            NotificationCenter.default.post(name: .tsutaeConfigDidChange, object: nil, userInfo: ["config": config])
+        } catch {
+            return
+        }
+    }
+}
+
 /// tsutae 主应用入口
 @main
 struct TsutaeApp: App {
-    
+
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "MenuBar")
     @StateObject private var recordingSession = RecordingSession.shared
     @AppStorage(L10n.appLanguageDefaultsKey) private var appLanguage = L10n.AppLanguage.system.rawValue
-    
+
     var body: some Scene {
         // 使用自定义品牌图标
         MenuBarExtra("Tsutae", image: "MenuBarIcon") {
@@ -172,7 +312,7 @@ struct TsutaeApp: App {
                 .environment(\.locale, currentLocale)
         }
         .menuBarExtraStyle(.menu)
-        
+
         Window("Settings", id: "settings-window") {
             SettingsWindowRoot(locale: currentLocale)
         }
@@ -182,12 +322,12 @@ struct TsutaeApp: App {
             SettingsCommands()
         }
     }
-    
+
     private var currentLocale: Locale {
         _ = appLanguage
         return L10n.currentLocale
     }
-    
+
     @ViewBuilder
     private var menuContent: some View {
         MenuBarMenuContent(recordingSession: recordingSession, logger: logger)
@@ -198,7 +338,7 @@ private struct MenuBarMenuContent: View {
     @ObservedObject var recordingSession: RecordingSession
     @ObservedObject private var hotkeyManager = GlobalHotkeyManager.shared
     let logger: Logger
-    
+
     var body: some View {
         Button(recordingSession.isRecording ? L10n.Menu.stopAndTranscribe : L10n.Menu.startRecording) {
             logger.info("Menu action: toggle recording")
@@ -206,26 +346,26 @@ private struct MenuBarMenuContent: View {
                 RecordingSession.shared.toggle()
             }
         }
-        
+
         if let transcript = recordingSession.lastTranscript, !transcript.isEmpty {
             Button(L10n.Menu.copyLatestTranscript) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(transcript, forType: .string)
             }
         }
-        
+
         Divider()
-        
+
         Text(L10n.Menu.shortcut(hotkeyManager.toggleRecordingShortcutDisplay))
             .foregroundStyle(.secondary)
-        
+
         Divider()
-        
+
         OpenSettingsMenuButton()
             .keyboardShortcut(",", modifiers: .command)
-        
+
         Divider()
-        
+
         Button(L10n.Menu.quit) {
             NSApplication.shared.terminate(nil)
         }
@@ -236,7 +376,7 @@ private struct MenuBarMenuContent: View {
 private struct SettingsWindowRoot: View {
     let locale: Locale
     @Environment(\.openWindow) private var openWindow
-    
+
     var body: some View {
         SettingsView()
             .environment(\.locale, locale)
@@ -254,20 +394,24 @@ private struct SettingsWindowAccessor: NSViewRepresentable {
         let view = NSView()
         DispatchQueue.main.async {
             if let window = view.window {
-                window.identifier = NSUserInterfaceItemIdentifier("settings-window")
-                SettingsWindowCoordinator.shared.window = window
+                configure(window)
             }
         }
         return view
     }
-    
+
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
             if let window = nsView.window {
-                window.identifier = NSUserInterfaceItemIdentifier("settings-window")
-                SettingsWindowCoordinator.shared.window = window
+                configure(window)
             }
         }
+    }
+
+    private func configure(_ window: NSWindow) {
+        window.identifier = NSUserInterfaceItemIdentifier("settings-window")
+        window.isReleasedWhenClosed = false
+        SettingsWindowCoordinator.shared.window = window
     }
 }
 
@@ -281,7 +425,7 @@ private struct OpenSettingsMenuButton: View {
 
 private struct SettingsCommands: Commands {
     @Environment(\.openWindow) private var openWindow
-    
+
     var body: some Commands {
         let _ = installOpenHandler()
         CommandGroup(replacing: .appSettings) {
@@ -291,7 +435,7 @@ private struct SettingsCommands: Commands {
             .keyboardShortcut(",", modifiers: .command)
         }
     }
-    
+
     private func installOpenHandler() {
         SettingsWindowCoordinator.shared.open = { _ in
             openWindow(id: "settings-window")
@@ -302,24 +446,43 @@ private struct SettingsCommands: Commands {
 // MARK: - App Delegate
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    
+
     private var localEscapeMonitor: Any?
     private var globalEscapeMonitor: Any?
+    private var isDuplicateInstance = false
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "AppDelegate")
     private let appController = DefaultAppController()
     private lazy var httpServer = HTTPServer(controller: appController)
     private var serverTask: Task<Void, Never>?
-    
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        guard hasRunningInstance() else {
+            return
+        }
+        isDuplicateInstance = true
+        logger.warning("Another Tsutae instance is already running; terminating this instance")
+        NSApp.terminate(nil)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard isDuplicateInstance == false else {
+            return
+        }
         logger.info("applicationDidFinishLaunching")
         EngineManager.shared.registerTTS(AppleTTSEngine.shared)
+        EngineManager.shared.registerTTS(FluidAudioLocalTTSEngine.shared)
+        EngineManager.shared.registerTTS(OpenAICompatibleRemoteTTSEngine.shared)
+        UNUserNotificationCenter.current().delegate = self
         _ = LocalSTTResidencyCoordinator.shared
+        _ = LocalTTSResidencyCoordinator.shared
+        TTSGeneralPresentationStyle.syncConfigDefaultToCurrent(notify: false)
         setupHotkeys()
         LocalSTTResidencyCoordinator.shared.refreshFromDisk()
+        LocalTTSResidencyCoordinator.shared.refreshFromDisk()
         FloatingSpeakingIndicator.shared.startObserving()
         startHTTPServerIfNeeded()
     }
-    
+
     func applicationWillTerminate(_ notification: Notification) {
         if let m = localEscapeMonitor { NSEvent.removeMonitor(m) }
         if let m = globalEscapeMonitor { NSEvent.removeMonitor(m) }
@@ -327,7 +490,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         serverTask?.cancel()
         httpServer.stop()
     }
-    
+
     /// 注册全局快捷键
     private func setupHotkeys() {
         logger.info("Registering global hotkey")
@@ -337,25 +500,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 RecordingSession.shared.toggle()
             }
         }
-        
+
         localEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if self.handleEscapeKeyEvent(event) {
                 return nil
             }
-            
+
             return event
         }
-        
+
         globalEscapeMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             _ = self.handleEscapeKeyEvent(event)
         }
     }
-    
+
     private func handleEscapeKeyEvent(_ event: NSEvent) -> Bool {
         guard event.keyCode == 53 else {
             return false
         }
-        
+
         if FloatingRecordingBar.shared.isShowing {
             logger.info("Escape pressed while recording bar is visible")
             Task { @MainActor in
@@ -363,16 +526,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return true
         }
-        
+
         if TTSPlaybackManager.shared.isSpeaking {
             logger.info("Escape pressed while speaking indicator is active")
             TTSPlaybackManager.shared.stop()
             return true
         }
-        
+
         return false
     }
-    
+
     private func startHTTPServerIfNeeded() {
         let config = (try? ConfigLoader.load()) ?? .default
         guard config.server.autoStart else {
@@ -390,5 +553,76 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.error("Failed to start HTTP server: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    private func hasRunningInstance() -> Bool {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+            return false
+        }
+        let currentPID = ProcessInfo.processInfo.processIdentifier
+        return NSWorkspace.shared.runningApplications.contains { application in
+            application.bundleIdentifier == bundleIdentifier
+                && application.processIdentifier != currentPID
+                && application.isTerminated == false
+        }
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier else {
+            return
+        }
+        let userInfo = response.notification.request.content.userInfo
+        await MainActor.run {
+            openNotificationTarget(from: userInfo)
+        }
+    }
+
+    @MainActor
+    private func openNotificationTarget(from userInfo: [AnyHashable: Any]) {
+        if let clickAction = userInfo[TTSNotifyUserInfoKey.clickAction] as? String,
+           clickAction == TTSNotifyClickAction.none.rawValue {
+            return
+        }
+
+        if let openURL = userInfo[TTSNotifyUserInfoKey.openURL] as? String,
+           let url = URL(string: openURL),
+           NSWorkspace.shared.open(url) {
+            return
+        }
+
+        if let bundleID = userInfo[TTSNotifyUserInfoKey.activateBundleID] as? String,
+           activateApplication(bundleIdentifier: bundleID) {
+            return
+        }
+
+        SettingsWindowCoordinator.shared.openSettings(tab: nil)
+    }
+
+    @MainActor
+    private func activateApplication(bundleIdentifier: String) -> Bool {
+        if let application = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleIdentifier }) {
+            return application.activate(options: [.activateAllWindows])
+        }
+
+        guard let applicationURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+            return false
+        }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration)
+        return true
     }
 }

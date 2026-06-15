@@ -79,7 +79,7 @@ struct STTSettingsPage: View {
                     
                     SettingsDivider()
                     
-                    STTStackedControlRow(label: L10n.Settings.sttModeLabel) {
+                    SettingsStackedControlRow(label: L10n.Settings.sttModeLabel) {
                         SettingsDropdown(
                             selection: store.modeBinding,
                             options: [
@@ -91,7 +91,7 @@ struct STTSettingsPage: View {
                         )
                     }
                     
-                    STTStackedControlRow(label: L10n.Settings.sttLanguageLabel) {
+                    SettingsStackedControlRow(label: L10n.Settings.sttLanguageLabel) {
                         SettingsDropdown(
                             selection: store.languageBinding,
                             options: [
@@ -550,21 +550,6 @@ struct STTSettingsPage: View {
     }
 }
 
-
-private struct STTStackedControlRow<Content: View>: View {
-    let label: String
-    @ViewBuilder let content: Content
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-            content
-        }
-    }
-}
-
 private struct SettingsToggleRow<Trailing: View>: View {
     let title: String
     let subtitle: String
@@ -701,7 +686,7 @@ private struct SettingsSecureRevealField: View {
     }
 }
 
-private struct SettingsInlineStatusMessage: View {
+struct SettingsInlineStatusMessage: View {
     enum Tone {
         case neutral
         case info
@@ -1176,7 +1161,7 @@ private struct STTLocalModelCard: View {
     
 }
 
-private struct ModelStateBadge: View {
+struct ModelStateBadge: View {
     let title: String
     let tone: ServerStatusCapsule.Tone
     let icon: String
@@ -1247,7 +1232,7 @@ private struct ModelStateBadge: View {
     }
 }
 
-private struct SettingsMetricPill: View {
+struct SettingsMetricPill: View {
     let title: String
     @Environment(\.colorScheme) private var colorScheme
     
@@ -1270,7 +1255,7 @@ private struct SettingsMetricPill: View {
     }
 }
 
-private struct SettingsFeatureTag: View {
+struct SettingsFeatureTag: View {
     enum Tone {
         case group
         case accent
@@ -1622,4 +1607,3 @@ struct FlowLayout: Layout {
         }
     }
 }
-

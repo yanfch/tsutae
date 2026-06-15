@@ -34,8 +34,8 @@ final class FloatingRecordingBar {
     private let panelHorizontalInset: CGFloat = 12
     private let panelVerticalInset: CGFloat = 10
     private let companionSpacing: CGFloat = 10
-    private let companionHeight: CGFloat = 122
-    private let companionMinWidth: CGFloat = 360
+    private let companionHeight: CGFloat = 142
+    private let companionMinWidth: CGFloat = 384
     
     private var companionVerticalShift: CGFloat {
         companionSpacing + companionHeight
@@ -674,10 +674,15 @@ private struct RecordingBarCompanionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
-                Circle()
-                    .fill(accentMarkColor)
-                    .frame(width: 8, height: 8)
-                    .padding(.top, 6)
+                ZStack {
+                    Circle()
+                        .fill(accentMarkColor.opacity(colorScheme == .dark ? 0.2 : 0.12))
+                    Image(systemName: iconName)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(accentMarkColor)
+                }
+                .frame(width: 22, height: 22)
+                .padding(.top, 1)
                 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(companion.title)
@@ -743,6 +748,17 @@ private struct RecordingBarCompanionCard: View {
             return colorScheme == .dark ? DS.color.warningDark : DS.color.warning
         case .danger:
             return colorScheme == .dark ? DS.color.dangerDark : DS.color.danger
+        }
+    }
+
+    private var iconName: String {
+        switch companion.tone {
+        case .info:
+            return "info"
+        case .warning:
+            return "exclamationmark"
+        case .danger:
+            return "xmark"
         }
     }
     

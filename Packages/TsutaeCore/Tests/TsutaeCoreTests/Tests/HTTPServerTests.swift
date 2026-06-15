@@ -62,6 +62,285 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(vad.count, 1)
         XCTAssertEqual(vad.first?.id, "silero")
     }
+
+    func testTTSVoicesResponseCanFilterByEngine() {
+        let apple = EngineInfo(id: "apple", displayName: "Apple TTS", status: .ready, isLocal: true)
+        let remote = EngineInfo(id: "openai_compatible_remote", displayName: "Remote TTS", status: .ready, isLocal: false)
+        mockController.stubbedTTSVoices = [
+            TTSVoiceEngineInfo(
+                engine: apple,
+                voices: [Voice(id: "com.apple.voice.compact.en-US.Samantha", displayName: "Samantha", language: "en-US")]
+            ),
+            TTSVoiceEngineInfo(engine: remote, voices: [])
+        ]
+
+        let voices = mockController.listTTSVoices(engineID: "apple")
+
+        XCTAssertEqual(voices.count, 1)
+        XCTAssertEqual(voices.first?.engine.id, "apple")
+        XCTAssertEqual(voices.first?.voices.first?.displayName, "Samantha")
+        XCTAssertEqual(mockController.listTTSVoicesCallCount, 1)
+    }
+
+    func testNotifyRequestDecodesDocumentedFields() throws {
+        let json = """
+        {
+          "message": "Build succeeded",
+          "level": "warning",
+          "voice": "alloy",
+          "duration": "long",
+          "interruptible": false,
+          "sound": true,
+          "click_action": "default",
+          "open_url": "codex://thread/current",
+          "activate_bundle_id": "com.openai.codex",
+          "fallback_to_notification": false
+        }
+        """.data(using: .utf8)!
+
+        let request = try JSONDecoder().decode(TTSNotifyRequest.self, from: json)
+
+        XCTAssertEqual(request.message, "Build succeeded")
+        XCTAssertEqual(request.level, .warning)
+        XCTAssertEqual(request.voice, "alloy")
+        XCTAssertEqual(request.duration, .long)
+        XCTAssertEqual(request.interruptible, false)
+        XCTAssertEqual(request.sound, true)
+        XCTAssertEqual(request.clickAction, .default)
+        XCTAssertEqual(request.openURL, "codex://thread/current")
+        XCTAssertEqual(request.activateBundleID, "com.openai.codex")
+        XCTAssertFalse(request.fallbackToNotification)
+        XCTAssertTrue(request.speak)
+        XCTAssertFalse(request.notify)
+    }
+
+    func testNotifyRequestDefaultsToSpeakAndFallbackNotification() throws {
+        let json = #"{"message":"Build succeeded"}"#.data(using: .utf8)!
+
+        let request = try JSONDecoder().decode(TTSNotifyRequest.self, from: json)
+
+        XCTAssertEqual(request.level, .info)
+        XCTAssertEqual(request.duration, .short)
+        XCTAssertTrue(request.fallbackToNotification)
+        XCTAssertTrue(request.speak)
+        XCTAssertFalse(request.notify)
+        XCTAssertNil(request.sound)
+    }
+
+    func testNotifyClickActionSupportsNoOpAliases() throws {
+        let none = try JSONDecoder().decode(
+            TTSNotifyRequest.self,
+            from: Data(#"{"message":"Done","click_action":"none"}"#.utf8)
+        )
+        let blank = try JSONDecoder().decode(
+            TTSNotifyRequest.self,
+            from: Data(#"{"message":"Done","click_action":""}"#.utf8)
+        )
+
+        XCTAssertEqual(none.clickAction, TTSNotifyClickAction.none)
+        XCTAssertEqual(blank.clickAction, TTSNotifyClickAction.none)
+    }
+
+    func testConfigDefaultsNotificationSoundPolicy() throws {
+        let config = try JSONDecoder().decode(Config.self, from: Data("{}".utf8))
+
+        XCTAssertEqual(config.notifications.soundPolicy, .important)
+    }
+
+    func testConfigDefaultsServerHooks() throws {
+        let config = try JSONDecoder().decode(Config.self, from: Data("{}".utf8))
+
+        XCTAssertFalse(config.server.hooks.onTranscribed.enabled)
+        XCTAssertFalse(config.server.hooks.onError.enabled)
+        XCTAssertFalse(config.server.hooks.onSpoken.enabled)
+        XCTAssertEqual(config.server.hooks.onTranscribed.timeoutMs, 5_000)
+        XCTAssertFalse(config.server.requireToken)
+        XCTAssertTrue(config.server.clients.isEmpty)
+    }
+
+    func testServerClientRegistryCreatesTokenAndAuthenticatesClient() throws {
+        let created = ServerClientRegistry.createClient(name: "Codex", scopes: [.notify])
+        let config = Config.ServerConfig(requireToken: true, clients: [created.client])
+
+        let client = try ServerClientRegistry.authenticate(token: created.token, requiredScope: .notify, server: config)
+
+        XCTAssertEqual(client?.name, "Codex")
+        XCTAssertTrue(created.token.hasPrefix("tsutae_"))
+        XCTAssertNotNil(created.token.range(of: #"^tsutae_[0-9a-f]{64}$"#, options: .regularExpression))
+        XCTAssertFalse(created.client.tokenHash.contains(created.token))
+    }
+
+    func testServerClientRegistryRejectsMissingTokenWhenRequired() throws {
+        let created = ServerClientRegistry.createClient(name: "Codex", scopes: [.notify])
+        let config = Config.ServerConfig(requireToken: true, clients: [created.client])
+
+        XCTAssertThrowsError(
+            try ServerClientRegistry.authenticate(token: nil, requiredScope: .notify, server: config)
+        ) { error in
+            XCTAssertTrue(error is ServerClientAuthError)
+        }
+    }
+
+    func testServerClientRegistryRejectsInvalidToken() throws {
+        let created = ServerClientRegistry.createClient(name: "Codex", scopes: [.notify])
+        let config = Config.ServerConfig(requireToken: true, clients: [created.client])
+
+        XCTAssertThrowsError(
+            try ServerClientRegistry.authenticate(token: "tsutae_wrong", requiredScope: .notify, server: config)
+        ) { error in
+            XCTAssertTrue(error is ServerClientAuthError)
+        }
+    }
+
+    func testServerClientRegistryRejectsMissingScope() throws {
+        let created = ServerClientRegistry.createClient(name: "Codex", scopes: [.notify])
+        let config = Config.ServerConfig(requireToken: true, clients: [created.client])
+
+        XCTAssertThrowsError(
+            try ServerClientRegistry.authenticate(token: created.token, requiredScope: .speak, server: config)
+        )
+    }
+
+    func testServerHookPayloadAddsClientIdentity() {
+        let client = Config.ServerClientConfig(
+            id: "client_codex",
+            name: "Codex",
+            tokenHash: "hash"
+        )
+        let payload = ServerHookPayload(event: .onError, source: "notify", error: "failed")
+            .withClient(client)
+
+        XCTAssertEqual(payload.clientId, "client_codex")
+        XCTAssertEqual(payload.clientName, "Codex")
+    }
+
+    func testServerHookRequestUsesJSONAndBearerToken() throws {
+        let endpoint = Config.ServerHookEndpoint(
+            enabled: true,
+            url: "https://example.com/hooks/transcribed",
+            tokenRef: "hook_token",
+            timeoutMs: 2_500
+        )
+        let payload = ServerHookPayload(
+            event: .onTranscribed,
+            text: "hello",
+            source: "test",
+            timestamp: "2026-06-15T00:00:00Z"
+        )
+
+        let request = try ServerHookRunner.makeRequest(endpoint: endpoint, payload: payload, token: "secret-token")
+
+        XCTAssertEqual(request.url?.absoluteString, "https://example.com/hooks/transcribed")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.timeoutInterval, 2.5)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer secret-token")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Tsutae-Hook-Event"), "onTranscribed")
+        XCTAssertNotNil(request.httpBody)
+    }
+
+    func testNotifyControllerResponse() async throws {
+        mockController.stubbedNotifyResponse = TTSNotifyResponse(
+            ok: true,
+            spoken: false,
+            notificationDelivered: true,
+            fallbackUsed: true,
+            level: .error,
+            state: nil
+        )
+
+        let response = try await mockController.notify(
+            TTSNotifyRequest(
+                message: "Needs attention",
+                level: .error,
+                interruptible: false,
+                fallbackToNotification: true
+            )
+        )
+
+        XCTAssertTrue(response.ok)
+        XCTAssertTrue(response.notificationDelivered)
+        XCTAssertEqual(response.level, .error)
+        XCTAssertEqual(mockController.notifyCallCount, 1)
+    }
+
+    func testServerHookControllerResponse() async throws {
+        let response = await mockController.testServerHook(.onError)
+
+        XCTAssertTrue(response.ok)
+        XCTAssertEqual(response.event, .onError)
+        XCTAssertEqual(response.statusCode, 204)
+        XCTAssertEqual(mockController.testServerHookCallCount, 1)
+        XCTAssertEqual(mockController.runServerHookCallCount, 1)
+    }
+
+    func testStateResponseIncludesTTSPlaybackSnapshot() throws {
+        mockController.stubbedTTSPlaybackSnapshot = TTSPlaybackSnapshot(
+            state: .speaking,
+            text: "hello",
+            source: "test",
+            voiceID: "voice-1",
+            rate: 1.1,
+            presentationStyle: .standard,
+            startedAt: Date(timeIntervalSince1970: 1)
+        )
+
+        let response = StateResponse(
+            state: mockController.currentState,
+            transcript: mockController.currentTranscript,
+            spokenText: mockController.currentSpokenText,
+            speakingSource: mockController.currentSpeakingSource,
+            ttsPlayback: mockController.ttsPlaybackSnapshot
+        )
+        let data = try JSONEncoder().encode(response)
+        let decoded = try JSONDecoder().decode(StateResponse.self, from: data)
+
+        XCTAssertEqual(decoded.ttsPlayback.state, .speaking)
+        XCTAssertEqual(decoded.ttsPlayback.voiceID, "voice-1")
+        XCTAssertEqual(decoded.ttsPlayback.presentationStyle, .standard)
+    }
+
+    // MARK: - STT Transcriptions
+
+    func testAudioTranscriptionsUploadParsesMultipartWAV() throws {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let pcm = Data([0, 0, 255, 127, 0, 128])
+        let wav = try WAVEncoder.encode(AudioData(samples: pcm, sampleRate: 16_000, channels: 1))
+        let body = MultipartFormData(boundary: boundary)
+            .addField(name: "model", value: "whisper-1")
+            .addField(name: "language", value: "en")
+            .addField(name: "response_format", value: "verbose_json")
+            .addFile(name: "file", filename: "audio.wav", contentType: "audio/wav", data: wav)
+            .finalize()
+
+        let upload = try STTTranscriptionUpload.parse(
+            body: body,
+            contentType: "multipart/form-data; boundary=\(boundary)"
+        )
+
+        XCTAssertEqual(upload.request.model, "whisper-1")
+        XCTAssertEqual(upload.request.language, "en")
+        XCTAssertEqual(upload.request.responseFormat, "verbose_json")
+        XCTAssertEqual(upload.request.audio.samples, pcm)
+        XCTAssertEqual(upload.request.audio.sampleRate, 16_000)
+        XCTAssertEqual(upload.request.audio.channels, 1)
+        XCTAssertEqual(upload.request.audio.container, .pcm16)
+    }
+
+    func testAudioTranscriptionsUploadRejectsUnsupportedContainer() throws {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let body = MultipartFormData(boundary: boundary)
+            .addField(name: "model", value: "whisper-1")
+            .addFile(name: "file", filename: "audio.m4a", contentType: "audio/mp4", data: Data([1, 2, 3, 4]))
+            .finalize()
+
+        XCTAssertThrowsError(
+            try STTTranscriptionUpload.parse(
+                body: body,
+                contentType: "multipart/form-data; boundary=\(boundary)"
+            )
+        )
+    }
     
     // MARK: - Config
     

@@ -41,6 +41,27 @@ final class AppControllerTests: XCTestCase {
         XCTAssertEqual(config.stt.model, "parakeet-tdt-v3")
         XCTAssertEqual(config.stt.remote.requestStyle, .audioTranscriptions)
     }
+
+    func testServerClientSourceOverridesRequestSource() {
+        let client = Config.ServerClientConfig(
+            id: "client_kanade",
+            name: "Kanade",
+            tokenHash: "hash"
+        )
+
+        XCTAssertEqual(
+            DefaultAppController.resolvedRequestSource("spoofed", client: client, fallback: "Tsutae"),
+            "Kanade"
+        )
+        XCTAssertEqual(
+            DefaultAppController.resolvedRequestSource("legacy", client: nil, fallback: "Tsutae"),
+            "legacy"
+        )
+        XCTAssertEqual(
+            DefaultAppController.resolvedRequestSource("  ", client: nil, fallback: "Tsutae"),
+            "Tsutae"
+        )
+    }
     
     func testSaveAndLoadConfig() throws {
         var config = try controller.loadConfig()

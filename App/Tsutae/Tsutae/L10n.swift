@@ -100,6 +100,16 @@ enum L10n {
         static var transcriptionNetworkMessage: String { tr("companion.transcription_network_message", default: "Check your network connection and try again.") }
         static var transcriptionTimeoutMessage: String { tr("companion.transcription_timeout_message", default: "The transcription service timed out. Try again or check the service status.") }
         static var transcriptionUnreachableMessage: String { tr("companion.transcription_unreachable_message", default: "Cannot reach the transcription service. Check network, endpoint, or model settings.") }
+        static func longRecordingWarningMessage(seconds: Int, modelName: String, limitSeconds: Int) -> String {
+            String(format: tr("companion.long_recording_warning_message", default: "You’ve recorded for about %d seconds. %@ is best kept under %d seconds per clip; stop now and continue in the next round."), seconds, modelName, limitSeconds)
+        }
+        static var longRecordingWarningTitle: String { tr("companion.long_recording_warning_title", default: "Long Recording") }
+        static var longRecordingKeepGoing: String { tr("companion.long_recording_keep_going", default: "Keep Recording") }
+        static var longTranscriptionFailedTitle: String { tr("companion.long_transcription_failed_title", default: "Recording Was Too Long") }
+        static var longTranscriptionFailedMessage: String { tr("companion.long_transcription_failed_message", default: "The local model could not process this clip, and fallback did not return text. Retry the saved audio with remote STT or record shorter segments.") }
+        static var retryRemoteTranscription: String { tr("companion.retry_remote_transcription", default: "Retry Remote") }
+        static var emptyTranscriptTitle: String { tr("companion.empty_transcript_title", default: "No Text Recognized") }
+        static var emptyTranscriptMessage: String { tr("companion.empty_transcript_message", default: "Tsutae recorded audio, but the recognizer returned no text. Try a shorter, clearer recording or switch STT mode.") }
         static var authenticationFailedTitle: String { tr("companion.authentication_failed_title", default: "Authentication Failed") }
         static var authenticationFailedMessage: String { tr("companion.authentication_failed_message", default: "Check your API key or service permissions before trying again.") }
         static var speechRecognitionAccessRequiredTitle: String { tr("companion.speech_recognition_access_required_title", default: "Speech Recognition Required") }
@@ -199,6 +209,8 @@ enum L10n {
         static var labelOutput: String { tr("settings.label_output", default: "Output") }
         static var labelSTT: String { tr("settings.label_stt", default: "STT") }
         static var labelTTS: String { tr("settings.label_tts", default: "TTS") }
+        static var labelVAD: String { tr("settings.label_vad", default: "VAD") }
+        static var labelVersion: String { tr("settings.label_version", default: "Version") }
         static var labelAutoPlay: String { tr("settings.label_auto_play", default: "Auto Play") }
         static var labelInterrupt: String { tr("settings.label_interrupt", default: "Interrupt") }
         static var labelQueue: String { tr("settings.label_queue", default: "Queue") }
@@ -206,6 +218,7 @@ enum L10n {
         static var labelCallbacks: String { tr("settings.label_callbacks", default: "Callbacks") }
         static var labelStreaming: String { tr("settings.label_streaming", default: "Streaming") }
         static var labelStatus: String { tr("settings.label_status", default: "Status") }
+        static var labelLevel: String { tr("settings.label_level", default: "Level") }
         static var labelSample: String { tr("settings.label_sample", default: "Sample") }
         static var labelHooks: String { tr("settings.label_hooks", default: "Hooks") }
         static var labelBaseURL: String { tr("settings.label_base_url", default: "Base URL") }
@@ -228,26 +241,108 @@ enum L10n {
         static var valueSupported: String { tr("settings.value_supported", default: "Supported") }
         static var valueFuture: String { tr("settings.value_future", default: "Future") }
         static var valueStopped: String { tr("settings.value_stopped", default: "Stopped") }
+        static var valueLocal: String { tr("settings.value_local", default: "Local") }
         static var valueLocalhost: String { tr("settings.value_localhost", default: "Localhost") }
         static var valueManaged: String { tr("settings.value_managed", default: "Managed") }
         static var valueConfigurable: String { tr("settings.value_configurable", default: "Configurable") }
         static var valueShortcut: String { tr("settings.value_shortcut", default: "Shortcut") }
         static var ttsVoiceEngineTitle: String { tr("settings.tts_voice_engine_title", default: "Voice Engine") }
         static var ttsVoiceEngineSubtitle: String { tr("settings.tts_voice_engine_subtitle", default: "Prepare synthesis providers and voice routing.") }
+        static var ttsCurrentVoiceTitle: String { tr("settings.tts_current_voice_title", default: "Current Voice") }
+        static var ttsCurrentVoiceSubtitle: String { tr("settings.tts_current_voice_subtitle", default: "Review the active speech route before previewing or exporting.") }
+        static var ttsProviderApple: String { tr("settings.tts_provider_apple", default: "Apple TTS") }
+        static var ttsProviderLocal: String { tr("settings.tts_provider_local", default: "Local Model") }
+        static var ttsProviderRemote: String { tr("settings.tts_provider_remote", default: "Remote API") }
+        static var ttsModeOneShot: String { tr("settings.tts_mode_one_shot", default: "One-shot synthesis") }
+        static var ttsRouteLabel: String { tr("settings.tts_route_label", default: "Route") }
+        static var ttsRouteLocal: String { tr("settings.tts_route_local", default: "Local") }
+        static var ttsRouteRemote: String { tr("settings.tts_route_remote", default: "Remote") }
+        static var ttsRouteApple: String { tr("settings.tts_route_apple", default: "Apple TTS") }
+        static var ttsVoiceAutomatic: String { tr("settings.tts_voice_automatic", default: "Automatic") }
+        static var ttsDefaultVoiceLabel: String { tr("settings.tts_default_voice_label", default: "Default Voice") }
+        static var ttsRateProviderManaged: String { tr("settings.tts_rate_provider_managed", default: "Provider Controlled") }
+        static var ttsLocalModelKokoroAne: String { tr("settings.tts_local_model_kokoro_ane", default: "Kokoro ANE") }
+        static var ttsLocalSectionTitle: String { tr("settings.tts_local_section_title", default: "Local Model") }
+        static var ttsLocalSectionSubtitle: String { tr("settings.tts_local_section_subtitle", default: "Use FluidAudio Kokoro ANE for offline speech when you want a higher-quality local route.") }
+        static var ttsLocalUseTitle: String { tr("settings.tts_local_use_title", default: "Enable Local Model") }
+        static var ttsLocalUseEnabledSubtitle: String { tr("settings.tts_local_use_enabled_subtitle", default: "Local synthesis is available in the current route selector.") }
+        static var ttsLocalUseDisabledSubtitle: String { tr("settings.tts_local_use_disabled_subtitle", default: "Local route is disabled. Existing model and voice choices are kept.") }
+        static var ttsManageModelsValue: String { tr("settings.tts_manage_models_value", default: "Manage models") }
+        static var ttsBackToTTS: String { tr("settings.tts_back_to_tts", default: "Back to TTS") }
+        static var ttsLocalModelsTitle: String { tr("settings.tts_local_models_title", default: "Local TTS Models") }
+        static var ttsLocalModelsSubtitle: String { tr("settings.tts_local_models_subtitle", default: "Warm local voices here before using them. First warmup may download and compile model assets.") }
+        static var ttsModelLibraryTitle: String { tr("settings.tts_model_library_title", default: "Model Library") }
+        static var ttsModelLibrarySubtitle: String { tr("settings.tts_model_library_subtitle", default: "Curated local TTS voices available through FluidAudio.") }
+        static var ttsWarmStatusLabel: String { tr("settings.tts_warm_status_label", default: "Warm Status") }
+        static var ttsModelStatusCached: String { tr("settings.tts_model_status_cached", default: "Cached") }
+        static var ttsModelStatusNotCached: String { tr("settings.tts_model_status_not_cached", default: "Not cached") }
+        static var ttsModelStatusCachedHelp: String { tr("settings.tts_model_status_cached_help", default: "Model files are cached. Preload once to make playback responsive.") }
+        static var ttsModelStatusPreloadNeeded: String { tr("settings.tts_model_status_preload_needed", default: "Preload will download and compile the local voice assets.") }
+        static var ttsModelStatusWarmingLocal: String { tr("settings.tts_model_status_warming_local", default: "Warming local voice…") }
+        static var ttsModelStatusDownloaded: String { tr("settings.tts_model_status_downloaded", default: "Downloaded. Set as default or warm it before playback.") }
+        static var ttsModelStatusDefaultLocalVoice: String { tr("settings.tts_model_status_default_local_voice", default: "Default local voice") }
+        static var ttsModelStatusReady: String { tr("settings.tts_model_status_ready", default: "Ready for low-latency playback") }
+        static var ttsModelStatusActiveReady: String { tr("settings.tts_model_status_active_ready", default: "Active local voice is ready") }
+        static var ttsModelBadgeCached: String { tr("settings.tts_model_badge_cached", default: "Cached") }
+        static var ttsModelActionPreload: String { tr("settings.tts_model_action_preload", default: "Preload") }
+        static var ttsModelActionPreloadSelected: String { tr("settings.tts_model_action_preload_selected", default: "Preload Selected") }
+        static var ttsModelActionWarming: String { tr("settings.tts_model_action_warming", default: "Warming…") }
+        static var ttsModelActionUse: String { tr("settings.tts_model_action_use", default: "Use") }
+        static var ttsModelActionTest: String { tr("settings.tts_model_action_test", default: "Test") }
+        static var ttsModelSummaryKokoroMandarin: String { tr("settings.tts_model_summary_kokoro_mandarin", default: "Offline Mandarin voice using FluidAudio Kokoro ANE.") }
+        static var ttsModelSummaryKokoroEnglish: String { tr("settings.tts_model_summary_kokoro_english", default: "Offline English voice using FluidAudio Kokoro ANE.") }
+        static var ttsModelTagMandarin: String { tr("settings.tts_model_tag_mandarin", default: "Mandarin") }
+        static var ttsModelTagEnglish: String { tr("settings.tts_model_tag_english", default: "English") }
+        static var ttsModelTagOffline: String { tr("settings.tts_model_tag_offline", default: "Offline") }
+        static var ttsModelTagANE: String { tr("settings.tts_model_tag_ane", default: "ANE") }
+        static func ttsCachedCount(_ count: Int) -> String {
+            String(format: tr("settings.tts_cached_count_format", default: "%d cached"), count)
+        }
+        static func ttsDownloadedCount(_ count: Int) -> String {
+            String(format: tr("settings.tts_downloaded_count_format", default: "%d downloaded"), count)
+        }
+        static func ttsCuratedModelsCount(_ count: Int) -> String {
+            String(format: tr("settings.tts_curated_models_count_format", default: "%d curated models"), count)
+        }
+        static func ttsWarmingModel(_ modelName: String) -> String {
+            String(format: tr("settings.tts_warming_model_format", default: "Warming %@…"), modelName)
+        }
+        static var ttsRemoteSectionTitle: String { tr("settings.tts_remote_section_title", default: "Remote API") }
+        static var ttsRemoteSectionSubtitle: String { tr("settings.tts_remote_section_subtitle", default: "Turn on high-quality remote speech and configure the provider only when needed.") }
+        static var ttsRemoteUseTitle: String { tr("settings.tts_remote_use_title", default: "Enable Remote API") }
+        static var ttsRemoteUseEnabledSubtitle: String { tr("settings.tts_remote_use_enabled_subtitle", default: "Remote synthesis is available after the endpoint is configured.") }
+        static var ttsRemoteUseDisabledSubtitle: String { tr("settings.tts_remote_use_disabled_subtitle", default: "Remote route is disabled. Model, voice, and endpoint settings are kept.") }
+        static var ttsRemoteProtocolAudioSpeech: String { tr("settings.tts_remote_protocol_audio_speech", default: "OpenAI Audio Speech") }
+        static var ttsRemoteVoicePlaceholder: String { tr("settings.tts_remote_voice_placeholder", default: "Enter voice id (optional)") }
+        static var ttsRemoteInstructionsLabel: String { tr("settings.tts_remote_instructions_label", default: "Instructions") }
+        static var ttsRemoteInstructionsPlaceholder: String { tr("settings.tts_remote_instructions_placeholder", default: "Describe tone, emotion, pace, or scene") }
+        static var ttsRemoteFeedbackReady: String { tr("settings.tts_remote_feedback_ready", default: "Test passed") }
+        static var ttsRemoteSaveButton: String { tr("settings.tts_remote_save_button", default: "Save Remote") }
+        static var ttsRemoteSavedStatus: String { tr("settings.tts_remote_saved_status", default: "Saved configuration") }
         static var ttsPlaybackTitle: String { tr("settings.tts_playback_title", default: "Playback") }
-        static var ttsPlaybackSubtitle: String { tr("settings.tts_playback_subtitle", default: "Control how spoken results should behave.") }
-        static var ttsPresentationStyleLabel: String { tr("settings.tts_presentation_style_label", default: "Presentation") }
-        static var ttsStyleStandard: String { tr("settings.tts_style_standard", default: "Standard") }
-        static var ttsStyleMinimal: String { tr("settings.tts_style_minimal", default: "Minimal") }
-        static var ttsInterruptCurrentLabel: String { tr("settings.tts_interrupt_current_label", default: "Interrupt") }
+        static var ttsPlaybackSubtitle: String { tr("settings.tts_playback_subtitle", default: "Control interruption and queueing. Capsule style follows General.") }
+        static var ttsInterruptCurrentLabel: String { tr("settings.tts_interrupt_current_label", default: "Replace Current") }
+        static var ttsQueueWhenBusyLabel: String { tr("settings.tts_queue_when_busy_label", default: "Queue When Busy") }
+        static var ttsQueueDisabledHelp: String { tr("settings.tts_queue_disabled_help", default: "Queueing only applies when Replace Current is off.") }
+        static var ttsQueueWhenBusyHelp: String { tr("settings.tts_queue_when_busy_help", default: "When speech is already playing, queue the next request instead of returning busy.") }
         static var ttsPreviewTitle: String { tr("settings.tts_preview_title", default: "Preview") }
         static var ttsPreviewSubtitle: String { tr("settings.tts_preview_subtitle", default: "This space will host quick synthesis testing.") }
         static var ttsPreviewTextLabel: String { tr("settings.tts_preview_text_label", default: "Preview Text") }
         static var ttsPreviewPlaceholder: String { tr("settings.tts_preview_placeholder", default: "Type a short phrase") }
         static var ttsPreviewPlayButton: String { tr("settings.tts_preview_play_button", default: "Play Preview") }
         static var ttsPreviewStopButton: String { tr("settings.tts_preview_stop_button", default: "Stop") }
+        static var ttsPreviewExportButton: String { tr("settings.tts_preview_export_button", default: "Export WAV") }
+        static var ttsPreviewCancelExportButton: String { tr("settings.tts_preview_cancel_export_button", default: "Cancel") }
+        static var ttsPreviewExportingButton: String { tr("settings.tts_preview_exporting_button", default: "Exporting…") }
+        static var ttsPreviewSynthesizingStatus: String { tr("settings.tts_preview_synthesizing_status", default: "Synthesizing audio…") }
+        static var ttsPreviewChooseLocationStatus: String { tr("settings.tts_preview_choose_location_status", default: "Choose a save location…") }
+        static var ttsPreviewExportedStatus: String { tr("settings.tts_preview_exported_status", default: "Exported") }
         static var ttsStatusIdle: String { tr("settings.tts_status_idle", default: "Idle") }
         static var ttsStatusSpeaking: String { tr("settings.tts_status_speaking", default: "Speaking") }
+        static var ttsFallbackTitle: String { tr("settings.tts_fallback_title", default: "System Fallback") }
+        static var ttsFallbackSubtitle: String { tr("settings.tts_fallback_subtitle", default: "Keep Apple TTS available as a low-priority safety net.") }
+        static var ttsFallbackAppleTitle: String { tr("settings.tts_fallback_apple_title", default: "Apple TTS Fallback") }
+        static var ttsFallbackAppleSubtitle: String { tr("settings.tts_fallback_apple_subtitle", default: "Use the system voice if the remote route cannot speak.") }
         static var ttsIntegrationTitle: String { tr("settings.tts_integration_title", default: "Integration") }
         static var ttsIntegrationSubtitle: String { tr("settings.tts_integration_subtitle", default: "TTS will also be available through the local server layer.") }
         static var developerTTSProbeTitle: String { tr("settings.developer_tts_probe_title", default: "Speak Probe") }
@@ -255,16 +350,138 @@ enum L10n {
         static var developerTTSProbePlaceholder: String { tr("settings.developer_tts_probe_placeholder", default: "Enter debug speech text") }
         static var developerTTSProbePlay: String { tr("settings.developer_tts_probe_play", default: "Speak") }
         static var developerTTSProbeStop: String { tr("settings.developer_tts_probe_stop", default: "Stop") }
+        static var developerNotifyProbeTitle: String { tr("settings.developer_notify_probe_title", default: "Notify Probe") }
+        static var developerNotifyProbeSubtitle: String { tr("settings.developer_notify_probe_subtitle", default: "Trigger the /v1/notify path from the settings window.") }
+        static var developerNotifyProbePlaceholder: String { tr("settings.developer_notify_probe_placeholder", default: "Enter notification test text") }
+        static var developerNotifyProbeSpeakButton: String { tr("settings.developer_notify_probe_speak_button", default: "Speak") }
+        static var developerNotifyProbeNotificationButton: String { tr("settings.developer_notify_probe_notification_button", default: "Notify") }
+        static var developerNotifyProbeBothButton: String { tr("settings.developer_notify_probe_both_button", default: "Both") }
+        static var notifyLevelInfo: String { tr("settings.notify_level_info", default: "Info") }
+        static var notifyLevelWarning: String { tr("settings.notify_level_warning", default: "Warning") }
+        static var notifyLevelError: String { tr("settings.notify_level_error", default: "Error") }
+        static var notifySending: String { tr("settings.notify_sending", default: "Sending") }
+        static var notifyQueued: String { tr("settings.notify_queued", default: "Queued") }
+        static var notifySentSpeak: String { tr("settings.notify_sent_speak", default: "Speak triggered") }
+        static var notifySentNotification: String { tr("settings.notify_sent_notification", default: "Notification sent") }
+        static var notifyFallbackNotificationSent: String { tr("settings.notify_fallback_notification_sent", default: "Fallback notification sent") }
+        static var notifySentBoth: String { tr("settings.notify_sent_both", default: "Speak and notification sent") }
+        static func notifyFailed(_ message: String) -> String {
+            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.isEmpty == false else { return tr("settings.notify_failed", default: "Failed") }
+            return String(format: tr("settings.notify_failed_format", default: "Failed: %@"), trimmed)
+        }
         static var serverRuntimeTitle: String { tr("settings.server_runtime_title", default: "Server Runtime") }
         static var serverRuntimeSubtitle: String { tr("settings.server_runtime_subtitle", default: "Expose Tsutae capabilities to local tools and external clients.") }
+        static var serverRuntimeConfigureButton: String { tr("settings.server_runtime_configure_button", default: "Configure") }
+        static var serverRuntimeCollapseButton: String { tr("settings.server_runtime_collapse_button", default: "Collapse") }
         static var serverCapabilitiesTitle: String { tr("settings.server_capabilities_title", default: "Capabilities") }
         static var serverCapabilitiesSubtitle: String { tr("settings.server_capabilities_subtitle", default: "Choose what the local server can provide.") }
         static var serverAccessTitle: String { tr("settings.server_access_title", default: "Access") }
         static var serverAccessSubtitle: String { tr("settings.server_access_subtitle", default: "Authentication, endpoints, and request control.") }
+        static var serverAPIEndpointsTitle: String { tr("settings.server_api_endpoints_title", default: "API Endpoints") }
+        static var serverAPIEndpointsSubtitle: String { tr("settings.server_api_endpoints_subtitle", default: "Copy local HTTP endpoints for scripts and tools.") }
         static var serverHooksTitle: String { tr("settings.server_hooks_title", default: "Hooks") }
-        static var serverHooksSubtitle: String { tr("settings.server_hooks_subtitle", default: "Useful for callback-based integrations and automation.") }
+        static var serverHooksSubtitle: String { tr("settings.server_hooks_subtitle", default: "Callbacks Tsutae sends to this app after STT, TTS, or error events.") }
+        static var serverHooksConfigured: String { tr("settings.server_hooks_configured", default: "Configured") }
+        static var serverHookEventLabel: String { tr("settings.server_hook_event_label", default: "Event") }
+        static var serverHookEnabledLabel: String { tr("settings.server_hook_enabled_label", default: "Enabled") }
+        static var serverHookURLLabel: String { tr("settings.server_hook_url_label", default: "Webhook URL") }
+        static var serverHookTokenRefLabel: String { tr("settings.server_hook_token_ref_label", default: "Token Ref") }
+        static var serverHookTimeoutLabel: String { tr("settings.server_hook_timeout_label", default: "Timeout") }
+        static var serverHookTargetLabel: String { tr("settings.server_hook_target_label", default: "Client") }
+        static var serverHookDefaultTarget: String { tr("settings.server_hook_default_target", default: "Default") }
+        static var serverHookURLPlaceholder: String { tr("settings.server_hook_url_placeholder", default: "https://example.com/webhook") }
+        static var serverHookTokenRefPlaceholder: String { tr("settings.server_hook_token_ref_placeholder", default: "Optional Keychain token ref") }
+        static var serverHookSaveButton: String { tr("settings.server_hook_save_button", default: "Save Hook") }
+        static var serverHookTestButton: String { tr("settings.server_hook_test_button", default: "Test Hook") }
+        static var serverHookSavedStatus: String { tr("settings.server_hook_saved_status", default: "Hook saved") }
+        static var serverHookTestingStatus: String { tr("settings.server_hook_testing_status", default: "Testing hook…") }
+        static var serverHookTestPassedStatus: String { tr("settings.server_hook_test_passed_status", default: "Hook test passed") }
+        static var serverHookInvalidURL: String { tr("settings.server_hook_invalid_url", default: "Webhook URL is required when the hook is enabled.") }
+        static var serverHookInvalidTimeout: String { tr("settings.server_hook_invalid_timeout", default: "Timeout must be between 1000 and 120000 ms.") }
+        static func serverHooksConfiguredCount(_ count: Int) -> String {
+            String(format: tr("settings.server_hooks_configured_count_format", default: "%d enabled"), count)
+        }
+        static func serverHookTestFailedStatus(_ message: String) -> String {
+            String(format: tr("settings.server_hook_test_failed_status_format", default: "Hook test failed: %@"), message)
+        }
+        static var serverClientsTitle: String { tr("settings.server_clients_title", default: "Applications") }
+        static var serverClientsSubtitle: String { tr("settings.server_clients_subtitle", default: "Issue tokens for external apps and route hooks by client.") }
+        static var serverClientDetailSubtitle: String { tr("settings.server_client_detail_subtitle", default: "Manage this app token, permissions, and callbacks.") }
+        static var serverClientOpenButton: String { tr("settings.server_client_open_button", default: "Open") }
+        static var serverClientBackButton: String { tr("settings.server_client_back_button", default: "Applications") }
+        static var serverClientPermissionsTitle: String { tr("settings.server_client_permissions_title", default: "API Access") }
+        static var serverClientPermissionsSubtitle: String { tr("settings.server_client_permissions_subtitle", default: "Choose which HTTP APIs this app token can call. Hooks are configured below.") }
+        static var serverClientAdvancedScopesTitle: String { tr("settings.server_client_advanced_scopes_title", default: "Advanced / Planned Access") }
+        static var serverClientShowAdvancedScopes: String { tr("settings.server_client_show_advanced_scopes", default: "Show Advanced") }
+        static var serverClientHideAdvancedScopes: String { tr("settings.server_client_hide_advanced_scopes", default: "Hide Advanced") }
+        static var serverClientHooksNote: String { tr("settings.server_client_hooks_note", default: "Hooks are callbacks from Tsutae to this app. They are not API-call permissions.") }
+        static var serverClientSelectLabel: String { tr("settings.server_client_select_label", default: "Selected") }
+        static var serverClientNewNameLabel: String { tr("settings.server_client_new_name_label", default: "New Client") }
+        static var serverClientNamePlaceholder: String { tr("settings.server_client_name_placeholder", default: "Codex, Raycast, or workflow name") }
+        static var serverClientCreateButton: String { tr("settings.server_client_create_button", default: "Create Client") }
+        static var serverClientRegenerateTokenButton: String { tr("settings.server_client_regenerate_token_button", default: "Regenerate Token") }
+        static var serverClientDisableButton: String { tr("settings.server_client_disable_button", default: "Disable") }
+        static var serverClientEnableButton: String { tr("settings.server_client_enable_button", default: "Enable") }
+        static var serverClientTokenLabel: String { tr("settings.server_client_token_label", default: "Token") }
+        static var serverClientCopyTokenButton: String { tr("settings.server_client_copy_token_button", default: "Copy Token") }
+        static var serverClientTokenGeneratedStatus: String { tr("settings.server_client_token_generated_status", default: "Token generated. Store it now; it will only be shown once.") }
+        static var serverClientTokenCopiedStatus: String { tr("settings.server_client_token_copied_status", default: "Token copied") }
+        static var serverClientCreatedStatus: String { tr("settings.server_client_created_status", default: "Client created") }
+        static var serverClientRegeneratedStatus: String { tr("settings.server_client_regenerated_status", default: "Token regenerated") }
+        static var serverClientEmptyName: String { tr("settings.server_client_empty_name", default: "Client name is required.") }
+        static var serverRequireTokenTitle: String { tr("settings.server_require_token_title", default: "Require Token") }
+        static var serverRequireTokenSubtitle: String { tr("settings.server_require_token_subtitle", default: "Reject local API calls that do not include a known bearer token.") }
+        static var serverClientStatusEnabled: String { tr("settings.server_client_status_enabled", default: "Enabled") }
+        static var serverClientStatusDisabled: String { tr("settings.server_client_status_disabled", default: "Disabled") }
+        static func serverClientCount(_ count: Int) -> String {
+            String(format: tr("settings.server_client_count_format", default: "%d clients"), count)
+        }
+        static func serverClientScopeCount(_ count: Int) -> String {
+            String(format: tr("settings.server_client_scope_count_format", default: "%d scopes"), count)
+        }
         static var serverHealthTitle: String { tr("settings.server_health_title", default: "Health") }
         static var serverHealthSubtitle: String { tr("settings.server_health_subtitle", default: "Operational visibility for the service layer.") }
+        static var serverAutostartTitle: String { tr("settings.server_autostart_title", default: "Start Local Server") }
+        static var serverAutostartSubtitle: String { tr("settings.server_autostart_subtitle", default: "Launch the HTTP server automatically when Tsutae starts.") }
+        static var serverBindLabel: String { tr("settings.server_bind_label", default: "Bind") }
+        static var serverPortLabel: String { tr("settings.server_port_label", default: "Port") }
+        static var serverSaveButton: String { tr("settings.server_save_button", default: "Save") }
+        static var serverCheckButton: String { tr("settings.server_check_button", default: "Check") }
+        static var serverCopyButton: String { tr("settings.server_copy_button", default: "Copy") }
+        static var serverSavedStatus: String { tr("settings.server_saved_status", default: "Saved") }
+        static var serverSavedRestartRequired: String { tr("settings.server_saved_restart_required", default: "Saved. Restart Tsutae to apply server lifecycle changes.") }
+        static var serverNotificationsTitle: String { tr("settings.server_notifications_title", default: "Notifications") }
+        static var serverNotificationSoundLabel: String { tr("settings.server_notification_sound_label", default: "Sound") }
+        static var serverNotificationSoundHelp: String { tr("settings.server_notification_sound_help", default: "API requests can override this default by sending sound true or false.") }
+        static var serverNotificationSoundImportant: String { tr("settings.server_notification_sound_important", default: "Important") }
+        static var serverNotificationSoundAll: String { tr("settings.server_notification_sound_all", default: "All") }
+        static var serverNotificationSoundSilent: String { tr("settings.server_notification_sound_silent", default: "Silent") }
+        static var serverInvalidBind: String { tr("settings.server_invalid_bind", default: "Bind address is required.") }
+        static var serverInvalidPort: String { tr("settings.server_invalid_port", default: "Port must be between 1 and 65535.") }
+        static var serverStatusOnline: String { tr("settings.server_status_online", default: "Online") }
+        static var serverStatusOffline: String { tr("settings.server_status_offline", default: "Offline") }
+        static var serverStatusChecking: String { tr("settings.server_status_checking", default: "Checking") }
+        static var serverStatusUnknown: String { tr("settings.server_status_unknown", default: "Unknown") }
+        static var serverHealthCheckingStatus: String { tr("settings.server_health_checking_status", default: "Checking local server health…") }
+        static func serverHealthOnlineStatus(_ status: String) -> String {
+            String(format: tr("settings.server_health_online_status_format", default: "Health check passed. Server responded: %@."), status)
+        }
+        static func serverHealthOfflineStatus(_ message: String) -> String {
+            String(format: tr("settings.server_health_offline_status_format", default: "Health check failed: %@"), message)
+        }
+        static var serverCapabilityAvailable: String { tr("settings.server_capability_available", default: "Available") }
+        static var serverEndpointHealth: String { tr("settings.server_endpoint_health", default: "Health") }
+        static var serverEndpointState: String { tr("settings.server_endpoint_state", default: "State") }
+        static var serverEndpointSTT: String { tr("settings.server_endpoint_stt", default: "STT Transcriptions") }
+        static var serverEndpointTTSAudio: String { tr("settings.server_endpoint_tts_audio", default: "TTS Audio") }
+        static var serverEndpointTTSVoices: String { tr("settings.server_endpoint_tts_voices", default: "TTS Voices") }
+        static var serverEndpointSpeak: String { tr("settings.server_endpoint_speak", default: "Speak") }
+        static var serverEndpointNotify: String { tr("settings.server_endpoint_notify", default: "Notify") }
+        static var serverEndpointStop: String { tr("settings.server_endpoint_stop", default: "Stop") }
+        static func serverCopiedEndpoint(_ name: String) -> String {
+            String(format: tr("settings.server_copied_endpoint_format", default: "Copied %@ endpoint"), name)
+        }
         static var permissionsMicrophoneTitle: String { tr("settings.permissions_microphone_title", default: "Microphone") }
         static var permissionsMicrophoneSubtitle: String { tr("settings.permissions_microphone_subtitle", default: "Required for recording") }
         static var permissionsSpeechRecognitionTitle: String { tr("settings.permissions_speech_recognition_title", default: "Speech Recognition") }

@@ -120,6 +120,31 @@ public final class EngineManager: @unchecked Sendable {
             )
         }.sorted { $0.id < $1.id }
     }
+
+    /// 列出 TTS 引擎音色
+    public func listTTSVoices(engineID: String? = nil) -> [TTSVoiceEngineInfo] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let engines: [TTSEngine]
+        if let engineID = engineID?.trimmingCharacters(in: .whitespacesAndNewlines), engineID.isEmpty == false {
+            engines = ttsEngines[engineID].map { [$0] } ?? []
+        } else {
+            engines = Array(ttsEngines.values)
+        }
+
+        return engines.map { engine in
+            TTSVoiceEngineInfo(
+                engine: EngineInfo(
+                    id: engine.id,
+                    displayName: engine.displayName,
+                    status: engine.status,
+                    isLocal: engine.isLocal
+                ),
+                voices: engine.voices
+            )
+        }.sorted { $0.engine.id < $1.engine.id }
+    }
     
     /// 获取 TTS 引擎，支持 fallback
     public func getTTS(primary: String, fallback: String?) throws -> TTSEngine {

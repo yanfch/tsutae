@@ -40,7 +40,11 @@ final class TsutaeCoreTests: XCTestCase {
         XCTAssertEqual(config.stt.fallbackEngine, "apple_speech")
         XCTAssertEqual(config.stt.remote.requestStyle, .audioTranscriptions)
         XCTAssertEqual(config.tts.engine, "apple")
+        XCTAssertTrue(config.tts.local.enabled)
         XCTAssertEqual(config.tts.rate, 1.0)
+        XCTAssertTrue(config.tts.interruptCurrent)
+        XCTAssertTrue(config.tts.queueWhenBusy)
+        XCTAssertNil(config.tts.fallbackEngine)
         XCTAssertEqual(config.vad.engine, "energy")
         XCTAssertEqual(config.vad.pauseDurationMs, 800)
         XCTAssertTrue(config.vad.allowBargeIn)
@@ -70,6 +74,102 @@ final class TsutaeCoreTests: XCTestCase {
         let config3 = try ConfigLoader.load()
         print("Loaded port: \(config3.server.port)")
         XCTAssertEqual(config3.server.port, 9999, "Reloaded config should have port 9999")
+    }
+
+    func testTTSFallbackEngineIsExplicitOptIn() throws {
+        let decoder = YAMLDecoder()
+
+        let missingFallback = try decoder.decode(Config.TTSConfig.self, from: "engine: openai_compatible_remote_tts\n")
+        XCTAssertNil(missingFallback.fallbackEngine)
+        XCTAssertTrue(missingFallback.queueWhenBusy)
+
+        let disabledFallback = try decoder.decode(Config.TTSConfig.self, from: "fallbackEngine: null\n")
+        XCTAssertNil(disabledFallback.fallbackEngine)
+
+        let appleFallback = try decoder.decode(Config.TTSConfig.self, from: "fallbackEngine: apple\n")
+        XCTAssertEqual(appleFallback.fallbackEngine, "apple")
+    }
+
+    func testTTSRemoteVoiceIsStoredSeparately() throws {
+        let decoder = YAMLDecoder()
+        let config = try decoder.decode(
+            Config.TTSConfig.self,
+            from: """
+            engine: openai_compatible_remote_tts
+            voice: kokoro_ane_mandarin
+            remote:
+              enabled: true
+              model: gpt-4o-mini-tts
+              voice: alloy
+            """
+        )
+
+        XCTAssertEqual(config.voice, "kokoro_ane_mandarin")
+        XCTAssertEqual(config.remote.voice, "alloy")
+    }
+
+    func testTTSPlaybackSnapshotEncodesQueueLength() throws {
+        let snapshot = TTSPlaybackSnapshot(
+            state: .speaking,
+            text: "hello",
+            source: "test",
+            voiceID: "voice",
+            rate: 1.0,
+            presentationStyle: .minimal,
+            startedAt: nil,
+            queueLength: 2
+        )
+
+        let data = try JSONEncoder().encode(snapshot)
+        let decoded = try JSONDecoder().decode(TTSPlaybackSnapshot.self, from: data)
+
+        XCTAssertEqual(decoded.queueLength, 2)
+        XCTAssertEqual(decoded.presentationStyle, .minimal)
+    }
+
+    func testFluidAudioLocalTTSVoiceResolution() {
+        XCTAssertEqual(
+            FluidAudioLocalTTSVoice.resolve(voiceID: nil, text: "你好，构建完成。"),
+            .mandarin
+        )
+        XCTAssertEqual(
+            FluidAudioLocalTTSVoice.resolve(voiceID: nil, text: "Build finished."),
+            .english
+        )
+        XCTAssertEqual(
+            FluidAudioLocalTTSVoice.resolve(voiceID: "zf_001", text: "Build finished."),
+            .mandarin
+        )
+        XCTAssertNil(FluidAudioLocalTTSVoice.resolve(voiceID: "unknown", text: "Build finished."))
+    }
+
+    func testLocalSTTRecordingGuidance() {
+        let qwen = LocalSTTModelCatalog.recordingGuidance(for: "qwen3-asr-int8")
+        XCTAssertEqual(qwen.warningSeconds, 30)
+        XCTAssertEqual(qwen.recommendedMaximumSeconds, 35)
+        XCTAssertFalse(qwen.isEstimated)
+
+        let senseVoice = LocalSTTModelCatalog.recordingGuidance(for: "sensevoice-small")
+        XCTAssertEqual(senseVoice.warningSeconds, 25)
+        XCTAssertEqual(senseVoice.recommendedMaximumSeconds, 30)
+        XCTAssertFalse(senseVoice.isEstimated)
+
+        let unknown = LocalSTTModelCatalog.recordingGuidance(for: "unknown")
+        XCTAssertEqual(unknown.warningSeconds, 30)
+        XCTAssertTrue(unknown.isEstimated)
+    }
+
+    func testSTTTranscriptionErrorClassifiesLongAudioLimits() {
+        let error = STTTranscriptionError.allRoutesFailed(
+            primaryEngine: "fluidaudio_local",
+            primaryError: "Generation failed: Prompt length 622 exceeds cache capacity 512",
+            fallbackEngine: "apple_speech",
+            fallbackError: "STT engine returned an empty transcript. engine=apple_speech"
+        )
+        XCTAssertTrue(error.isLikelyLongAudioLimit)
+
+        let empty = STTTranscriptionError.emptyTranscript(engine: "apple_speech")
+        XCTAssertFalse(empty.isLikelyLongAudioLimit)
     }
     
     // MARK: - Paths Tests
