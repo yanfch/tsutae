@@ -344,6 +344,157 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(mockController.speakCallCount, 0)
     }
 
+    func testStateRouteRequiresStateScopeAndReturnsPlaybackSnapshot() async throws {
+        let created = configureRequiredTokenClient(scopes: [.state])
+        mockController.stubbedState = .speaking
+        mockController.stubbedTranscript = "latest transcript"
+        mockController.stubbedSpokenText = "spoken"
+        mockController.stubbedSpeakingSource = "Codex"
+        mockController.stubbedTTSPlaybackSnapshot = TTSPlaybackSnapshot(
+            state: .preparing,
+            text: "spoken",
+            source: "Codex",
+            voiceID: "kokoro_ane_mandarin",
+            rate: 1.0,
+            presentationStyle: .standard,
+            startedAt: nil,
+            queueLength: 1
+        )
+
+        try await testServer { client in
+            try await client.execute(
+                uri: "/v1/state",
+                method: .get,
+                headers: Self.authHeaders(token: created.token)
+            ) { response in
+                XCTAssertEqual(response.status, .ok)
+                let decoded = try Self.decodeJSON(StateResponse.self, from: response)
+                XCTAssertEqual(decoded.state, .speaking)
+                XCTAssertEqual(decoded.transcript, "latest transcript")
+                XCTAssertEqual(decoded.ttsPlayback.state, .preparing)
+                XCTAssertEqual(decoded.ttsPlayback.queueLength, 1)
+            }
+        }
+    }
+
+    func testNotifyRouteAuthenticatesAndPassesClientToController() async throws {
+        let created = configureRequiredTokenClient(scopes: [.notify])
+        mockController.stubbedNotifyResponse = TTSNotifyResponse(
+            ok: true,
+            spoken: true,
+            notificationDelivered: false,
+            fallbackUsed: false,
+            level: .info,
+            state: .queued,
+            queueLength: 1
+        )
+
+        try await testServer { client in
+            try await client.execute(
+                uri: "/v1/notify",
+                method: .post,
+                headers: Self.jsonHeaders(token: created.token),
+                body: Self.jsonBody(#"{"message":"Done","title":"Codex"}"#)
+            ) { response in
+                XCTAssertEqual(response.status, .ok)
+                let decoded = try Self.decodeJSON(TTSNotifyResponse.self, from: response)
+                XCTAssertTrue(decoded.ok)
+                XCTAssertEqual(decoded.state, .queued)
+                XCTAssertEqual(decoded.queueLength, 1)
+            }
+        }
+
+        XCTAssertEqual(mockController.notifyCallCount, 1)
+        XCTAssertEqual(mockController.lastClient?.id, created.client.id)
+    }
+
+    func testNotifyRouteRejectsClientWithoutNotifyScope() async throws {
+        let created = configureRequiredTokenClient(scopes: [.speak])
+
+        try await testServer { client in
+            try await client.execute(
+                uri: "/v1/notify",
+                method: .post,
+                headers: Self.jsonHeaders(token: created.token),
+                body: Self.jsonBody(#"{"message":"Done"}"#)
+            ) { response in
+                XCTAssertEqual(response.status, .forbidden)
+            }
+        }
+
+        XCTAssertEqual(mockController.notifyCallCount, 0)
+    }
+
+    func testStopRouteRequiresStopScopeAndCallsController() async throws {
+        let created = configureRequiredTokenClient(scopes: [.stop])
+
+        try await testServer { client in
+            try await client.execute(
+                uri: "/v1/stop",
+                method: .post,
+                headers: Self.authHeaders(token: created.token)
+            ) { response in
+                XCTAssertEqual(response.status, .ok)
+                let decoded = try Self.decodeJSON(TTSStopResponse.self, from: response)
+                XCTAssertTrue(decoded.ok)
+                XCTAssertEqual(decoded.state, .stopping)
+            }
+        }
+
+        XCTAssertEqual(mockController.stopSpeakingCallCount, 1)
+    }
+
+    func testAudioTranscriptionsRouteAuthenticatesAndPassesClientToController() async throws {
+        let created = configureRequiredTokenClient(scopes: [.transcribe])
+        mockController.stubbedTranscription = Transcript(
+            text: "route transcript",
+            language: "en",
+            durationMs: 1_500,
+            confidence: nil,
+            isFinal: true
+        )
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let pcm = Data([0, 0, 255, 127])
+        let wav = try WAVEncoder.encode(AudioData(samples: pcm, sampleRate: 16_000, channels: 1))
+        let body = MultipartFormData(boundary: boundary)
+            .addField(name: "model", value: "whisper-1")
+            .addFile(name: "file", filename: "audio.wav", contentType: "audio/wav", data: wav)
+            .finalize()
+
+        try await testServer { client in
+            try await client.execute(
+                uri: "/v1/audio/transcriptions",
+                method: .post,
+                headers: Self.multipartHeaders(boundary: boundary, token: created.token),
+                body: ByteBuffer(data: body)
+            ) { response in
+                XCTAssertEqual(response.status, .ok)
+                let decoded = try Self.decodeJSON(STTTranscriptionResponse.self, from: response)
+                XCTAssertEqual(decoded.text, "route transcript")
+                XCTAssertEqual(decoded.language, "en")
+                XCTAssertEqual(decoded.duration, 1.5)
+            }
+        }
+
+        XCTAssertEqual(mockController.transcribeCallCount, 1)
+        XCTAssertEqual(mockController.lastClient?.id, created.client.id)
+    }
+
+    func testAudioSpeechRouteRejectsClientWithoutAudioSpeechScope() async throws {
+        let created = configureRequiredTokenClient(scopes: [.speak])
+
+        try await testServer { client in
+            try await client.execute(
+                uri: "/v1/audio/speech",
+                method: .post,
+                headers: Self.jsonHeaders(token: created.token),
+                body: Self.jsonBody(#"{"input":"hello","voice":"alloy"}"#)
+            ) { response in
+                XCTAssertEqual(response.status, .forbidden)
+            }
+        }
+    }
+
     func testServerHookRequestUsesJSONAndBearerToken() throws {
         let endpoint = Config.ServerHookEndpoint(
             enabled: true,
@@ -593,6 +744,20 @@ final class HTTPServerTests: XCTestCase {
         try await app.test(.router, test)
     }
 
+    private func configureRequiredTokenClient(scopes: [Config.ServerClientScope]) -> ServerClientCreationResult {
+        let created = ServerClientRegistry.createClient(name: "Codex", scopes: scopes)
+        mockController.stubbedConfig.server = Config.ServerConfig(requireToken: true, clients: [created.client])
+        return created
+    }
+
+    private static func authHeaders(token: String? = nil) -> HTTPFields {
+        var headers = HTTPFields()
+        if let token {
+            headers[.authorization] = "Bearer \(token)"
+        }
+        return headers
+    }
+
     private static func jsonHeaders(token: String? = nil) -> HTTPFields {
         var headers: HTTPFields = [.contentType: "application/json"]
         if let token {
@@ -601,7 +766,21 @@ final class HTTPServerTests: XCTestCase {
         return headers
     }
 
+    private static func multipartHeaders(boundary: String, token: String? = nil) -> HTTPFields {
+        var headers: HTTPFields = [.contentType: "multipart/form-data; boundary=\(boundary)"]
+        if let token {
+            headers[.authorization] = "Bearer \(token)"
+        }
+        return headers
+    }
+
     private static func jsonBody(_ string: String) -> ByteBuffer {
         ByteBuffer(data: Data(string.utf8))
+    }
+
+    private static func decodeJSON<T: Decodable>(_ type: T.Type, from response: TestResponse) throws -> T {
+        var body = response.body
+        let data = body.readData(length: body.readableBytes) ?? Data()
+        return try JSONDecoder().decode(T.self, from: data)
     }
 }

@@ -214,23 +214,68 @@ public enum LocalTTSModelCatalog {
     }
 
     public static func isCached(id: String) -> Bool {
-        guard let descriptor = descriptor(id: id),
-              let voice = FluidAudioLocalTTSVoice.resolve(voiceID: descriptor.voiceID, text: "") else {
+        guard let descriptor = descriptor(id: id) else {
             return false
         }
         do {
-            let modelsDirectory = try TtsCacheDirectory.ensure()
-                .appendingPathComponent(KokoroAneResourceDownloader.modelsSubdirectory)
-            let repoDir = modelsDirectory.appendingPathComponent(voice.variant.repo.folderName)
-            let required: Set<String> = voice == .mandarin
-                ? ModelNames.KokoroAne.requiredModelsZh
-                : ModelNames.KokoroAne.requiredModels
-            return required.allSatisfy { name in
-                FileManager.default.fileExists(atPath: repoDir.appendingPathComponent(name).path)
+            let layout = try cacheLayout(for: descriptor)
+            return layout.required.allSatisfy { name in
+                FileManager.default.fileExists(atPath: layout.repoDir.appendingPathComponent(name).path)
             }
         } catch {
             return false
         }
+    }
+
+    public static func download(id: String, progressHandler: (@Sendable (Double) -> Void)? = nil) async throws {
+        guard let descriptor = descriptor(id: id) else {
+            throw FluidAudioLocalTTSError.unsupportedVoice(id)
+        }
+        let layout = try cacheLayout(for: descriptor)
+        let wrappedProgress: DownloadUtils.ProgressHandler?
+        if let progressHandler {
+            wrappedProgress = { progress in
+                progressHandler(max(0, min(progress.fractionCompleted, 1)))
+            }
+        } else {
+            wrappedProgress = nil
+        }
+
+        try await KokoroAneResourceDownloader.ensureModels(
+            variant: layout.voice.variant,
+            directory: layout.modelsDirectory,
+            progressHandler: wrappedProgress
+        )
+        progressHandler?(1)
+    }
+
+    public static func delete(id: String) async throws {
+        guard let descriptor = descriptor(id: id) else {
+            throw FluidAudioLocalTTSError.unsupportedVoice(id)
+        }
+        let layout = try cacheLayout(for: descriptor)
+        await FluidAudioLocalTTSEngine.shared.unloadAndWait()
+        if FileManager.default.fileExists(atPath: layout.repoDir.path) {
+            try FileManager.default.removeItem(at: layout.repoDir)
+        }
+    }
+
+    private static func cacheLayout(for descriptor: LocalTTSModelDescriptor) throws -> (
+        modelsDirectory: URL,
+        repoDir: URL,
+        voice: FluidAudioLocalTTSVoice,
+        required: Set<String>
+    ) {
+        guard let voice = FluidAudioLocalTTSVoice.resolve(voiceID: descriptor.voiceID, text: "") else {
+            throw FluidAudioLocalTTSError.unsupportedVoice(descriptor.voiceID)
+        }
+        let modelsDirectory = try TtsCacheDirectory.ensure()
+            .appendingPathComponent(KokoroAneResourceDownloader.modelsSubdirectory)
+        let repoDir = modelsDirectory.appendingPathComponent(voice.variant.repo.folderName)
+        let required: Set<String> = voice == .mandarin
+            ? ModelNames.KokoroAne.requiredModelsZh
+            : ModelNames.KokoroAne.requiredModels
+        return (modelsDirectory, repoDir, voice, required)
     }
 }
 
@@ -269,9 +314,19 @@ public final class FluidAudioLocalTTSEngine: TTSEngine, @unchecked Sendable {
     }
 
     @discardableResult
-    public func prewarm(voiceID: String?) async throws -> String {
+    public func prewarm(
+        voiceID: String?,
+        progressHandler: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> String {
         let voice = FluidAudioLocalTTSVoice.resolve(voiceID: voiceID, text: "") ?? .mandarin
+        if let descriptor = LocalTTSModelCatalog.descriptor(voiceID: voice.rawValue) {
+            try await LocalTTSModelCatalog.download(id: descriptor.id) { progress in
+                progressHandler?(min(progress * 0.85, 0.85))
+            }
+        }
+        progressHandler?(0.9)
         try await runtime.prewarm(voice: voice)
+        progressHandler?(1)
         return voice.rawValue
     }
 
@@ -288,6 +343,10 @@ public final class FluidAudioLocalTTSEngine: TTSEngine, @unchecked Sendable {
         Task {
             await runtime.unload()
         }
+    }
+
+    public func unloadAndWait() async {
+        await runtime.unload()
     }
 }
 

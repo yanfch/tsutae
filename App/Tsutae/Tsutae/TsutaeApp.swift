@@ -162,11 +162,13 @@ final class LocalTTSResidencyCoordinator: ObservableObject {
     static let shared = LocalTTSResidencyCoordinator()
 
     @Published private(set) var warmingVoiceID: String?
+    @Published private(set) var warmProgressByVoiceID: [String: Double] = [:]
     @Published private(set) var readyVoiceIDs: Set<String> = []
     @Published private(set) var lastError: String?
 
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "LocalTTSResidency")
     private var warmTask: Task<Void, Never>?
+    private var warmRequestID = UUID()
 
     private init() {}
 
@@ -178,7 +180,9 @@ final class LocalTTSResidencyCoordinator: ObservableObject {
 
     func requestApply(config: Config) {
         guard config.tts.engine == FluidAudioLocalTTSEngine.shared.id, config.tts.local.enabled else {
+            warmTask?.cancel()
             warmingVoiceID = nil
+            warmProgressByVoiceID.removeAll()
             lastError = nil
             return
         }
@@ -186,49 +190,55 @@ final class LocalTTSResidencyCoordinator: ObservableObject {
     }
 
     func requestWarm(voiceID: String?) {
-        let resolvedVoiceID = LocalTTSModelCatalog.descriptor(voiceID: voiceID)?.voiceID
-            ?? LocalTTSModelCatalog.all.first?.voiceID
-        guard let resolvedVoiceID else { return }
+        guard let descriptor = LocalTTSModelCatalog.descriptor(voiceID: voiceID) ?? LocalTTSModelCatalog.all.first else {
+            return
+        }
+        let resolvedVoiceID = descriptor.voiceID
 
         warmTask?.cancel()
+        let requestID = UUID()
+        warmRequestID = requestID
         warmingVoiceID = resolvedVoiceID
+        warmProgressByVoiceID = [resolvedVoiceID: LocalTTSModelCatalog.isCached(id: descriptor.id) ? 0.9 : 0]
         lastError = nil
 
         warmTask = Task(priority: .utility) { [weak self] in
             do {
-                let warmedVoiceID = try await FluidAudioLocalTTSEngine.shared.prewarm(voiceID: resolvedVoiceID)
+                let warmedVoiceID = try await FluidAudioLocalTTSEngine.shared.prewarm(voiceID: resolvedVoiceID) { progress in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.warmRequestID == requestID, self.warmingVoiceID == resolvedVoiceID else {
+                            return
+                        }
+                        let clamped = max(0, min(progress, 1))
+                        let current = self.warmProgressByVoiceID[resolvedVoiceID] ?? 0
+                        self.warmProgressByVoiceID[resolvedVoiceID] = max(current, clamped)
+                    }
+                }
                 await MainActor.run {
                     guard let self else { return }
+                    guard self.warmRequestID == requestID else { return }
                     self.readyVoiceIDs.insert(warmedVoiceID)
-                    if self.warmingVoiceID == warmedVoiceID {
-                        self.warmingVoiceID = nil
-                    }
+                    self.clearWarmState(voiceID: warmedVoiceID, requestID: requestID)
                     self.logger.info("Applied local TTS residency policy. voice=\(warmedVoiceID, privacy: .public)")
                 }
             } catch is CancellationError {
                 await MainActor.run {
                     guard let self else { return }
-                    if self.warmingVoiceID == resolvedVoiceID {
-                        self.warmingVoiceID = nil
-                    }
+                    self.clearWarmState(voiceID: resolvedVoiceID, requestID: requestID)
                     self.logger.debug("Cancelled local TTS warmup. voice=\(resolvedVoiceID, privacy: .public)")
                 }
             } catch {
                 if Self.isCancellationLike(error) {
                     await MainActor.run {
                         guard let self else { return }
-                        if self.warmingVoiceID == resolvedVoiceID {
-                            self.warmingVoiceID = nil
-                        }
+                        self.clearWarmState(voiceID: resolvedVoiceID, requestID: requestID)
                         self.logger.debug("Cancelled local TTS warmup. voice=\(resolvedVoiceID, privacy: .public)")
                     }
                     return
                 }
                 await MainActor.run {
                     guard let self else { return }
-                    if self.warmingVoiceID == resolvedVoiceID {
-                        self.warmingVoiceID = nil
-                    }
+                    self.clearWarmState(voiceID: resolvedVoiceID, requestID: requestID)
                     self.lastError = error.localizedDescription
                     self.logger.error("Failed to apply local TTS residency policy: \(error.localizedDescription, privacy: .public)")
                 }
@@ -250,9 +260,22 @@ final class LocalTTSResidencyCoordinator: ObservableObject {
                 }
             }
             await MainActor.run {
-                self?.readyVoiceIDs = ready
+                guard let self else { return }
+                self.readyVoiceIDs = ready
+                if let warmingVoiceID = self.warmingVoiceID, ready.contains(warmingVoiceID) {
+                    self.warmingVoiceID = nil
+                    self.warmProgressByVoiceID[warmingVoiceID] = nil
+                }
             }
         }
+    }
+
+    private func clearWarmState(voiceID: String, requestID: UUID) {
+        guard warmRequestID == requestID else { return }
+        if warmingVoiceID == voiceID {
+            warmingVoiceID = nil
+        }
+        warmProgressByVoiceID[voiceID] = nil
     }
 }
 

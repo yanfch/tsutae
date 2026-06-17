@@ -23,9 +23,39 @@ private struct TTSExportPayload: Equatable {
     let data: Data
 }
 
+private struct TTSLocalModelDialog: Identifiable {
+    enum Kind {
+        case confirmDelete(LocalTTSModelDescriptor)
+        case error(String)
+    }
+
+    let id = UUID()
+    let kind: Kind
+}
+
 private enum TTSSettingsScreen {
     case overview
     case localModels
+}
+
+private enum TTSLocalModelFilter: String, CaseIterable {
+    case all
+    case downloaded
+    case mandarin
+    case english
+
+    var title: String {
+        switch self {
+        case .all:
+            return L10n.Settings.sttFilterAllModels
+        case .downloaded:
+            return L10n.Settings.sttFilterDownloaded
+        case .mandarin:
+            return L10n.Settings.ttsModelTagMandarin
+        case .english:
+            return L10n.Settings.ttsModelTagEnglish
+        }
+    }
 }
 
 struct TTSSettingsPage: View {
@@ -47,6 +77,9 @@ struct TTSSettingsPage: View {
     @State private var exportPayload: TTSExportPayload?
     @State private var exportTask: Task<Void, Never>?
     @State private var screen: TTSSettingsScreen = .overview
+    @State private var localModelSearchQuery = ""
+    @State private var localModelFilter: TTSLocalModelFilter = .all
+    @State private var localModelDialog: TTSLocalModelDialog?
 
     private let remoteEngineID = OpenAICompatibleRemoteTTSEngine.shared.id
     private let localEngineID = FluidAudioLocalTTSEngine.shared.id
@@ -66,6 +99,27 @@ struct TTSSettingsPage: View {
         .onChange(of: remoteDraftSignature) { _, _ in
             if config.tts.remote.enabled {
                 remoteCheckState = .edited
+            }
+        }
+        .alert(item: $localModelDialog) { dialog in
+            switch dialog.kind {
+            case .confirmDelete(let descriptor):
+                return Alert(
+                    title: Text(deleteAlertTitle(for: descriptor)),
+                    message: Text(deleteAlertMessage(for: descriptor)),
+                    primaryButton: .destructive(Text(deleteAlertPrimaryActionTitle(for: descriptor))) {
+                        Task {
+                            await confirmDeleteLocalModel(descriptor)
+                        }
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .error(let message):
+                return Alert(
+                    title: Text(L10n.Settings.sttDeleteErrorTitle),
+                    message: Text(message),
+                    dismissButton: .default(Text(L10n.Common.dismiss))
+                )
             }
         }
         .background(
@@ -384,6 +438,17 @@ struct TTSSettingsPage: View {
                     ])
 
                     HStack(spacing: 10) {
+                        SettingsSearchField(text: $localModelSearchQuery)
+
+                        SettingsDropdown(
+                            selection: localModelFilterBinding,
+                            options: TTSLocalModelFilter.allCases.map { filter in
+                                .init(id: filter.rawValue, title: filter.title)
+                            },
+                            tone: .soft,
+                            width: SettingsTokens.Width.modelFilterDropdown
+                        )
+
                         Button(L10n.Settings.sttRefreshButton) {
                             localTTSResidency.refreshReadyState()
                         }
@@ -403,16 +468,20 @@ struct TTSSettingsPage: View {
 
             SettingsDashboardCard(title: L10n.Settings.ttsModelLibraryTitle, subtitle: L10n.Settings.ttsModelLibrarySubtitle) {
                 SettingsTwoColumnGrid {
-                    ForEach(LocalTTSModelCatalog.all) { descriptor in
+                    ForEach(filteredLocalModels) { descriptor in
                         TTSLocalModelCard(
                             descriptor: descriptor,
                             isSelected: selectedLocalModel.voiceID == descriptor.voiceID,
                             isCached: LocalTTSModelCatalog.isCached(id: descriptor.id),
                             isReady: localTTSResidency.readyVoiceIDs.contains(descriptor.voiceID),
                             isWarming: localTTSResidency.warmingVoiceID == descriptor.voiceID,
+                            downloadProgress: localTTSResidency.warmProgressByVoiceID[descriptor.voiceID],
                             onUse: { selectLocalModel(descriptor) },
                             onPreload: { localTTSResidency.requestWarm(voiceID: descriptor.voiceID) },
-                            onTest: { testLocalModel(descriptor) }
+                            onTest: { testLocalModel(descriptor) },
+                            onDelete: canDeleteLocalModel(descriptor) ? {
+                                promptDeleteLocalModel(descriptor)
+                            } : nil
                         )
                     }
                 }
@@ -521,6 +590,59 @@ struct TTSSettingsPage: View {
 
     private var cachedLocalModelCount: Int {
         LocalTTSModelCatalog.all.filter { LocalTTSModelCatalog.isCached(id: $0.id) }.count
+    }
+
+    private var localModelFilterBinding: Binding<String> {
+        Binding(
+            get: { localModelFilter.rawValue },
+            set: { value in
+                guard let filter = TTSLocalModelFilter(rawValue: value) else { return }
+                localModelFilter = filter
+            }
+        )
+    }
+
+    private var filteredLocalModels: [LocalTTSModelDescriptor] {
+        LocalTTSModelCatalog.all.filter { descriptor in
+            matchesLocalModelFilter(descriptor) && matchesLocalModelSearch(descriptor)
+        }
+    }
+
+    private func matchesLocalModelFilter(_ descriptor: LocalTTSModelDescriptor) -> Bool {
+        switch localModelFilter {
+        case .all:
+            return true
+        case .downloaded:
+            return LocalTTSModelCatalog.isCached(id: descriptor.id)
+        case .mandarin:
+            return descriptor.language.lowercased().hasPrefix("zh")
+        case .english:
+            return descriptor.language.lowercased().hasPrefix("en")
+        }
+    }
+
+    private func matchesLocalModelSearch(_ descriptor: LocalTTSModelDescriptor) -> Bool {
+        let query = localModelSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard query.isEmpty == false else { return true }
+        return localModelSearchFields(for: descriptor).contains { field in
+            field.lowercased().contains(query)
+        }
+    }
+
+    private func localModelSearchFields(for descriptor: LocalTTSModelDescriptor) -> [String] {
+        [
+            descriptor.id,
+            descriptor.voiceID,
+            descriptor.displayName,
+            descriptor.runtime,
+            descriptor.language,
+            descriptor.summary,
+            descriptor.size,
+            descriptor.memory,
+            descriptor.tags.joined(separator: " "),
+            localizedLocalModelSummary(for: descriptor),
+            descriptor.tags.map(localizedLocalModelTag).joined(separator: " ")
+        ]
     }
 
     private func localModelStateTitle(for descriptor: LocalTTSModelDescriptor) -> String {
@@ -852,6 +974,32 @@ struct TTSSettingsPage: View {
         return "\(prefix) · \(voice.upstreamVoiceID) · \(voice.language)"
     }
 
+    private func localizedLocalModelSummary(for descriptor: LocalTTSModelDescriptor) -> String {
+        switch descriptor.id {
+        case "kokoro-ane-mandarin":
+            return L10n.Settings.ttsModelSummaryKokoroMandarin
+        case "kokoro-ane-english":
+            return L10n.Settings.ttsModelSummaryKokoroEnglish
+        default:
+            return descriptor.summary
+        }
+    }
+
+    private func localizedLocalModelTag(_ tag: String) -> String {
+        switch tag {
+        case "Mandarin":
+            return L10n.Settings.ttsModelTagMandarin
+        case "English":
+            return L10n.Settings.ttsModelTagEnglish
+        case "Offline":
+            return L10n.Settings.ttsModelTagOffline
+        case "ANE":
+            return L10n.Settings.ttsModelTagANE
+        default:
+            return tag
+        }
+    }
+
     private func selectLocalModel(_ descriptor: LocalTTSModelDescriptor) {
         updateConfig {
             $0.tts.voice = descriptor.voiceID
@@ -890,6 +1038,61 @@ struct TTSSettingsPage: View {
                 }
             }
         }
+    }
+
+    private func canDeleteLocalModel(_ descriptor: LocalTTSModelDescriptor) -> Bool {
+        LocalTTSModelCatalog.isCached(id: descriptor.id)
+            && localTTSResidency.warmingVoiceID != descriptor.voiceID
+    }
+
+    private func promptDeleteLocalModel(_ descriptor: LocalTTSModelDescriptor) {
+        localModelDialog = .init(kind: .confirmDelete(descriptor))
+    }
+
+    private func confirmDeleteLocalModel(_ descriptor: LocalTTSModelDescriptor) async {
+        do {
+            try await LocalTTSModelCatalog.delete(id: descriptor.id)
+            await MainActor.run {
+                if selectedLocalModel.id == descriptor.id,
+                   let replacement = replacementLocalModel(afterDeleting: descriptor.id) {
+                    updateConfig {
+                        $0.tts.voice = replacement.voiceID
+                    }
+                }
+                localTTSResidency.refreshReadyState()
+                playbackSnapshot = TTSPlaybackManager.shared.snapshot()
+            }
+        } catch {
+            await MainActor.run {
+                localModelDialog = .init(kind: .error(error.localizedDescription))
+            }
+        }
+    }
+
+    private func replacementLocalModel(afterDeleting modelID: String) -> LocalTTSModelDescriptor? {
+        if let cached = LocalTTSModelCatalog.all.first(where: { $0.id != modelID && LocalTTSModelCatalog.isCached(id: $0.id) }) {
+            return cached
+        }
+        if let recommended = LocalTTSModelCatalog.all.first(where: { $0.id != modelID && $0.isRecommended }) {
+            return recommended
+        }
+        return LocalTTSModelCatalog.all.first(where: { $0.id != modelID })
+    }
+
+    private func deleteAlertTitle(for descriptor: LocalTTSModelDescriptor) -> String {
+        selectedLocalModel.id == descriptor.id ? L10n.Settings.sttDeleteCurrentTitle : L10n.Settings.sttDeleteDownloadedTitle
+    }
+
+    private func deleteAlertPrimaryActionTitle(for descriptor: LocalTTSModelDescriptor) -> String {
+        selectedLocalModel.id == descriptor.id ? L10n.Settings.sttDeleteAndSwitchAction : L10n.Settings.sttDeleteAction
+    }
+
+    private func deleteAlertMessage(for descriptor: LocalTTSModelDescriptor) -> String {
+        if selectedLocalModel.id == descriptor.id {
+            let replacement = replacementLocalModel(afterDeleting: descriptor.id)?.displayName ?? L10n.Settings.ttsVoiceAutomatic
+            return L10n.Settings.sttDeleteCurrentMessage(modelName: descriptor.displayName, replacementName: replacement)
+        }
+        return L10n.Settings.sttDeleteDownloadedMessage(descriptor.displayName)
     }
 
     private func saveRemoteSettings() {
@@ -1075,9 +1278,11 @@ private struct TTSLocalModelCard: View {
     let isCached: Bool
     let isReady: Bool
     let isWarming: Bool
+    let downloadProgress: Double?
     let onUse: () -> Void
     let onPreload: () -> Void
     let onTest: () -> Void
+    let onDelete: (() -> Void)?
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -1120,17 +1325,23 @@ private struct TTSLocalModelCard: View {
             Divider()
                 .overlay(colorScheme == .dark ? Color.white.opacity(0.08) : DS.color.borderSoft.opacity(0.56))
 
-            HStack(alignment: .center, spacing: 12) {
-                Text(statusText)
-                    .font(DS.font.mono(size: 11, weight: .regular))
-                    .foregroundStyle(colorScheme == .dark ? DS.color.mutedDark : DS.color.muted)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
-                    .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-                Spacer(minLength: 12)
-                actionView
-                    .fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 12) {
+                    Text(statusText)
+                        .font(DS.font.mono(size: 11, weight: .regular))
+                        .foregroundStyle(colorScheme == .dark ? DS.color.mutedDark : DS.color.muted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
+                        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+                    Spacer(minLength: 12)
+                    actionView
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+
+                if case .downloading = presentationState {
+                    STTInlineDownloadProgress(progress: downloadProgress ?? 0)
+                }
             }
         }
         .padding(SettingsTokens.Padding.localModelCard)
@@ -1269,15 +1480,35 @@ private struct TTSLocalModelCard: View {
     @ViewBuilder
     private var actionView: some View {
         if isSelected && (presentationState == .downloaded || presentationState == .ready) {
-            Button(L10n.Settings.ttsModelActionTest, action: onTest)
-                .buttonStyle(SettingsAccentButtonStyle())
-                .controlSize(.small)
-                .frame(minWidth: 116)
+            HStack(spacing: 8) {
+                if let onDelete {
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(SettingsDangerIconButtonStyle())
+                    .controlSize(.small)
+                }
+
+                Button(L10n.Settings.ttsModelActionTest, action: onTest)
+                    .buttonStyle(SettingsAccentButtonStyle())
+                    .controlSize(.small)
+                    .frame(minWidth: 116)
+            }
         } else if presentationState == .downloaded || presentationState == .ready {
-            Button(L10n.Settings.sttModelActionSetDefault, action: onUse)
-                .buttonStyle(SettingsAccentButtonStyle())
-                .controlSize(.small)
-                .frame(minWidth: 116)
+            HStack(spacing: 8) {
+                if let onDelete {
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(SettingsDangerIconButtonStyle())
+                    .controlSize(.small)
+                }
+
+                Button(L10n.Settings.sttModelActionSetDefault, action: onUse)
+                    .buttonStyle(SettingsAccentButtonStyle())
+                    .controlSize(.small)
+                    .frame(minWidth: 116)
+            }
         } else if isWarming {
             Button(isCached ? L10n.Settings.ttsModelActionWarming : L10n.Settings.sttModelActionDownloading, action: onPreload)
                 .buttonStyle(.bordered)

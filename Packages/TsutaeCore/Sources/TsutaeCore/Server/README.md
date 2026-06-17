@@ -1,20 +1,46 @@
 # Server
 
-Hummingbird HTTP server exposing tsutae's API. See workspace doc `01-voicebar.md` (对外 API) and `07-integration.md` for action framework details.
+Hummingbird HTTP server exposing Tsutae's local automation API.
 
-## What goes here
+## Current Surface
 
-- `Server.swift` — Hummingbird app builder; wires routes; binds `127.0.0.1:1338`.
-- `Routes/Audio.swift` — OpenAI-compatible: `POST /v1/audio/transcriptions`, `POST /v1/audio/speech`.
-- `Routes/Edge.swift` — Sidecar-specific: `POST /v1/listen` (SSE), `POST /v1/speak`, `POST /v1/stop`, `GET /v1/state`, `WS /v1/events`.
-- `Routes/Notify.swift` — Inbound notifications: `POST /v1/notify` (other tools push messages here).
-- `Routes/Health.swift` — `GET /health` (status of each engine + uptime).
-- `Routes/Config.swift` — `GET /v1/config`, `PUT /v1/config`, `POST /v1/diagnose`, `POST /v1/recipes/:name/test`.
-- `ServerHooks.swift` — outbound `onTranscribed` / `onError` webhook delivery for local automation.
+- `GET /health` — process and engine health.
+- `GET /v1/state` — app state, latest transcript, and TTS playback snapshot.
+- `GET /v1/config` — read current config. Requires the advanced `configRead` scope when token auth is enabled.
+- `GET /v1/models` — list STT/TTS/VAD engines.
+- `GET /v1/tts/voices?engine=...` — list TTS voices, optionally filtered by engine.
+- `POST /v1/audio/transcriptions` — OpenAI-compatible multipart STT upload.
+- `POST /v1/audio/speech` — OpenAI-compatible TTS audio synthesis. Returns binary audio.
+- `POST /v1/speak` — enqueue or interrupt spoken playback.
+- `POST /v1/notify` — deliver spoken and/or system notifications.
+- `POST /v1/stop` — stop current TTS playback.
+- `GET /v1/recipes`, `GET /v1/recipes/:name` — read saved recipes.
+- `GET /v1/secrets` — list secret reference names only. Secret values are never returned.
+- `POST /v1/listen` — reserved for future live-listening control; currently returns not implemented.
+
+## Auth
+
+Token auth is optional by config. When `server.requireToken` is enabled, callers must send:
+
+```http
+Authorization: Bearer tsutae_<token>
+```
+
+Tokens are issued per server client. Each client has scopes such as `state`, `models`, `transcribe`, `audioSpeech`, `speak`, `notify`, and `stop`. Advanced scopes include `listen`, `recipes`, `secrets`, and `configRead`.
+
+## Hooks
+
+`ServerHooks.swift` sends outbound callbacks for:
+
+- `onTranscribed`
+- `onSpoken`
+- `onError`
+
+Hooks can be configured globally or per server client. Requests authenticated with a client token use that client's hook configuration instead of falling back to global hooks.
 
 ## Constraints
 
-- Bind localhost only by default.
-- All non-streaming responses are JSON.
-- `/v1/listen` SSE protocol matches workspace doc `01-voicebar.md` §协议示例.
-- W3C `traceparent` header propagation: extract from incoming requests, inject on outgoing recipe POST calls.
+- Bind localhost by default.
+- JSON is used for all non-binary responses.
+- `/v1/audio/speech` returns binary audio.
+- `/v1/listen` is still planned and intentionally not implemented.

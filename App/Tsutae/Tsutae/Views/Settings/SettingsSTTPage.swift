@@ -794,30 +794,6 @@ private struct SettingsSwitchToggleStyle: ToggleStyle {
     }
 }
 
-private struct SettingsSearchField: View {
-    @Binding var text: String
-    @Environment(\.colorScheme) private var colorScheme
-    
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(L10n.Settings.sttSearchModelsPlaceholder, text: $text)
-                .textFieldStyle(.plain)
-        }
-        .padding(.horizontal, SettingsTokens.Padding.sidebarHorizontal)
-        .frame(width: SettingsTokens.Size.searchFieldWidth, height: SettingsTokens.Size.controlHeight)
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(colorScheme == .dark ? DS.color.surface2Dark.opacity(0.92) : Color.white.opacity(0.88))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .strokeBorder(colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.45) : DS.color.borderSoft.opacity(0.52), lineWidth: 1)
-                )
-        )
-    }
-}
-
 private struct STTLocalModelCard: View {
     let descriptor: LocalSTTModelDescriptor
     let state: STTDownloadState
@@ -1325,111 +1301,6 @@ struct SettingsFeatureTag: View {
     }
 }
 
-private struct STTInlineDownloadProgress: View {
-    let progress: Double
-    @State private var displayedProgress: Double = 0
-    
-    var body: some View {
-        HStack(spacing: 10) {
-            STTModelDownloadProgressBar(progress: displayedProgress)
-                .frame(height: 8)
-            STTAnimatedDownloadProgressLabel(progress: displayedProgress)
-                .font(DS.font.mono(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 42, alignment: .trailing)
-        }
-        .onAppear {
-            displayedProgress = clamped(progress)
-        }
-        .onChange(of: progress) { _, newValue in
-            let target = clamped(newValue)
-            let delta = abs(target - displayedProgress)
-            let duration = min(max(0.22, delta * 2.8), 1.8)
-            withAnimation(.linear(duration: duration)) {
-                displayedProgress = target
-            }
-        }
-    }
-    
-    private func clamped(_ value: Double) -> Double {
-        max(0, min(value, 1))
-    }
-}
-
-private struct STTAnimatedDownloadProgressLabel: View, Animatable {
-    var progress: Double
-    
-    var animatableData: Double {
-        get { progress }
-        set { progress = newValue }
-    }
-    
-    var body: some View {
-        Text(progressLabel)
-    }
-    
-    private var progressLabel: String {
-        let clamped = max(0, min(progress, 1))
-        if clamped == 0 {
-            return "0%"
-        }
-        if clamped < 0.01 {
-            return "<1%"
-        }
-        if clamped < 0.1 {
-            return String(format: "%.1f%%", clamped * 100)
-        }
-        return "\(Int(clamped * 100))%"
-    }
-}
-
-private struct STTModelDownloadProgressBar: View {
-    let progress: Double
-    @Environment(\.colorScheme) private var colorScheme
-    
-    var body: some View {
-        GeometryReader { geometry in
-            let clamped = max(0, min(progress, 1))
-            let track = Capsule()
-            
-            ZStack(alignment: .leading) {
-                track
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.08) : DS.color.surface3.opacity(0.7))
-                
-                if clamped <= 0 {
-                    TimelineView(.animation) { context in
-                        let segmentWidth = max(geometry.size.width * 0.34, 28)
-                        let cycle = 1.05
-                        let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
-                        let travel = geometry.size.width + segmentWidth
-                        let offset = -segmentWidth + travel * phase
-                        
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        DS.color.accent.opacity(0.08),
-                                        DS.color.accent.opacity(0.9),
-                                        DS.color.accent.opacity(0.08),
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: segmentWidth)
-                            .offset(x: offset)
-                    }
-                } else {
-                    Capsule()
-                        .fill(DS.color.accent)
-                        .frame(width: max(geometry.size.height, geometry.size.width * clamped))
-                }
-            }
-            .clipShape(track)
-        }
-    }
-}
-
 struct SettingsAccentButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -1442,47 +1313,6 @@ struct SettingsAccentButtonStyle: ButtonStyle {
             .background(
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .fill(DS.color.accent.opacity(configuration.isPressed ? 0.85 : 1))
-            )
-    }
-}
-
-private struct SettingsDangerButtonStyle: ButtonStyle {
-    @Environment(\.colorScheme) private var colorScheme
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(colorScheme == .dark ? DS.color.warningDark : DS.color.warning)
-            .padding(.horizontal, SettingsTokens.Padding.buttonHorizontal)
-            .frame(height: SettingsTokens.Size.buttonHeight)
-            .background(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill((colorScheme == .dark ? DS.color.warningDark : DS.color.warning).opacity(configuration.isPressed ? 0.18 : 0.12))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .strokeBorder((colorScheme == .dark ? DS.color.warningDark : DS.color.warning).opacity(0.28), lineWidth: 1)
-            )
-    }
-}
-
-private struct SettingsDangerIconButtonStyle: ButtonStyle {
-    @Environment(\.colorScheme) private var colorScheme
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(colorScheme == .dark ? DS.color.warningDark : DS.color.warning)
-            .frame(width: SettingsTokens.Size.iconButton, height: SettingsTokens.Size.iconButton)
-            .background(
-                Circle()
-                    .fill((colorScheme == .dark ? DS.color.warningDark : DS.color.warning).opacity(configuration.isPressed ? 0.18 : 0.1))
-            )
-            .overlay(
-                Circle()
-                    .strokeBorder((colorScheme == .dark ? DS.color.warningDark : DS.color.warning).opacity(0.24), lineWidth: 1)
             )
     }
 }
