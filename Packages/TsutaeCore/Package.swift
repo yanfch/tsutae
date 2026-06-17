@@ -26,7 +26,10 @@ let package = Package(
 		),
 		.testTarget(
 			name: "TsutaeCoreTests",
-			dependencies: ["TsutaeCore"]
+			dependencies: [
+				"TsutaeCore",
+				.product(name: "HummingbirdTesting", package: "hummingbird"),
+			]
 		),
 	]
 )

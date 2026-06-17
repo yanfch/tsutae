@@ -59,6 +59,19 @@ public struct ServerHookPayload: Codable, Sendable {
         )
     }
 
+    public static func spoken(text: String, source: String, response: TTSSpeakResponse) -> ServerHookPayload {
+        ServerHookPayload(
+            event: .onSpoken,
+            text: text,
+            source: source,
+            metadata: [
+                "state": response.state.rawValue,
+                "queueLength": String(response.queueLength),
+                "presentationStyle": response.presentationStyle.rawValue
+            ]
+        )
+    }
+
     public static func test(event: Config.ServerHookEvent) -> ServerHookPayload {
         switch event {
         case .onTranscribed:
@@ -86,10 +99,11 @@ public struct ServerHookPayload: Codable, Sendable {
 
     public func withClient(_ client: Config.ServerClientConfig?) -> ServerHookPayload {
         guard let client else { return self }
+        let clientSource = client.name.trimmingCharacters(in: .whitespacesAndNewlines)
         return ServerHookPayload(
             event: event,
             text: text,
-            source: source ?? client.name,
+            source: clientSource.isEmpty ? client.id : clientSource,
             clientId: client.id,
             clientName: client.name,
             language: language,

@@ -1,4 +1,7 @@
 import XCTest
+import Hummingbird
+import HummingbirdTesting
+import NIOCore
 @testable import TsutaeCore
 
 /// HTTPServer 测试
@@ -210,8 +213,135 @@ final class HTTPServerTests: XCTestCase {
         let payload = ServerHookPayload(event: .onError, source: "notify", error: "failed")
             .withClient(client)
 
+        XCTAssertEqual(payload.source, "Codex")
         XCTAssertEqual(payload.clientId, "client_codex")
         XCTAssertEqual(payload.clientName, "Codex")
+    }
+
+    func testRequestSourceUsesAuthenticatedClientBeforePayloadSource() {
+        let client = Config.ServerClientConfig(
+            id: "client_codex",
+            name: "Codex",
+            tokenHash: "hash"
+        )
+
+        let resolved = DefaultAppController.resolvedRequestSource("custom-source", client: client, fallback: "Tsutae")
+
+        XCTAssertEqual(resolved, "Codex")
+    }
+
+    func testRequestSourceUsesPayloadSourceWithoutClient() {
+        let resolved = DefaultAppController.resolvedRequestSource("custom-source", client: nil, fallback: "Tsutae")
+
+        XCTAssertEqual(resolved, "custom-source")
+    }
+
+    func testServerHookSpokenPayloadIncludesPlaybackMetadata() {
+        let response = TTSSpeakResponse(
+            ok: true,
+            state: .queued,
+            source: "Codex",
+            presentationStyle: .minimal,
+            queueLength: 2
+        )
+
+        let payload = ServerHookPayload.spoken(text: "Done", source: "Codex", response: response)
+
+        XCTAssertEqual(payload.event, .onSpoken)
+        XCTAssertEqual(payload.text, "Done")
+        XCTAssertEqual(payload.source, "Codex")
+        XCTAssertEqual(payload.metadata?["state"], "queued")
+        XCTAssertEqual(payload.metadata?["queueLength"], "2")
+        XCTAssertEqual(payload.metadata?["presentationStyle"], "minimal")
+    }
+
+    func testClientHookConfigDoesNotFallbackToGlobalHook() {
+        let globalHooks = Config.ServerHooksConfig(
+            onSpoken: Config.ServerHookEndpoint(enabled: true, url: "https://global.example/hook")
+        )
+        let client = Config.ServerClientConfig(
+            id: "client_codex",
+            name: "Codex",
+            tokenHash: "hash",
+            hooks: Config.ServerHooksConfig(
+                onSpoken: Config.ServerHookEndpoint(enabled: false, url: "https://codex.example/hook")
+            )
+        )
+        let config = Config(server: Config.ServerConfig(hooks: globalHooks))
+
+        let hooks = DefaultAppController.resolvedHooksConfig(for: .onSpoken, client: client, config: config)
+
+        XCTAssertFalse(hooks.onSpoken.enabled)
+        XCTAssertEqual(hooks.onSpoken.url, "https://codex.example/hook")
+    }
+
+    func testGlobalHookConfigIsUsedWhenRequestHasNoClient() {
+        let globalHooks = Config.ServerHooksConfig(
+            onSpoken: Config.ServerHookEndpoint(enabled: true, url: "https://global.example/hook")
+        )
+        let config = Config(server: Config.ServerConfig(hooks: globalHooks))
+
+        let hooks = DefaultAppController.resolvedHooksConfig(for: .onSpoken, client: nil, config: config)
+
+        XCTAssertTrue(hooks.onSpoken.enabled)
+        XCTAssertEqual(hooks.onSpoken.url, "https://global.example/hook")
+    }
+
+    func testSpeakRouteAuthenticatesAndPassesClientToController() async throws {
+        let created = ServerClientRegistry.createClient(name: "Codex", scopes: [.speak])
+        mockController.stubbedConfig.server = Config.ServerConfig(requireToken: true, clients: [created.client])
+
+        try await testServer { client in
+            try await client.execute(
+                uri: "/v1/speak",
+                method: .post,
+                headers: Self.jsonHeaders(token: created.token),
+                body: Self.jsonBody(#"{"text":"Done","source":"payload-source"}"#)
+            ) { response in
+                XCTAssertEqual(response.status, .ok)
+            }
+        }
+
+        XCTAssertEqual(mockController.speakCallCount, 1)
+        XCTAssertEqual(mockController.lastClient?.id, created.client.id)
+        XCTAssertEqual(mockController.stubbedSpokenText, "Done")
+        XCTAssertEqual(mockController.stubbedSpeakingSource, "payload-source")
+    }
+
+    func testSpeakRouteRejectsMissingTokenWhenRequired() async throws {
+        let created = ServerClientRegistry.createClient(name: "Codex", scopes: [.speak])
+        mockController.stubbedConfig.server = Config.ServerConfig(requireToken: true, clients: [created.client])
+
+        try await testServer { client in
+            try await client.execute(
+                uri: "/v1/speak",
+                method: .post,
+                headers: Self.jsonHeaders(),
+                body: Self.jsonBody(#"{"text":"Done"}"#)
+            ) { response in
+                XCTAssertEqual(response.status, .unauthorized)
+            }
+        }
+
+        XCTAssertEqual(mockController.speakCallCount, 0)
+    }
+
+    func testSpeakRouteRejectsClientWithoutSpeakScope() async throws {
+        let created = ServerClientRegistry.createClient(name: "Codex", scopes: [.notify])
+        mockController.stubbedConfig.server = Config.ServerConfig(requireToken: true, clients: [created.client])
+
+        try await testServer { client in
+            try await client.execute(
+                uri: "/v1/speak",
+                method: .post,
+                headers: Self.jsonHeaders(token: created.token),
+                body: Self.jsonBody(#"{"text":"Done"}"#)
+            ) { response in
+                XCTAssertEqual(response.status, .forbidden)
+            }
+        }
+
+        XCTAssertEqual(mockController.speakCallCount, 0)
     }
 
     func testServerHookRequestUsesJSONAndBearerToken() throws {
@@ -455,5 +585,23 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertThrowsError(try mockController.getSecret("key"))
         XCTAssertThrowsError(try mockController.deleteSecret("key"))
         XCTAssertThrowsError(try mockController.listSecrets())
+    }
+
+    private func testServer(_ test: @Sendable (any TestClientProtocol) async throws -> Void) async throws {
+        let server = HTTPServer(controller: mockController)
+        let app = Application(responder: server.buildRouter().buildResponder())
+        try await app.test(.router, test)
+    }
+
+    private static func jsonHeaders(token: String? = nil) -> HTTPFields {
+        var headers: HTTPFields = [.contentType: "application/json"]
+        if let token {
+            headers[.authorization] = "Bearer \(token)"
+        }
+        return headers
+    }
+
+    private static func jsonBody(_ string: String) -> ByteBuffer {
+        ByteBuffer(data: Data(string.utf8))
     }
 }

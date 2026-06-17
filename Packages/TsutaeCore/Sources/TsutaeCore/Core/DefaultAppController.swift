@@ -156,6 +156,7 @@ public final class DefaultAppController: AppControllerProtocol, @unchecked Senda
         do {
             let config = try ConfigLoader.load()
             let response = try await TTSPlaybackManager.shared.speak(playbackRequest, config: config.tts)
+            triggerServerHook(.onSpoken, payload: .spoken(text: playbackRequest.text, source: source, response: response), client: client)
             return response
         } catch {
             triggerServerHook(.onError, payload: .failure(error, source: source), client: client)
@@ -271,15 +272,23 @@ public final class DefaultAppController: AppControllerProtocol, @unchecked Senda
         return requestedSource?.nilIfBlank ?? fallback
     }
 
+    static func resolvedHooksConfig(
+        for _: Config.ServerHookEvent,
+        client: Config.ServerClientConfig?,
+        config: Config
+    ) -> Config.ServerHooksConfig {
+        if let client {
+            return client.hooks
+        }
+        return config.server.hooks
+    }
+
     private func hooksConfig(
         for event: Config.ServerHookEvent,
         client: Config.ServerClientConfig?,
         config: Config
     ) -> Config.ServerHooksConfig {
-        if let client, client.hooks.endpoint(for: event).enabled {
-            return client.hooks
-        }
-        return config.server.hooks
+        Self.resolvedHooksConfig(for: event, client: client, config: config)
     }
 
     private func deliverSystemNotification(
