@@ -338,6 +338,7 @@ enum L10n {
         static var ttsPreviewChooseLocationStatus: String { tr("settings.tts_preview_choose_location_status", default: "Choose a save location…") }
         static var ttsPreviewExportedStatus: String { tr("settings.tts_preview_exported_status", default: "Exported") }
         static var ttsStatusIdle: String { tr("settings.tts_status_idle", default: "Idle") }
+        static var ttsStatusPreparing: String { tr("settings.tts_status_preparing", default: "Preparing") }
         static var ttsStatusSpeaking: String { tr("settings.tts_status_speaking", default: "Speaking") }
         static var ttsFallbackTitle: String { tr("settings.tts_fallback_title", default: "System Fallback") }
         static var ttsFallbackSubtitle: String { tr("settings.tts_fallback_subtitle", default: "Keep Apple TTS available as a low-priority safety net.") }

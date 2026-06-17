@@ -66,7 +66,7 @@ struct DeveloperToolsPage: View {
                         .buttonStyle(SettingsAccentButtonStyle())
 
                         ServerStatusCapsule(
-                            title: playbackSnapshot.state == .idle ? L10n.Settings.ttsStatusIdle : L10n.Settings.ttsStatusSpeaking,
+                            title: playbackStatusTitle,
                             tone: playbackSnapshot.state == .idle ? .soft : .active
                         )
                     }
@@ -187,5 +187,17 @@ struct DeveloperToolsPage: View {
         }
         return response.error.map(L10n.Settings.notifyFailed) ?? L10n.Settings.notifyFailed("")
     }
-}
 
+    private var playbackStatusTitle: String {
+        switch playbackSnapshot.state {
+        case .idle:
+            return L10n.Settings.ttsStatusIdle
+        case .preparing:
+            return L10n.Settings.ttsStatusPreparing
+        case .queued:
+            return L10n.Settings.notifyQueued
+        case .speaking, .stopping:
+            return L10n.Settings.ttsStatusSpeaking
+        }
+    }
+}

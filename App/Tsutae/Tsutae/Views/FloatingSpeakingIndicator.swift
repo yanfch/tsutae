@@ -163,8 +163,18 @@ final class FloatingSpeakingIndicator {
     private func handleHoverChanged(_ isHovering: Bool) {
         guard let presentationModel else { return }
         companionDismissWorkItem?.cancel()
-        guard presentationModel.snapshot.presentationStyle == .standard,
-              presentationModel.snapshot.state == .speaking else {
+        guard presentationModel.snapshot.presentationStyle == .standard else {
+            presentationModel.isCompanionVisible = false
+            return
+        }
+
+        if presentationModel.snapshot.state == .preparing {
+            applyBestCompanionPlacement()
+            presentationModel.isCompanionVisible = true
+            return
+        }
+
+        guard presentationModel.snapshot.state == .speaking else {
             presentationModel.isCompanionVisible = false
             return
         }
@@ -452,10 +462,10 @@ private struct SpeakingIndicatorWrapper: View {
 
     @ViewBuilder
     private var companionSlot: some View {
-        if model.isCompanionVisible, let summary = model.snapshot.text {
+        if model.isCompanionVisible, let content = companionContent {
             SpeakingCompanionCard(
-                source: model.snapshot.source ?? "Tsutae",
-                summary: summary,
+                source: content.title,
+                summary: content.message,
                 startedAt: model.snapshot.startedAt,
                 colorScheme: model.colorScheme,
                 width: model.contentWidth,
@@ -466,6 +476,17 @@ private struct SpeakingIndicatorWrapper: View {
             Color.clear
                 .frame(width: model.contentWidth, height: companionHeight)
         }
+    }
+
+    private var companionContent: (title: String, message: String)? {
+        if model.snapshot.state == .preparing {
+            return (
+                L10n.RecordingCompanion.preparingLocalModelTitle,
+                L10n.RecordingCompanion.preparingLocalModelMessage
+            )
+        }
+        guard let summary = model.snapshot.text else { return nil }
+        return (model.snapshot.source ?? "Tsutae", summary)
     }
 
     private var contentHeight: CGFloat {

@@ -184,6 +184,7 @@
 "settings.tts_preview_play_button" = "开始试听";
 "settings.tts_preview_stop_button" = "停止";
 "settings.tts_status_idle" = "空闲";
+"settings.tts_status_preparing" = "准备中";
 "settings.tts_status_speaking" = "播报中";
 "settings.tts_integration_title" = "集成";
 "settings.tts_integration_subtitle" = "后续 TTS 也会通过本地服务接口对外提供。";

@@ -6,6 +6,7 @@ import OSLog
 public enum TTSPlaybackState: String, Codable, Sendable {
     case idle
     case queued
+    case preparing
     case speaking
     case stopping
 }
@@ -298,12 +299,16 @@ public final class TTSPlaybackManager: NSObject, @unchecked Sendable {
 
             let audio: AudioData
             if request.config.engine == FluidAudioLocalTTSEngine.shared.id {
+                let wasReady = await FluidAudioLocalTTSEngine.shared.isVoiceReady(request.voiceID)
+                if wasReady == false {
+                    recordPerf("TTS local preparation started. engine=\(request.config.engine) voice=\(request.voiceID ?? "auto") chars=\(request.text.count)")
+                }
                 audio = try await FluidAudioLocalTTSEngine.shared.synthesize(
                     request.text,
                     voiceID: request.voiceID,
                     rate: request.rate
                 )
-                recordPerf("TTS local synthesis finished. engine=\(request.config.engine) voice=\(request.voiceID ?? "auto") chars=\(request.text.count) audio_bytes=\(audio.samples.count) container=\(audio.container.rawValue) synth_elapsed_ms=\(Self.ms(since: startedAt)) queue_length=\(currentQueueLength())")
+                recordPerf("TTS local synthesis finished. engine=\(request.config.engine) voice=\(request.voiceID ?? "auto") was_ready=\(wasReady) chars=\(request.text.count) audio_bytes=\(audio.samples.count) container=\(audio.container.rawValue) synth_elapsed_ms=\(Self.ms(since: startedAt)) queue_length=\(currentQueueLength())")
             } else {
                 audio = try await OpenAICompatibleRemoteTTSEngine.shared.synthesize(
                     request.text,
@@ -466,11 +471,11 @@ public final class TTSPlaybackManager: NSObject, @unchecked Sendable {
 
     public var isSpeaking: Bool {
         let state = snapshot().state
-        return state == .speaking || state == .stopping
+        return state == .preparing || state == .speaking || state == .stopping
     }
 
     private var isActivelyPlayingOrPending: Bool {
-        activeRequestID != nil || synthesizer.isSpeaking || audioPlayer?.isPlaying == true || snapshotValue.state == .speaking || snapshotValue.state == .stopping
+        activeRequestID != nil || synthesizer.isSpeaking || audioPlayer?.isPlaying == true || snapshotValue.state == .preparing || snapshotValue.state == .speaking || snapshotValue.state == .stopping
     }
 
     private func stopCurrentPlaybackForReplacement(clearQueue: Bool) {
@@ -501,9 +506,10 @@ public final class TTSPlaybackManager: NSObject, @unchecked Sendable {
         activeRequestStartedAt = startedAt
         activePlaybackStartedAt = nil
         activeEngineID = request.config.engine
+        let initialState: TTSPlaybackState = request.config.engine == AppleTTSEngine.shared.id ? .speaking : .preparing
         updateSnapshot(
             TTSPlaybackSnapshot(
-                state: .speaking,
+                state: initialState,
                 text: request.text,
                 source: request.source,
                 voiceID: request.voiceID,
@@ -525,7 +531,7 @@ public final class TTSPlaybackManager: NSObject, @unchecked Sendable {
         let current = snapshot()
         updateSnapshot(
             TTSPlaybackSnapshot(
-                state: current.state,
+                state: .speaking,
                 text: current.text,
                 source: current.source,
                 voiceID: resolvedVoice?.identifier ?? preferredVoiceID,
@@ -553,6 +559,18 @@ public final class TTSPlaybackManager: NSObject, @unchecked Sendable {
             }
             audioPlayer = player
             activePlaybackStartedAt = Date()
+            let current = snapshot()
+            updateSnapshot(
+                TTSPlaybackSnapshot(
+                    state: .speaking,
+                    text: current.text,
+                    source: current.source,
+                    voiceID: current.voiceID,
+                    rate: current.rate,
+                    presentationStyle: current.presentationStyle,
+                    startedAt: current.startedAt
+                )
+            )
         case .pcm16:
             throw TTSPlaybackError.playbackFailed
         }

@@ -127,6 +127,24 @@ final class TsutaeCoreTests: XCTestCase {
         XCTAssertEqual(decoded.presentationStyle, .minimal)
     }
 
+    func testTTSPlaybackSnapshotEncodesPreparingState() throws {
+        let snapshot = TTSPlaybackSnapshot(
+            state: .preparing,
+            text: "hello",
+            source: "local",
+            voiceID: "kokoro_ane_mandarin",
+            rate: 1.0,
+            presentationStyle: .standard,
+            startedAt: nil
+        )
+
+        let data = try JSONEncoder().encode(snapshot)
+        let decoded = try JSONDecoder().decode(TTSPlaybackSnapshot.self, from: data)
+
+        XCTAssertEqual(decoded.state, .preparing)
+        XCTAssertEqual(decoded.voiceID, "kokoro_ane_mandarin")
+    }
+
     func testFluidAudioLocalTTSVoiceResolution() {
         XCTAssertEqual(
             FluidAudioLocalTTSVoice.resolve(voiceID: nil, text: "你好，构建完成。"),

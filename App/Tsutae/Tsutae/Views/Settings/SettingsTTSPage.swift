@@ -78,6 +78,9 @@ struct TTSSettingsPage: View {
         )
         .onReceive(NotificationCenter.default.publisher(for: .tsutaeTTSPlaybackDidChange)) { _ in
             playbackSnapshot = TTSPlaybackManager.shared.snapshot()
+            if LocalTTSModelCatalog.isKnownVoiceID(playbackSnapshot.voiceID) {
+                localTTSResidency.refreshReadyState()
+            }
         }
     }
 
@@ -674,7 +677,17 @@ struct TTSSettingsPage: View {
     }
 
     private var playbackStatusText: String {
-        let base = playbackSnapshot.state == .idle ? L10n.Settings.ttsStatusIdle : L10n.Settings.ttsStatusSpeaking
+        let base: String
+        switch playbackSnapshot.state {
+        case .idle:
+            base = L10n.Settings.ttsStatusIdle
+        case .preparing:
+            base = L10n.Settings.ttsStatusPreparing
+        case .queued:
+            base = L10n.Settings.notifyQueued
+        case .speaking, .stopping:
+            base = L10n.Settings.ttsStatusSpeaking
+        }
         guard playbackSnapshot.queueLength > 0 else { return base }
         return "\(base) · +\(playbackSnapshot.queueLength)"
     }
@@ -1387,4 +1400,3 @@ private struct TTSExportSavePanelPresenter: NSViewRepresentable {
         }
     }
 }
-
