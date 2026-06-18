@@ -79,6 +79,8 @@ enum L10n {
         }
         static var stopAndTranscribe: String { tr("menu.stop_and_transcribe", default: "Stop and Transcribe") }
         static var startRecording: String { tr("menu.start_recording", default: "Start Recording") }
+        static var github: String { tr("menu.github", default: "GitHub") }
+        static var reportIssue: String { tr("menu.report_issue", default: "Report Issue") }
         static var settings: String { tr("menu.settings", default: "Settings…") }
         static var quit: String { tr("menu.quit", default: "Quit Tsutae") }
     }
@@ -137,6 +139,7 @@ enum L10n {
         static var appLanguageLabel: String { tr("settings.app_language_label", default: "App Language") }
         static var recordingCapsuleLabel: String { tr("settings.recording_capsule_label", default: "Recording Capsule") }
         static var launchAtLoginLabel: String { tr("settings.launch_at_login_label", default: "Launch at Login") }
+        static var showDockIconLabel: String { tr("settings.show_dock_icon_label", default: "Show in Dock") }
         static var recordingShortcutLabel: String { tr("settings.recording_shortcut_label", default: "Recording Shortcut") }
         static var recordingShortcutPrompt: String { tr("settings.recording_shortcut_prompt", default: "Press") }
         static var recordingShortcutRecordHint: String { tr("settings.recording_shortcut_record_hint", default: "Set") }
@@ -174,6 +177,8 @@ enum L10n {
         static var tabPermissions: String { tr("settings.tab_permissions", default: "Permissions") }
         static var tabDeveloper: String { tr("settings.tab_developer", default: "Developer") }
         static var sidebarAdvanced: String { tr("settings.sidebar_advanced", default: "Advanced") }
+        static var sidebarGitHub: String { tr("settings.sidebar_github", default: "GitHub") }
+        static var sidebarGitHubHelp: String { tr("settings.sidebar_github_help", default: "Open the Tsutae GitHub repository") }
         static var subtitleGeneral: String { tr("settings.subtitle_general", default: "Tune the everyday behavior and appearance of Tsutae.") }
         static var subtitleSTT: String { tr("settings.subtitle_stt", default: "Configure transcription engines and routing.") }
         static var subtitleTTS: String { tr("settings.subtitle_tts", default: "Prepare voices, playback, and synthesis behavior.") }

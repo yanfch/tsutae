@@ -3,7 +3,6 @@ import Combine
 import Foundation
 import OSLog
 import TsutaeCore
-import UserNotifications
 
 @MainActor
 final class RecordingSession: ObservableObject {
@@ -192,7 +191,6 @@ final class RecordingSession: ObservableObject {
                         return
                     }
                     FloatingRecordingBar.shared.hide()
-                    self.notify(title: L10n.Notification.insertedTextTitle, body: transcript.text)
                     let injectDoneMessage = "Transcription injected. chars=\(transcript.text.count) inject_elapsed_ms=\(self.formatElapsedMs(since: injectStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
                     self.logger.info("\(injectDoneMessage, privacy: .public)")
                     PerformanceLog.record(category: "RecordingSession", message: injectDoneMessage)
@@ -446,7 +444,6 @@ final class RecordingSession: ObservableObject {
                     try FocusedTextInjector.inject(transcript.text)
                     guard !Task.isCancelled, self.activeOperationID == operationID else { return }
                     FloatingRecordingBar.shared.hide()
-                    self.notify(title: L10n.Notification.insertedTextTitle, body: transcript.text)
                     let injectDoneMessage = "Remote retry transcription injected. chars=\(transcript.text.count) inject_elapsed_ms=\(self.formatElapsedMs(since: injectStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
                     self.logger.info("\(injectDoneMessage, privacy: .public)")
                     PerformanceLog.record(category: "RecordingSession", message: injectDoneMessage)
@@ -718,19 +715,4 @@ final class RecordingSession: ObservableObject {
         PerformanceLog.record(category: "RecordingSession", message: message)
     }
     
-    private func notify(title: String, body: String) {
-        Task {
-            let center = UNUserNotificationCenter.current()
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
-            
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
-            try? await center.add(UNNotificationRequest(
-                identifier: "tsutae.recording.\(UUID().uuidString)",
-                content: content,
-                trigger: nil
-            ))
-        }
-    }
 }

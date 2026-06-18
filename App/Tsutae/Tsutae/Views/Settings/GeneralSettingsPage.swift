@@ -18,6 +18,7 @@ struct GeneralSettingsView: View {
     
     @ObservedObject private var hotkeyManager = GlobalHotkeyManager.shared
     @AppStorage("launchAtLogin") private var launchAtLogin = false
+    @AppStorage(AppPresentationController.showDockIconDefaultsKey) private var showDockIcon = false
     @State private var didSyncLaunchAtLogin = false
     @AppStorage("settings.appearanceMode") private var appearanceMode = "system"
     @AppStorage(L10n.appLanguageDefaultsKey) private var appLanguage = L10n.AppLanguage.system.rawValue
@@ -45,6 +46,13 @@ struct GeneralSettingsView: View {
         Binding(
             get: { launchAtLogin ? "on" : "off" },
             set: { updateLaunchAtLogin($0 == "on") }
+        )
+    }
+
+    private var showDockIconSelection: Binding<String> {
+        Binding(
+            get: { showDockIcon ? "on" : "off" },
+            set: { updateDockIconVisibility($0 == "on") }
         )
     }
     
@@ -92,6 +100,18 @@ struct GeneralSettingsView: View {
                     )
                 }
                 
+                SettingsDivider()
+
+                SettingsRow(label: L10n.Settings.showDockIconLabel) {
+                    SettingsChipSelector(
+                        selection: showDockIconSelection,
+                        options: [
+                            ("off", L10n.Settings.toggleOff),
+                            ("on", L10n.Settings.toggleOn)
+                        ]
+                    )
+                }
+
                 SettingsDivider()
                 
                 SettingsRow(label: L10n.Settings.defaultActionLabel) {
@@ -151,9 +171,16 @@ struct GeneralSettingsView: View {
             launchAtLogin = newValue
         }
     }
+
+    private func updateDockIconVisibility(_ newValue: Bool) {
+        guard showDockIcon != newValue else { return }
+        showDockIcon = newValue
+        AppPresentationController.shared.setDockIconVisible(newValue)
+    }
     
     private func resetDefaults() {
         updateLaunchAtLogin(false)
+        updateDockIconVisibility(false)
         appearanceMode = "system"
         appLanguage = L10n.AppLanguage.system.rawValue
         recordingBarPreset = DS.recordingBar.defaultPreset.rawValue

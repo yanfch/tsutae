@@ -70,46 +70,11 @@ extension TsutaeLogoMark {
         }
         
         private func createMenuBarIcon() -> NSImage {
-            let size = NSSize(width: 18, height: 18)
-            let image = NSImage(size: size, flipped: false) { rect in
-                let ctx = NSGraphicsContext.current!.cgContext
-                
-                // 背景圆角方块
-                let bgRect = rect.insetBy(dx: 1, dy: 1)
-                let bgPath = CGPath(
-                    roundedRect: bgRect,
-                    cornerWidth: 5,
-                    cornerHeight: 5,
-                    transform: nil
-                )
-                ctx.setFillColor(NSColor.white.cgColor)
-                ctx.addPath(bgPath)
-                ctx.fillPath()
-                
-                // 声波竖线
-                ctx.setStrokeColor(NSColor.white.cgColor)
-                ctx.setLineWidth(2.0)
-                ctx.setLineCap(.round)
-                
-                let centerX = rect.midX
-                let centerY = rect.midY
-                
-                // 竖线（旋转）
-                ctx.saveGState()
-                ctx.translateBy(x: centerX - 1, y: centerY - 2)
-                ctx.rotate(by: .pi / 180 * 18)
-                ctx.move(to: CGPoint(x: 0, y: -9))
-                ctx.addLine(to: CGPoint(x: 0, y: 9))
-                ctx.strokePath()
-                ctx.restoreGState()
-                
-                // 横线
-                ctx.move(to: CGPoint(x: centerX - 7, y: centerY + 2))
-                ctx.addLine(to: CGPoint(x: centerX + 7, y: centerY + 2))
-                ctx.strokePath()
-                
-                return true
+            if let image = NSImage(named: "MenuBarIcon")?.copy() as? NSImage {
+                image.isTemplate = true
+                return image
             }
+            let image = NSImage(size: NSSize(width: 18, height: 18))
             image.isTemplate = true
             return image
         }

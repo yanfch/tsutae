@@ -35,6 +35,10 @@ struct SettingsSidebar: View {
             .padding(.top, SettingsTokens.Padding.sidebarTop)
             
             Spacer()
+
+            SettingsSidebarFooterLinks()
+                .padding(.horizontal, SettingsTokens.Padding.sidebarHorizontal)
+                .padding(.bottom, 18)
         }
         .background(sidebarBackground)
     }
@@ -48,6 +52,58 @@ struct SettingsSidebar: View {
                     .overlay(.ultraThinMaterial)
             }
         }
+    }
+}
+
+private struct SettingsSidebarFooterLinks: View {
+    var body: some View {
+        SettingsSidebarGitHubLink()
+    }
+}
+
+private struct SettingsSidebarGitHubLink: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Button {
+            TsutaeLinks.openGitHubRepository()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.left.forwardslash.chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 16)
+
+                Text(L10n.Settings.sidebarGitHub)
+                    .font(DS.font.mono(size: 12, weight: .medium))
+            }
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .fixedSize(horizontal: true, vertical: false)
+                .foregroundStyle(foregroundColor)
+                .background {
+                    Capsule()
+                        .fill(backgroundColor)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(borderColor, lineWidth: 1)
+                        )
+                }
+        }
+        .buttonStyle(.plain)
+        .help(L10n.Settings.sidebarGitHubHelp)
+        .accessibilityLabel(L10n.Settings.sidebarGitHub)
+    }
+
+    private var foregroundColor: Color {
+        colorScheme == .dark ? DS.color.foregroundDark.opacity(0.76) : DS.color.accent
+    }
+
+    private var backgroundColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.04) : Color.white.opacity(0.44)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.08) : DS.color.accent.opacity(0.12)
     }
 }
 

@@ -11,6 +11,15 @@ final class SettingsWindowCoordinator {
     weak var window: NSWindow?
     private init() {}
 
+    var hasVisibleSettingsWindow: Bool {
+        if let window, window.isVisible {
+            return true
+        }
+        return NSApp.windows.contains {
+            ($0.identifier?.rawValue == "settings-window" || $0.title == "Settings") && $0.isVisible
+        }
+    }
+
     func openSettings(tab: String?) {
         if let tab {
             UserDefaults.standard.set(tab, forKey: "settings.selectedTab")
@@ -30,6 +39,7 @@ final class SettingsWindowCoordinator {
     }
 
     func bringToFront() {
+        NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
         if let window {
             window.identifier = NSUserInterfaceItemIdentifier("settings-window")
@@ -41,6 +51,19 @@ final class SettingsWindowCoordinator {
             self.window = fallback
             fallback.makeKeyAndOrderFront(nil)
             fallback.orderFrontRegardless()
+        }
+    }
+
+    func restoreSettingsAfterActivationPolicyChange() {
+        bringToFront()
+        DispatchQueue.main.async {
+            self.bringToFront()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            self.bringToFront()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            self.bringToFront()
         }
     }
 }
@@ -384,6 +407,16 @@ private struct MenuBarMenuContent: View {
 
         Divider()
 
+        Button(L10n.Menu.github) {
+            TsutaeLinks.openGitHubRepository()
+        }
+
+        Button(L10n.Menu.reportIssue) {
+            TsutaeLinks.openGitHubIssue()
+        }
+
+        Divider()
+
         OpenSettingsMenuButton()
             .keyboardShortcut(",", modifiers: .command)
 
@@ -492,6 +525,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         logger.info("applicationDidFinishLaunching")
+        installApplicationIcon()
+        AppPresentationController.shared.applyCurrentDockPreference()
         EngineManager.shared.registerTTS(AppleTTSEngine.shared)
         EngineManager.shared.registerTTS(FluidAudioLocalTTSEngine.shared)
         EngineManager.shared.registerTTS(OpenAICompatibleRemoteTTSEngine.shared)
@@ -504,6 +539,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         LocalTTSResidencyCoordinator.shared.refreshFromDisk()
         FloatingSpeakingIndicator.shared.startObserving()
         startHTTPServerIfNeeded()
+    }
+
+    private func installApplicationIcon() {
+        guard let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+              let image = NSImage(contentsOf: iconURL) else {
+            return
+        }
+        NSApp.applicationIconImage = image
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        SettingsWindowCoordinator.shared.openSettings(tab: nil)
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {

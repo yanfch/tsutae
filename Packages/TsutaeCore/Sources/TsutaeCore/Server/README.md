@@ -2,6 +2,8 @@
 
 Hummingbird HTTP server exposing Tsutae's local automation API.
 
+Full API parameters and examples live in [`docs/server-api.md`](../../../../../docs/server-api.md).
+
 ## Current Surface
 
 - `GET /health` — process and engine health.
