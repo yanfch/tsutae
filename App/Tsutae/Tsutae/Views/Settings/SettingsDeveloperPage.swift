@@ -1,9 +1,15 @@
 import SwiftUI
 import TsutaeCore
 
+private enum DeveloperToolsScreen {
+    case overview
+    case diagnostics
+}
+
 struct DeveloperToolsPage: View {
     @ObservedObject var store: STTSettingsStore
     @ObservedObject private var residencyCoordinator = LocalSTTResidencyCoordinator.shared
+    @State private var screen: DeveloperToolsScreen = .overview
     @State private var debugSpeechText = "Kanade finished the latest check and is ready to report back."
     @State private var debugNotifyText = "Build succeeded for main."
     @State private var polishModeSelection = Config.TranscriptPostProcessingMode.smart.rawValue
@@ -25,6 +31,33 @@ struct DeveloperToolsPage: View {
     @State private var playbackSnapshot = TTSPlaybackManager.shared.snapshot()
 
     var body: some View {
+        Group {
+            switch screen {
+            case .overview:
+                overviewContent
+            case .diagnostics:
+                DeveloperDiagnosticsPage {
+                    screen = .overview
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .tsutaeTTSPlaybackDidChange)) { _ in
+            playbackSnapshot = TTSPlaybackManager.shared.snapshot()
+        }
+        .onAppear {
+            syncPostProcessingDraftFromStore()
+        }
+        .onChange(of: polishSampleSelection) { _, newValue in
+            guard let sample = DeveloperPolishSample(rawValue: newValue) else { return }
+            polishInputText = sample.text
+            polishTaskSelection = sample.task.rawValue
+            polishOutputText = ""
+            polishStatusText = L10n.Settings.ttsStatusIdle
+            polishStatusTone = .soft
+        }
+    }
+
+    private var overviewContent: some View {
         VStack(alignment: .leading, spacing: SettingsTokens.Spacing.section) {
             SettingsDashboardCard(title: L10n.Settings.developerWarmupGateTitle, subtitle: L10n.Settings.developerWarmupGateSubtitle) {
                 VStack(alignment: .leading, spacing: SettingsTokens.Padding.sidebarHorizontal) {
@@ -62,6 +95,20 @@ struct DeveloperToolsPage: View {
                     ("3", L10n.Settings.developerHowToTestStep3),
                     (L10n.Settings.developerHowToTestExpectedLabel, L10n.Settings.developerHowToTestExpected)
                 ])
+            }
+
+            SettingsDashboardCard(title: L10n.Settings.developerDiagnosticsTitle, subtitle: L10n.Settings.developerDiagnosticsSubtitle) {
+                HStack(spacing: 10) {
+                    ServerStatusCapsule(title: L10n.Settings.developerDiagnosticsSamplesBadge, tone: .soft)
+                    ServerStatusCapsule(title: L10n.Settings.developerDiagnosticsLatencyBadge, tone: .soft)
+                    Spacer(minLength: 0)
+                    Button {
+                        screen = .diagnostics
+                    } label: {
+                        Label(L10n.Settings.developerDiagnosticsOpenButton, systemImage: "chart.line.uptrend.xyaxis")
+                    }
+                    .buttonStyle(SettingsAccentButtonStyle())
+                }
             }
 
             SettingsDashboardCard(title: L10n.Settings.developerPolishProbeTitle, subtitle: L10n.Settings.developerPolishProbeSubtitle) {
@@ -208,20 +255,6 @@ struct DeveloperToolsPage: View {
                     }
                 }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .tsutaeTTSPlaybackDidChange)) { _ in
-            playbackSnapshot = TTSPlaybackManager.shared.snapshot()
-        }
-        .onAppear {
-            syncPostProcessingDraftFromStore()
-        }
-        .onChange(of: polishSampleSelection) { _, newValue in
-            guard let sample = DeveloperPolishSample(rawValue: newValue) else { return }
-            polishInputText = sample.text
-            polishTaskSelection = sample.task.rawValue
-            polishOutputText = ""
-            polishStatusText = L10n.Settings.ttsStatusIdle
-            polishStatusTone = .soft
         }
     }
 

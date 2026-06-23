@@ -396,6 +396,47 @@ enum L10n {
         static func developerPolishDoneWithTerms(_ route: String, _ elapsedMs: Double, _ count: Int) -> String {
             String(format: tr("settings.developer_polish_done_with_terms_format", default: "%@ %.0f ms · %d terms"), route, elapsedMs, count)
         }
+        static var developerDiagnosticsTitle: String { tr("settings.developer_diagnostics_title", default: "ASR Diagnostics") }
+        static var developerDiagnosticsSubtitle: String { tr("settings.developer_diagnostics_subtitle", default: "Inspect recent dictation samples, routing, latency, and target app attribution.") }
+        static var developerDiagnosticsSamplesBadge: String { tr("settings.developer_diagnostics_samples_badge", default: "Samples") }
+        static var developerDiagnosticsLatencyBadge: String { tr("settings.developer_diagnostics_latency_badge", default: "Latency") }
+        static var developerDiagnosticsOpenButton: String { tr("settings.developer_diagnostics_open_button", default: "Open Diagnostics") }
+        static var developerDiagnosticsBackButton: String { tr("settings.developer_diagnostics_back_button", default: "Back to Developer") }
+        static var developerDiagnosticsRevealLogButton: String { tr("settings.developer_diagnostics_reveal_log_button", default: "Reveal Log") }
+        static var developerDiagnosticsSummaryTitle: String { tr("settings.developer_diagnostics_summary_title", default: "Today") }
+        static func developerDiagnosticsSummarySubtitle(_ count: Int) -> String {
+            String(format: tr("settings.developer_diagnostics_summary_subtitle_format", default: "Loaded %d recent ASR samples from the local JSONL log."), count)
+        }
+        static var developerDiagnosticsTodayCount: String { tr("settings.developer_diagnostics_today_count", default: "Today Samples") }
+        static var developerDiagnosticsOutputChars: String { tr("settings.developer_diagnostics_output_chars", default: "Output Chars") }
+        static var developerDiagnosticsTotalSamples: String { tr("settings.developer_diagnostics_total_samples", default: "Loaded Samples") }
+        static var developerDiagnosticsLocalCleanup: String { tr("settings.developer_diagnostics_local_cleanup", default: "Local Cleanup") }
+        static var developerDiagnosticsRemoteCleanup: String { tr("settings.developer_diagnostics_remote_cleanup", default: "Remote Cleanup") }
+        static var developerDiagnosticsClipboardFallback: String { tr("settings.developer_diagnostics_clipboard_fallback", default: "Clipboard Fallback") }
+        static var developerDiagnosticsTimingTitle: String { tr("settings.developer_diagnostics_timing_title", default: "Timing") }
+        static var developerDiagnosticsTimingSubtitle: String { tr("settings.developer_diagnostics_timing_subtitle", default: "P50 and P95 for today. End-to-end is measured through insertion completion.") }
+        static var developerDiagnosticsE2E: String { tr("settings.developer_diagnostics_e2e", default: "End to End") }
+        static var developerDiagnosticsASR: String { tr("settings.developer_diagnostics_asr", default: "ASR") }
+        static var developerDiagnosticsCleanup: String { tr("settings.developer_diagnostics_cleanup", default: "Cleanup") }
+        static var developerDiagnosticsInsertion: String { tr("settings.developer_diagnostics_insertion", default: "Insertion") }
+        static var developerDiagnosticsAppsTitle: String { tr("settings.developer_diagnostics_apps_title", default: "Target Apps") }
+        static var developerDiagnosticsAppsSubtitle: String { tr("settings.developer_diagnostics_apps_subtitle", default: "Grouped by the insertion target when available.") }
+        static var developerDiagnosticsTermsTitle: String { tr("settings.developer_diagnostics_terms_title", default: "Dictionary Hits") }
+        static var developerDiagnosticsTermsSubtitle: String { tr("settings.developer_diagnostics_terms_subtitle", default: "Most frequently matched cleanup terms today.") }
+        static var developerDiagnosticsRecentTitle: String { tr("settings.developer_diagnostics_recent_title", default: "Recent Samples") }
+        static var developerDiagnosticsRecentSubtitle: String { tr("settings.developer_diagnostics_recent_subtitle", default: "Raw and final text are shown here for local debugging only.") }
+        static var developerDiagnosticsNoSamples: String { tr("settings.developer_diagnostics_no_samples", default: "No ASR samples recorded yet.") }
+        static var developerDiagnosticsNoTerms: String { tr("settings.developer_diagnostics_no_terms", default: "No dictionary terms matched today.") }
+        static var developerDiagnosticsUnknownApp: String { tr("settings.developer_diagnostics_unknown_app", default: "Unknown App") }
+        static var developerDiagnosticsNoProvider: String { tr("settings.developer_diagnostics_no_provider", default: "No cleanup") }
+        static var developerDiagnosticsFinalLabel: String { tr("settings.developer_diagnostics_final_label", default: "Final") }
+        static var developerDiagnosticsRawLabel: String { tr("settings.developer_diagnostics_raw_label", default: "Raw") }
+        static func developerDiagnosticsChars(_ count: Int) -> String {
+            String(format: tr("settings.developer_diagnostics_chars_format", default: "%d chars"), count)
+        }
+        static func developerDiagnosticsE2ERow(_ value: String) -> String {
+            String(format: tr("settings.developer_diagnostics_e2e_row_format", default: "E2E %@"), value)
+        }
         static var notifyLevelInfo: String { tr("settings.notify_level_info", default: "Info") }
         static var notifyLevelWarning: String { tr("settings.notify_level_warning", default: "Warning") }
         static var notifyLevelError: String { tr("settings.notify_level_error", default: "Error") }
