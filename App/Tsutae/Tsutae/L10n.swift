@@ -165,6 +165,7 @@ enum L10n {
         static var languageAuto: String { tr("settings.language_auto", default: "Auto") }
         static var languageChinese: String { tr("settings.language_chinese", default: "Chinese") }
         static var languageEnglish: String { tr("settings.language_english", default: "English") }
+        static var tabUsage: String { tr("settings.tab_usage", default: "Usage") }
         static var tabGeneral: String { tr("settings.tab_general", default: "General") }
         static var tabSTT: String { tr("settings.tab_stt", default: "Speech to Text") }
         static var tabTTS: String { tr("settings.tab_tts", default: "Text to Speech") }
@@ -179,6 +180,7 @@ enum L10n {
         static var sidebarAdvanced: String { tr("settings.sidebar_advanced", default: "Advanced") }
         static var sidebarGitHub: String { tr("settings.sidebar_github", default: "GitHub") }
         static var sidebarGitHubHelp: String { tr("settings.sidebar_github_help", default: "Open the Tsutae GitHub repository") }
+        static var subtitleUsage: String { tr("settings.subtitle_usage", default: "A calm summary of today’s dictation activity.") }
         static var subtitleGeneral: String { tr("settings.subtitle_general", default: "Tune the everyday behavior and appearance of Tsutae.") }
         static var subtitleSTT: String { tr("settings.subtitle_stt", default: "Configure transcription engines and routing.") }
         static var subtitleTTS: String { tr("settings.subtitle_tts", default: "Prepare voices, playback, and synthesis behavior.") }
@@ -190,6 +192,7 @@ enum L10n {
         static var subtitleSecrets: String { tr("settings.subtitle_secrets", default: "Store keys and tokens used by engines and services.") }
         static var subtitleAbout: String { tr("settings.subtitle_about", default: "Version details, diagnostics, and product information.") }
         static var subtitleDeveloper: String { tr("settings.subtitle_developer", default: "Debug-only tools for warmup, runtime state, and test flows.") }
+        static var statusToday: String { tr("settings.status_today", default: "Today") }
         static var statusReady: String { tr("settings.status_ready", default: "Ready") }
         static var statusTranscribe: String { tr("settings.status_transcribe", default: "Transcribe") }
         static var statusSpeak: String { tr("settings.status_speak", default: "Speak") }
@@ -208,6 +211,39 @@ enum L10n {
         static var workflowInsert: String { tr("settings.workflow_insert", default: "Insert") }
         static var workflowSpeak: String { tr("settings.workflow_speak", default: "Speak") }
         static var workflowServe: String { tr("settings.workflow_serve", default: "Serve") }
+        static var usageHeroTitle: String { tr("settings.usage_hero_title", default: "Today") }
+        static var usageHeroSubtitle: String { tr("settings.usage_hero_subtitle", default: "Start dictating to see local usage stats here.") }
+        static var usageNoActivity: String { tr("settings.usage_no_activity", default: "No dictation activity yet today.") }
+        static var usageRefreshButton: String { tr("settings.usage_refresh_button", default: "Refresh") }
+        static var usageOutputChars: String { tr("settings.usage_output_chars", default: "output characters") }
+        static var usageDictations: String { tr("settings.usage_dictations", default: "Dictations") }
+        static var usageTargetApps: String { tr("settings.usage_target_apps", default: "Target Apps") }
+        static var usageAvgE2E: String { tr("settings.usage_avg_e2e", default: "Average") }
+        static var usageLastActivity: String { tr("settings.usage_last_activity", default: "Last Activity") }
+        static var usageTopAppsTitle: String { tr("settings.usage_top_apps_title", default: "Target Apps") }
+        static var usageTopAppsSubtitle: String { tr("settings.usage_top_apps_subtitle", default: "Where today’s dictation was inserted.") }
+        static var usageAppColumn: String { tr("settings.usage_app_column", default: "App") }
+        static var usageCharactersColumn: String { tr("settings.usage_characters_column", default: "Characters") }
+        static var usageTimingTitle: String { tr("settings.usage_timing_title", default: "Speed") }
+        static var usageTimingSubtitle: String { tr("settings.usage_timing_subtitle", default: "Complete dictation time today.") }
+        static var usageCleanupTitle: String { tr("settings.usage_cleanup_title", default: "Cleanup") }
+        static var usageCleanupSubtitle: String { tr("settings.usage_cleanup_subtitle", default: "Polish and fallback today.") }
+        static var usageComplete: String { tr("settings.usage_complete", default: "Complete") }
+        static var usageASR: String { tr("settings.usage_asr", default: "Recognize") }
+        static var usageCleanup: String { tr("settings.usage_cleanup", default: "Polish") }
+        static var usageInsertion: String { tr("settings.usage_insertion", default: "Insert") }
+        static var usageTypical: String { tr("settings.usage_typical", default: "Typical") }
+        static var usageSlow: String { tr("settings.usage_slow", default: "Slow") }
+        static var usageLocalCleanup: String { tr("settings.usage_local_cleanup", default: "Local Cleanup") }
+        static var usageRemoteCleanup: String { tr("settings.usage_remote_cleanup", default: "Remote Cleanup") }
+        static var usageDictionaryHits: String { tr("settings.usage_dictionary_hits", default: "Dictionary Hits") }
+        static var usageClipboardFallback: String { tr("settings.usage_clipboard_fallback", default: "Clipboard Fallback") }
+        static var usageNoSamples: String { tr("settings.usage_no_samples", default: "No usage samples recorded yet.") }
+        static var usageUnknownApp: String { tr("settings.usage_unknown_app", default: "Unknown App") }
+        static var usageCharsUnit: String { tr("settings.usage_chars_unit", default: "chars") }
+        static func usageChars(_ count: Int) -> String {
+            String(format: tr("settings.usage_chars_format", default: "%d chars"), count)
+        }
         static var labelProvider: String { tr("settings.label_provider", default: "Provider") }
         static var labelVoice: String { tr("settings.label_voice", default: "Voice") }
         static var labelSpeed: String { tr("settings.label_speed", default: "Speed") }

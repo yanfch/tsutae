@@ -125,6 +125,9 @@ enum DS {
         
         /// 设置页背景 - 亮色
         static let settingsBgLight = surface2
+
+        /// 设置页卡片背景 - 亮色，中性暖白，避免和页面纸色混在一起
+        static let settingsCardLight = SwiftUI.Color(red: 0xFF/255, green: 0xFE/255, blue: 0xF8/255)
         
         /// 设置页背景 - 暗色
         static let settingsBgDark = backgroundDark

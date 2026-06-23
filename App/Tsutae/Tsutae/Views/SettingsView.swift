@@ -12,9 +12,9 @@ struct SettingsView: View {
     @Namespace private var sidebarSelectionAnimation
     @AppStorage("settings.appearanceMode") private var appearanceMode = "system"
     @AppStorage(L10n.appLanguageDefaultsKey) private var appLanguage = L10n.AppLanguage.system.rawValue
-    @AppStorage("settings.selectedTab") private var selectedTabRaw = SettingsTab.general.rawValue
+    @AppStorage("settings.selectedTab") private var selectedTabRaw = SettingsTab.usage.rawValue
     @StateObject private var sttStore = STTSettingsStore()
-    @State private var selectedTabState: SettingsTab = .general
+    @State private var selectedTabState: SettingsTab = .usage
     @State private var titlebarCompensation: CGFloat = 0
     
     var body: some View {
@@ -70,17 +70,26 @@ struct SettingsView: View {
                         .overlay(resolvedColorScheme == .dark ? Color.white.opacity(0.038) : Color.black.opacity(0.05))
                     
                     VStack(spacing: 0) {
-                        SettingsPageChrome(tab: selectedTab)
-                        
-                        ScrollView {
+                        if selectedTab == .usage {
                             currentTabView
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                                 .padding(.horizontal, 28)
-                                .padding(.top, 18)
+                                .padding(.top, 24)
                                 .padding(.bottom, 24)
+                                .background(settingsBackground)
+                        } else {
+                            SettingsPageChrome(tab: selectedTab)
+
+                            ScrollView {
+                                currentTabView
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    .padding(.horizontal, 28)
+                                    .padding(.top, 18)
+                                    .padding(.bottom, 24)
+                            }
+                            .scrollIndicators(.never)
+                            .background(settingsBackground)
                         }
-                        .scrollIndicators(.never)
-                        .background(settingsBackground)
                     }
                     .background(settingsBackground)
                 }
@@ -113,6 +122,8 @@ struct SettingsView: View {
     @ViewBuilder
     private var currentTabView: some View {
         switch selectedTab {
+        case .usage:
+            UsageSettingsPage()
         case .general:
             GeneralSettingsPage()
         case .stt:
@@ -153,6 +164,7 @@ struct SettingsView: View {
 // MARK: - Tab Definition
 
 enum SettingsTab: String, CaseIterable, Identifiable {
+    case usage
     case general
     case stt
     case tts
@@ -167,7 +179,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     
     var id: String { rawValue }
     
-    static let primaryTabs: [SettingsTab] = [.general, .stt, .tts, .server, .permissions]
+    static let primaryTabs: [SettingsTab] = [.usage, .general, .stt, .tts, .server, .permissions]
     static var secondaryTabs: [SettingsTab] {
         #if DEBUG
         return [.vad, .hotkeys, .recipes, .secrets, .about, .developer]
@@ -178,6 +190,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
+        case .usage: return L10n.Settings.tabUsage
         case .general: return L10n.Settings.tabGeneral
         case .stt: return L10n.Settings.tabSTT
         case .tts: return L10n.Settings.tabTTS
@@ -194,6 +207,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     
     var subtitle: String {
         switch self {
+        case .usage:
+            return L10n.Settings.subtitleUsage
         case .general:
             return L10n.Settings.subtitleGeneral
         case .stt:
@@ -221,6 +236,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     
     var statusTitle: String {
         switch self {
+        case .usage:
+            return L10n.Settings.statusToday
         case .general:
             return L10n.Settings.statusReady
         case .stt:
@@ -240,6 +257,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     
     var systemImage: String {
         switch self {
+        case .usage: return "chart.line.uptrend.xyaxis"
         case .general: return "gearshape"
         case .stt: return "mic"
         case .tts: return "speaker.wave.2"

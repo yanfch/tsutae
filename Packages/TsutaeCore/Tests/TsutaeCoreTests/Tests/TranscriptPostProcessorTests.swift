@@ -263,6 +263,24 @@ final class TranscriptPostProcessorTests: XCTestCase {
             expected: "这个是 Codex app 写的还是 coi 写的。"
         ),
         .init(
+            id: "real_asr_phonetic_codex_hook",
+            category: "dictionary",
+            raw: "扣得克斯 的 hook 通知收到了",
+            expected: "Codex 的 hook 通知收到了。"
+        ),
+        .init(
+            id: "real_asr_phonetic_tsutae_server_token",
+            category: "dictionary",
+            raw: "次他诶 server token 已经配置好了",
+            expected: "Tsutae Server token 已经配置好了。"
+        ),
+        .init(
+            id: "real_asr_remote_api_fallback_artifacts",
+            category: "artifact",
+            raw: "tts部分目前只调通了re@@mo@@teapi跟app@@le的fu@@llback",
+            expected: "TTS 部分目前只调通了 Remote API 跟 Apple 的 fallback。"
+        ),
+        .init(
             id: "artifact_paraformer_scope_type",
             category: "artifact",
             raw: "ty@@pe是不是改成s@@co@@pety@@pe然后从enjoypro@@mo@@tion的s@@co@@pety@@pe赋一下值",

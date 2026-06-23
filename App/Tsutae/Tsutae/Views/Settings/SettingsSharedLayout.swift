@@ -491,7 +491,7 @@ struct SettingsCardBackground: View {
     }
     
     private var cardBackground: Color {
-        colorScheme == .dark ? DS.color.cardBgDark : Color.white.opacity(0.98)
+        colorScheme == .dark ? DS.color.cardBgDark : DS.color.settingsCardLight
     }
     
     private var cardBorderColor: Color {

@@ -48,8 +48,10 @@ struct SettingsSidebar: View {
             if colorScheme == .dark {
                 DS.color.backgroundDark.opacity(0.76)
             } else {
-                Color.white.opacity(0.38)
-                    .overlay(.ultraThinMaterial)
+                ZStack {
+                    DS.color.settingsBgLight
+                    Color.white.opacity(0.18)
+                }
             }
         }
     }
