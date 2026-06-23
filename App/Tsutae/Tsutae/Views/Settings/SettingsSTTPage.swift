@@ -4,6 +4,7 @@ import TsutaeCore
 private enum STTSettingsScreen {
     case overview
     case localModels
+    case dictionary
 }
 
 private struct LocalModelDialog: Identifiable {
@@ -30,6 +31,8 @@ struct STTSettingsPage: View {
     @State private var lastSuccessfulRemoteTestSignature: String?
     @State private var remoteSavedDismissTask: Task<Void, Never>?
     @State private var localModelDialog: LocalModelDialog?
+    @State private var dictionaryDraftKey = ""
+    @State private var dictionaryDraftValue = ""
     
     var body: some View {
         Group {
@@ -38,6 +41,8 @@ struct STTSettingsPage: View {
                 overviewContent
             case .localModels:
                 localModelsContent
+            case .dictionary:
+                dictionaryContent
             }
         }
         .onAppear {
@@ -103,9 +108,23 @@ struct STTSettingsPage: View {
                             width: SettingsTokens.Width.languageDropdown
                         )
                     }
+
+                    if let recommendation = store.languageModelRecommendation {
+                        STTLanguageModelRecommendationBanner(
+                            recommendation: recommendation,
+                            onApply: {
+                                if recommendation.isDownloaded {
+                                    store.applyLanguageModelRecommendation()
+                                } else {
+                                    store.prepareLocalModelsPresentation()
+                                    screen = .localModels
+                                }
+                            }
+                        )
+                    }
                 }
             }
-            
+
             SettingsDashboardCard(title: L10n.Settings.sttLocalSectionTitle, subtitle: L10n.Settings.sttLocalSectionSubtitle) {
                 VStack(alignment: .leading, spacing: SettingsTokens.Spacing.content) {
                     HStack(spacing: 8) {
@@ -123,9 +142,7 @@ struct STTSettingsPage: View {
                     HStack(spacing: 10) {
                         Button(L10n.Settings.sttManageModelsButton) {
                             store.prepareLocalModelsPresentation()
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                screen = .localModels
-                            }
+                            screen = .localModels
                         }
                         .buttonStyle(SettingsAccentButtonStyle())
                         
@@ -258,6 +275,197 @@ struct STTSettingsPage: View {
                     badgeTone: store.config.stt.fallbackEngine == nil ? .neutral : .active
                 )
             }
+
+            transcriptCleanupCard
+        }
+    }
+
+    private var transcriptCleanupCard: some View {
+        SettingsDashboardCard(title: L10n.Settings.sttCleanupTitle, subtitle: L10n.Settings.sttCleanupSubtitle) {
+            VStack(alignment: .leading, spacing: SettingsTokens.Spacing.content) {
+                HStack(spacing: 8) {
+                    ServerStatusCapsule(
+                        title: store.cleanupBadgeTitle,
+                        tone: store.config.postProcessing.enabled ? .active : .neutral
+                    )
+                    ServerStatusCapsule(
+                        title: store.cleanupTaskTitle,
+                        tone: .soft
+                    )
+                    ServerStatusCapsule(
+                        title: store.dictionarySummaryTitle,
+                        tone: store.config.postProcessing.dictionary.enabled ? .soft : .neutral
+                    )
+                }
+
+                SettingsToggleRow(
+                    title: L10n.Settings.sttCleanupEnableTitle,
+                    subtitle: store.config.postProcessing.enabled ? L10n.Settings.sttCleanupEnableOnSubtitle : L10n.Settings.sttCleanupEnableOffSubtitle,
+                    isOn: store.cleanupEnabledBinding,
+                    badgeTitle: store.config.postProcessing.enabled ? L10n.Settings.sttCleanupEnabledBadge : L10n.Settings.sttCleanupDisabledBadge,
+                    badgeTone: store.config.postProcessing.enabled ? .active : .neutral
+                )
+
+                SettingsDivider()
+
+                HStack(alignment: .top, spacing: SettingsTokens.Spacing.card) {
+                    SettingsStackedControlRow(label: L10n.Settings.sttCleanupModeLabel) {
+                        SettingsDropdown(
+                            selection: store.cleanupModeBinding,
+                            options: cleanupModeOptions,
+                            tone: store.config.postProcessing.enabled ? .active : .soft,
+                            width: SettingsTokens.Width.modeDropdown
+                        )
+                    }
+
+                    SettingsStackedControlRow(label: L10n.Settings.sttCleanupTaskLabel) {
+                        SettingsDropdown(
+                            selection: store.cleanupTaskBinding,
+                            options: cleanupTaskOptions,
+                            tone: .soft,
+                            width: SettingsTokens.Width.languageDropdown
+                        )
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .disabled(store.config.postProcessing.enabled == false)
+                .opacity(store.config.postProcessing.enabled ? 1 : 0.52)
+
+                SettingsInlineStatusMessage(
+                    text: store.cleanupRouteSummary,
+                    tone: store.config.postProcessing.enabled ? .info : .neutral
+                )
+
+                HStack(spacing: 10) {
+                    Button(L10n.Settings.sttManageDictionaryButton) {
+                        screen = .dictionary
+                    }
+                    .buttonStyle(SettingsAccentButtonStyle())
+
+                    ServerStatusCapsule(title: store.dictionaryFeatureSummary, tone: .soft)
+                }
+            }
+        }
+    }
+
+    private var dictionaryContent: some View {
+        VStack(alignment: .leading, spacing: SettingsTokens.Spacing.card) {
+            HStack(spacing: 12) {
+                Button {
+                    screen = .overview
+                } label: {
+                    Label(L10n.Settings.sttBackToSTT, systemImage: "chevron.left")
+                }
+                .buttonStyle(SettingsGhostButtonStyle())
+
+                Spacer(minLength: 0)
+
+                ServerStatusCapsule(title: store.dictionarySummaryTitle, tone: store.config.postProcessing.dictionary.enabled ? .active : .neutral)
+            }
+
+            SettingsDashboardCard(title: L10n.Settings.sttDictionaryTitle, subtitle: L10n.Settings.sttDictionarySubtitle) {
+                VStack(alignment: .leading, spacing: SettingsTokens.Spacing.content) {
+                    SettingsToggleRow(
+                        title: L10n.Settings.sttDictionaryEnableTitle,
+                        subtitle: L10n.Settings.sttDictionaryEnableSubtitle,
+                        isOn: store.dictionaryEnabledBinding,
+                        badgeTitle: store.config.postProcessing.dictionary.enabled ? L10n.Settings.sttDictionaryEnabledBadge : L10n.Settings.sttDictionaryDisabledBadge,
+                        badgeTone: store.config.postProcessing.dictionary.enabled ? .active : .neutral
+                    )
+
+                    SettingsDivider()
+
+                    SettingsToggleRow(
+                        title: L10n.Settings.sttDictionaryAutomaticTitle,
+                        subtitle: L10n.Settings.sttDictionaryAutomaticSubtitle,
+                        isOn: store.dictionaryUseAutomaticBinding,
+                        badgeTitle: store.config.postProcessing.dictionary.useAutomatic ? L10n.Settings.sttDictionaryAutomaticShort : L10n.Settings.sttOffShort,
+                        badgeTone: store.config.postProcessing.dictionary.useAutomatic ? .active : .neutral
+                    )
+
+                    SettingsToggleRow(
+                        title: L10n.Settings.sttDictionaryBuiltInTitle,
+                        subtitle: L10n.Settings.sttDictionaryBuiltInSubtitle,
+                        isOn: store.dictionaryUseBuiltInBinding,
+                        badgeTitle: store.config.postProcessing.dictionary.useBuiltIn ? L10n.Settings.sttDictionaryBuiltInShort : L10n.Settings.sttOffShort,
+                        badgeTone: store.config.postProcessing.dictionary.useBuiltIn ? .active : .neutral
+                    )
+                }
+            }
+
+            SettingsDashboardCard(title: L10n.Settings.sttDictionaryBuiltInListTitle, subtitle: L10n.Settings.sttDictionaryBuiltInListSubtitle) {
+                VStack(alignment: .leading, spacing: SettingsTokens.Spacing.content) {
+                    HStack(spacing: 8) {
+                        ServerStatusCapsule(
+                            title: L10n.Settings.sttDictionaryBuiltInCount(store.builtInDictionaryEntries.count),
+                            tone: store.config.postProcessing.dictionary.useBuiltIn ? .active : .neutral
+                        )
+                        ServerStatusCapsule(
+                            title: store.config.postProcessing.dictionary.useBuiltIn ? L10n.Settings.sttDictionaryBuiltInShort : L10n.Settings.sttOffShort,
+                            tone: store.config.postProcessing.dictionary.useBuiltIn ? .soft : .neutral
+                        )
+                    }
+
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(store.builtInDictionaryEntries) { entry in
+                                DictionaryReadOnlyEntryRow(entry: entry)
+                                if entry.id != store.builtInDictionaryEntries.last?.id {
+                                    SettingsDivider()
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 260)
+                    .opacity(store.config.postProcessing.dictionary.useBuiltIn ? 1 : 0.54)
+                }
+            }
+
+            SettingsDashboardCard(title: L10n.Settings.sttDictionaryCustomTitle, subtitle: L10n.Settings.sttDictionaryCustomSubtitle) {
+                VStack(alignment: .leading, spacing: SettingsTokens.Spacing.content) {
+                    HStack(alignment: .center, spacing: 10) {
+                        SettingsTextInputField(
+                            text: $dictionaryDraftKey,
+                            placeholder: L10n.Settings.sttDictionaryKeyPlaceholder,
+                            width: 260
+                        )
+                        SettingsTextInputField(
+                            text: $dictionaryDraftValue,
+                            placeholder: L10n.Settings.sttDictionaryValuePlaceholder,
+                            width: 260
+                        )
+                        Button {
+                            addDictionaryDraft()
+                        } label: {
+                            Label(L10n.Settings.sttDictionaryAddButton, systemImage: "plus")
+                        }
+                        .buttonStyle(SettingsAccentButtonStyle())
+                        .disabled(canAddDictionaryDraft == false)
+                    }
+
+                    if store.config.postProcessing.dictionary.entries.isEmpty {
+                        SettingsInlineStatusMessage(
+                            text: L10n.Settings.sttDictionaryEmptyMessage,
+                            tone: .neutral
+                        )
+                    } else {
+                        VStack(spacing: 10) {
+                            ForEach(store.config.postProcessing.dictionary.entries) { entry in
+                                DictionaryEntryRow(
+                                    entry: entry,
+                                    key: store.dictionaryEntryKeyBinding(entry.id),
+                                    value: store.dictionaryEntryValueBinding(entry.id),
+                                    isEnabled: store.dictionaryEntryEnabledBinding(entry.id),
+                                    onDelete: {
+                                        store.deleteDictionaryEntry(entry.id)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -265,9 +473,7 @@ struct STTSettingsPage: View {
         VStack(alignment: .leading, spacing: SettingsTokens.Spacing.card) {
             HStack(spacing: 12) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        screen = .overview
-                    }
+                    screen = .overview
                 } label: {
                     Label(L10n.Settings.sttBackToSTT, systemImage: "chevron.left")
                 }
@@ -326,6 +532,38 @@ struct STTSettingsPage: View {
                 }
             }
         }
+    }
+
+    private var cleanupModeOptions: [SettingsDropdownOption] {
+        [
+            .init(id: Config.TranscriptPostProcessingMode.smart.rawValue, title: L10n.Settings.sttCleanupModeSmart),
+            .init(id: Config.TranscriptPostProcessingMode.rules.rawValue, title: L10n.Settings.sttCleanupModeRules),
+            .init(
+                id: Config.TranscriptPostProcessingMode.remote.rawValue,
+                title: L10n.Settings.sttCleanupModeRemote,
+                isDisabled: store.cleanupRemoteConfigured == false
+            ),
+            .init(id: Config.TranscriptPostProcessingMode.off.rawValue, title: L10n.Settings.sttCleanupModeOff)
+        ]
+    }
+
+    private var cleanupTaskOptions: [SettingsDropdownOption] {
+        [
+            .init(id: Config.TranscriptPostProcessingTask.cleanDictation.rawValue, title: L10n.Settings.sttCleanupTaskDictation),
+            .init(id: Config.TranscriptPostProcessingTask.rewriteMessage.rawValue, title: L10n.Settings.sttCleanupTaskMessage),
+            .init(id: Config.TranscriptPostProcessingTask.meetingNotes.rawValue, title: L10n.Settings.sttCleanupTaskNotes)
+        ]
+    }
+
+    private var canAddDictionaryDraft: Bool {
+        dictionaryDraftKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && dictionaryDraftValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private func addDictionaryDraft() {
+        store.addDictionaryEntry(key: dictionaryDraftKey, value: dictionaryDraftValue)
+        dictionaryDraftKey = ""
+        dictionaryDraftValue = ""
     }
     
     private func promptDeleteModel(_ modelID: String) {
@@ -595,6 +833,134 @@ private struct SettingsToggleRow<Trailing: View>: View {
                 trailing
             }
         }
+    }
+}
+
+private struct STTLanguageModelRecommendationBanner: View {
+    let recommendation: STTLanguageModelRecommendation
+    let onApply: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "lightbulb")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle()
+                        .fill(iconColor.opacity(colorScheme == .dark ? 0.16 : 0.1))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(recommendation.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground)
+                Text(recommendation.message)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(colorScheme == .dark ? DS.color.mutedDark : DS.color.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+
+            Button(recommendation.isDownloaded ? L10n.Settings.sttUseRecommendedModelButton : L10n.Settings.sttManageModelsButton) {
+                onApply()
+            }
+            .buttonStyle(SettingsGhostButtonStyle())
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(colorScheme == .dark ? DS.color.surface2Dark.opacity(0.86) : DS.color.surface.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(colorScheme == .dark ? DS.color.accentDark.opacity(0.22) : DS.color.accent.opacity(0.18), lineWidth: 1)
+                )
+        )
+    }
+
+    private var iconColor: Color {
+        colorScheme == .dark ? DS.color.accentDark : DS.color.accent
+    }
+}
+
+private struct DictionaryReadOnlyEntryRow: View {
+    let entry: Config.TranscriptDictionaryEntry
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(entry.key)
+                .font(DS.font.mono(size: 12, weight: .regular))
+                .foregroundStyle(colorScheme == .dark ? DS.color.mutedDark : DS.color.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: "arrow.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Text(entry.value)
+                .font(DS.font.mono(size: 12, weight: .medium))
+                .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 9)
+    }
+}
+
+private struct DictionaryEntryRow: View {
+    let entry: Config.TranscriptDictionaryEntry
+    let key: Binding<String>
+    let value: Binding<String>
+    let isEnabled: Binding<Bool>
+    let onDelete: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Toggle("", isOn: isEnabled)
+                .labelsHidden()
+                .toggleStyle(SettingsSwitchToggleStyle())
+
+            SettingsTextInputField(
+                text: key,
+                placeholder: L10n.Settings.sttDictionaryKeyPlaceholder,
+                width: 240
+            )
+
+            SettingsTextInputField(
+                text: value,
+                placeholder: L10n.Settings.sttDictionaryValuePlaceholder,
+                width: 280
+            )
+
+            Spacer(minLength: 0)
+
+            ServerStatusCapsule(
+                title: entry.enabled ? L10n.Settings.sttDictionaryEntryOn : L10n.Settings.sttOffShort,
+                tone: entry.enabled ? .active : .neutral
+            )
+
+            Button {
+                onDelete()
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(SettingsDangerIconButtonStyle())
+            .help(L10n.Settings.sttDeleteAction)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(colorScheme == .dark ? DS.color.surface2Dark.opacity(0.78) : Color.white.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.08) : DS.color.borderSoft.opacity(0.52), lineWidth: 1)
+                )
+        )
     }
 }
 

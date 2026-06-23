@@ -127,6 +127,63 @@ final class TsutaeCoreTests: XCTestCase {
         XCTAssertEqual(decoded.presentationStyle, .minimal)
     }
 
+    func testASRSampleLogWritesJSONL() async throws {
+        var config = Config.default
+        config.stt.local.preferredModel = "sensevoice-small"
+        let transcript = Transcript(text: "呃 code x hook", language: "zh", durationMs: 1200, confidence: 0.82)
+        let postProcessing = TranscriptPostProcessingResult(
+            rawText: transcript.text,
+            processedText: "Codex hook。",
+            mode: .rules,
+            task: .cleanDictation,
+            provider: "rules+dictionary",
+            model: nil,
+            elapsedMs: 1.4,
+            dictionaryMatches: ["code x"]
+        )
+        let record = ASRSampleLog.makeRecord(
+            context: "test",
+            audio: AudioData(samples: Data(count: 3200), sampleRate: 16000, channels: 1),
+            transcript: transcript,
+            config: config,
+            transcriptionElapsedMs: 42,
+            totalElapsedMs: 45,
+            postProcessing: postProcessing,
+            recordingStartApplication: FocusedApplicationSnapshot(
+                localizedName: "Xcode",
+                bundleIdentifier: "com.apple.dt.Xcode",
+                processIdentifier: 123
+            ),
+            insertionApplication: FocusedApplicationSnapshot(
+                localizedName: "Notes",
+                bundleIdentifier: "com.apple.Notes",
+                processIdentifier: 456
+            ),
+            insertion: ASRSampleLog.InsertionSnapshot(
+                method: "focused_app",
+                succeeded: true,
+                elapsedMs: 6
+            ),
+            endToEndElapsedMs: 51
+        )
+
+        await ASRSampleLog.append(record)
+
+        let text = try String(contentsOf: ASRSampleLog.fileURL, encoding: .utf8)
+        let line = try XCTUnwrap(text.split(separator: "\n").first)
+        let decoded = try JSONDecoder().decode(ASRSampleLog.Record.self, from: Data(line.utf8))
+        XCTAssertEqual(decoded.context, "test")
+        XCTAssertEqual(decoded.rawText, "呃 code x hook")
+        XCTAssertEqual(decoded.finalText, "Codex hook。")
+        XCTAssertEqual(decoded.localModel, "sensevoice-small")
+        XCTAssertEqual(decoded.postProcessing?.dictionaryMatches, ["code x"])
+        XCTAssertEqual(decoded.recordingStartApplication?.bundleIdentifier, "com.apple.dt.Xcode")
+        XCTAssertEqual(decoded.insertionApplication?.bundleIdentifier, "com.apple.Notes")
+        XCTAssertEqual(decoded.targetApplication?.bundleIdentifier, "com.apple.Notes")
+        XCTAssertEqual(decoded.insertion?.method, "focused_app")
+        XCTAssertEqual(decoded.endToEndElapsedMs, 51)
+    }
+
     func testTTSPlaybackSnapshotEncodesPreparingState() throws {
         let snapshot = TTSPlaybackSnapshot(
             state: .preparing,

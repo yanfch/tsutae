@@ -362,6 +362,40 @@ enum L10n {
         static var developerNotifyProbeSpeakButton: String { tr("settings.developer_notify_probe_speak_button", default: "Speak") }
         static var developerNotifyProbeNotificationButton: String { tr("settings.developer_notify_probe_notification_button", default: "Notify") }
         static var developerNotifyProbeBothButton: String { tr("settings.developer_notify_probe_both_button", default: "Both") }
+        static var developerPolishProbeTitle: String { tr("settings.developer_polish_probe_title", default: "Transcript Polish Probe") }
+        static var developerPolishProbeSubtitle: String { tr("settings.developer_polish_probe_subtitle", default: "Compare raw ASR text with rule cleanup or a remote text model before wiring it into daily input.") }
+        static var developerPolishModeLabel: String { tr("settings.developer_polish_mode_label", default: "Mode") }
+        static var developerPolishModeSmart: String { tr("settings.developer_polish_mode_smart", default: "Smart") }
+        static var developerPolishModeRules: String { tr("settings.developer_polish_mode_rules", default: "Rules") }
+        static var developerPolishModeRemote: String { tr("settings.developer_polish_mode_remote", default: "Remote") }
+        static var developerPolishModeOff: String { tr("settings.developer_polish_mode_off", default: "Off") }
+        static var developerPolishTaskLabel: String { tr("settings.developer_polish_task_label", default: "Task") }
+        static var developerPolishTaskClean: String { tr("settings.developer_polish_task_clean", default: "Clean") }
+        static var developerPolishTaskMessage: String { tr("settings.developer_polish_task_message", default: "Message") }
+        static var developerPolishTaskMeeting: String { tr("settings.developer_polish_task_meeting", default: "Meeting Notes") }
+        static var developerPolishRemoteTitle: String { tr("settings.developer_polish_remote_title", default: "Remote Text Model") }
+        static var developerPolishAPIKeyHelp: String { tr("settings.developer_polish_api_key_help", default: "Stored in Keychain. Leave blank to keep the existing key.") }
+        static var developerPolishSampleLabel: String { tr("settings.developer_polish_sample_label", default: "Case") }
+        static var developerPolishSampleShort: String { tr("settings.developer_polish_sample_short", default: "Short Dictation") }
+        static var developerPolishSampleCorrection: String { tr("settings.developer_polish_sample_correction", default: "Self Correction") }
+        static var developerPolishSamplePunctuation: String { tr("settings.developer_polish_sample_punctuation", default: "Spoken Punctuation") }
+        static var developerPolishSampleTerms: String { tr("settings.developer_polish_sample_terms", default: "Technical Terms") }
+        static var developerPolishSampleMeeting: String { tr("settings.developer_polish_sample_meeting", default: "Meeting Notes") }
+        static var developerPolishSampleOpenQuestion: String { tr("settings.developer_polish_sample_open_question", default: "Open Question") }
+        static var developerPolishInputLabel: String { tr("settings.developer_polish_input_label", default: "Raw") }
+        static var developerPolishInputPlaceholder: String { tr("settings.developer_polish_input_placeholder", default: "Paste raw ASR text") }
+        static var developerPolishOutputLabel: String { tr("settings.developer_polish_output_label", default: "Output") }
+        static var developerPolishOutputPlaceholder: String { tr("settings.developer_polish_output_placeholder", default: "Run a case to see the cleaned output.") }
+        static var developerPolishSaveButton: String { tr("settings.developer_polish_save_button", default: "Save Remote") }
+        static var developerPolishRunButton: String { tr("settings.developer_polish_run_button", default: "Run Polish") }
+        static var developerPolishRunning: String { tr("settings.developer_polish_running", default: "Running") }
+        static var developerPolishSaved: String { tr("settings.developer_polish_saved", default: "Saved") }
+        static func developerPolishDone(_ route: String, _ elapsedMs: Double) -> String {
+            String(format: tr("settings.developer_polish_done_format", default: "%@ %.0f ms"), route, elapsedMs)
+        }
+        static func developerPolishDoneWithTerms(_ route: String, _ elapsedMs: Double, _ count: Int) -> String {
+            String(format: tr("settings.developer_polish_done_with_terms_format", default: "%@ %.0f ms · %d terms"), route, elapsedMs, count)
+        }
         static var notifyLevelInfo: String { tr("settings.notify_level_info", default: "Info") }
         static var notifyLevelWarning: String { tr("settings.notify_level_warning", default: "Warning") }
         static var notifyLevelError: String { tr("settings.notify_level_error", default: "Error") }
@@ -602,6 +636,72 @@ enum L10n {
         static var sttLanguageLabel: String { tr("settings.stt_language_label", default: "Language") }
         static var sttLanguageAutoDetectLong: String { tr("settings.stt_language_auto_detect_long", default: "Auto detect · zh / en") }
         static var sttLanguageAutoDetectBadge: String { tr("settings.stt_language_auto_detect_badge", default: "Auto Detect") }
+        static var sttLanguageRecommendationTitle: String { tr("settings.stt_language_recommendation_title", default: "Model Hint") }
+        static func sttLanguageRecommendationChineseMessage(_ modelName: String) -> String {
+            String(format: tr("settings.stt_language_recommendation_chinese_message_format", default: "Chinese is selected. %@ is tuned for faster Chinese transcription."), modelName)
+        }
+        static func sttLanguageRecommendationEnglishMessage(_ modelName: String) -> String {
+            String(format: tr("settings.stt_language_recommendation_english_message_format", default: "English is selected. %@ is tuned for fast English dictation."), modelName)
+        }
+        static func sttLanguageRecommendationAutoMessage(currentModel: String, recommendedModel: String) -> String {
+            String(format: tr("settings.stt_language_recommendation_auto_message_format", default: "Auto detect with %@ may miss short mixed-language snippets. %@ is safer for mixed dictation."), currentModel, recommendedModel)
+        }
+        static var sttUseRecommendedModelButton: String { tr("settings.stt_use_recommended_model_button", default: "Use Recommended") }
+        static var sttCleanupTitle: String { tr("settings.stt_cleanup_title", default: "Transcript Cleanup") }
+        static var sttCleanupSubtitle: String { tr("settings.stt_cleanup_subtitle", default: "Polish ASR output before insertion with fast local rules, dictionary terms, or remote rewrite when selected.") }
+        static var sttCleanupEnableTitle: String { tr("settings.stt_cleanup_enable_title", default: "Enable Cleanup") }
+        static var sttCleanupEnableOnSubtitle: String { tr("settings.stt_cleanup_enable_on_subtitle", default: "Tsutae will clean filler words, punctuation, and known terms after transcription.") }
+        static var sttCleanupEnableOffSubtitle: String { tr("settings.stt_cleanup_enable_off_subtitle", default: "Transcripts are inserted exactly as returned by the recognizer.") }
+        static var sttCleanupEnabledBadge: String { tr("settings.stt_cleanup_enabled_badge", default: "Cleanup On") }
+        static var sttCleanupDisabledBadge: String { tr("settings.stt_cleanup_disabled_badge", default: "Cleanup Off") }
+        static var sttCleanupModeLabel: String { tr("settings.stt_cleanup_mode_label", default: "Mode") }
+        static var sttCleanupTaskLabel: String { tr("settings.stt_cleanup_task_label", default: "Task") }
+        static var sttCleanupModeSmart: String { tr("settings.stt_cleanup_mode_smart", default: "Smart") }
+        static var sttCleanupModeRules: String { tr("settings.stt_cleanup_mode_rules", default: "Rules") }
+        static var sttCleanupModeRemote: String { tr("settings.stt_cleanup_mode_remote", default: "Remote") }
+        static var sttCleanupModeOff: String { tr("settings.stt_cleanup_mode_off", default: "Off") }
+        static var sttCleanupTaskDictation: String { tr("settings.stt_cleanup_task_dictation", default: "Dictation") }
+        static var sttCleanupTaskMessage: String { tr("settings.stt_cleanup_task_message", default: "Message") }
+        static var sttCleanupTaskNotes: String { tr("settings.stt_cleanup_task_notes", default: "Notes") }
+        static var sttCleanupRouteOff: String { tr("settings.stt_cleanup_route_off", default: "Cleanup is disabled. Raw ASR text will be used.") }
+        static var sttCleanupRouteRules: String { tr("settings.stt_cleanup_route_rules", default: "Fast local rules and dictionary run on every transcript.") }
+        static var sttCleanupRouteRemote: String { tr("settings.stt_cleanup_route_remote", default: "Remote text model is used for selected cleanup tasks.") }
+        static var sttCleanupRouteRemoteNeedsSetup: String { tr("settings.stt_cleanup_route_remote_needs_setup", default: "Remote cleanup needs a text model configured in Developer.") }
+        static var sttCleanupRouteSmartRules: String { tr("settings.stt_cleanup_route_smart_rules", default: "Smart uses local rules for dictation to keep input fast.") }
+        static var sttCleanupRouteSmartRemote: String { tr("settings.stt_cleanup_route_smart_remote", default: "Smart uses remote cleanup for richer message or notes tasks.") }
+        static var sttCleanupRouteSmartFallback: String { tr("settings.stt_cleanup_route_smart_fallback", default: "Smart will fall back to local rules until remote cleanup is configured.") }
+        static var sttManageDictionaryButton: String { tr("settings.stt_manage_dictionary_button", default: "Manage Dictionary") }
+        static var sttDictionaryTitle: String { tr("settings.stt_dictionary_title", default: "Dictionary") }
+        static var sttDictionarySubtitle: String { tr("settings.stt_dictionary_subtitle", default: "Control built-in, automatic, and custom term replacement used by transcript cleanup.") }
+        static var sttDictionaryEnableTitle: String { tr("settings.stt_dictionary_enable_title", default: "Enable Dictionary") }
+        static var sttDictionaryEnableSubtitle: String { tr("settings.stt_dictionary_enable_subtitle", default: "Apply known term replacements after rule cleanup and remote rewrite.") }
+        static var sttDictionaryEnabledBadge: String { tr("settings.stt_dictionary_enabled_badge", default: "Dictionary On") }
+        static var sttDictionaryDisabledBadge: String { tr("settings.stt_dictionary_disabled_badge", default: "Dictionary Off") }
+        static var sttDictionaryAutomaticTitle: String { tr("settings.stt_dictionary_automatic_title", default: "Automatic Context") }
+        static var sttDictionaryAutomaticSubtitle: String { tr("settings.stt_dictionary_automatic_subtitle", default: "Use configured app names, models, voices, and server clients as transient terms.") }
+        static var sttDictionaryBuiltInTitle: String { tr("settings.stt_dictionary_built_in_title", default: "Built-in Terms") }
+        static var sttDictionaryBuiltInSubtitle: String { tr("settings.stt_dictionary_built_in_subtitle", default: "Keep common product, coding, and Tsutae terms stable.") }
+        static var sttDictionaryBuiltInShort: String { tr("settings.stt_dictionary_built_in_short", default: "Built-in") }
+        static var sttDictionaryBuiltInListTitle: String { tr("settings.stt_dictionary_built_in_list_title", default: "Built-in Term List") }
+        static var sttDictionaryBuiltInListSubtitle: String { tr("settings.stt_dictionary_built_in_list_subtitle", default: "Read-only replacements that run before custom entries when built-in terms are enabled.") }
+        static func sttDictionaryBuiltInCount(_ count: Int) -> String {
+            String(format: tr("settings.stt_dictionary_built_in_count_format", default: "%d built-in"), count)
+        }
+        static var sttDictionaryAutomaticShort: String { tr("settings.stt_dictionary_automatic_short", default: "Automatic") }
+        static func sttDictionaryCustomShort(_ count: Int) -> String {
+            String(format: tr("settings.stt_dictionary_custom_short_format", default: "%d custom"), count)
+        }
+        static func sttDictionaryCustomCount(_ count: Int) -> String {
+            String(format: tr("settings.stt_dictionary_custom_count_format", default: "%d Custom"), count)
+        }
+        static var sttDictionaryFeatureOff: String { tr("settings.stt_dictionary_feature_off", default: "No dictionary terms active") }
+        static var sttDictionaryCustomTitle: String { tr("settings.stt_dictionary_custom_title", default: "Custom Entries") }
+        static var sttDictionaryCustomSubtitle: String { tr("settings.stt_dictionary_custom_subtitle", default: "Add exact replacements for names, project terms, and words your ASR often misses.") }
+        static var sttDictionaryKeyPlaceholder: String { tr("settings.stt_dictionary_key_placeholder", default: "ASR text") }
+        static var sttDictionaryValuePlaceholder: String { tr("settings.stt_dictionary_value_placeholder", default: "Replacement") }
+        static var sttDictionaryAddButton: String { tr("settings.stt_dictionary_add_button", default: "Add Term") }
+        static var sttDictionaryEmptyMessage: String { tr("settings.stt_dictionary_empty_message", default: "No custom entries yet. Automatic and built-in terms can still run when enabled.") }
+        static var sttDictionaryEntryOn: String { tr("settings.stt_dictionary_entry_on", default: "On") }
         static var sttKeepLocalWarmedTitle: String { tr("settings.stt_keep_local_warmed_title", default: "Keep Local Warmed in Remote First") }
         static var sttKeepLocalWarmedSubtitle: String { tr("settings.stt_keep_local_warmed_subtitle", default: "Advanced. Keep the selected local model loaded even when remote is the preferred STT route.") }
         static var sttKeepWarmBadge: String { tr("settings.stt_keep_warm_badge", default: "Keep Warm") }

@@ -6,6 +6,18 @@ struct DeveloperToolsPage: View {
     @ObservedObject private var residencyCoordinator = LocalSTTResidencyCoordinator.shared
     @State private var debugSpeechText = "Kanade finished the latest check and is ready to report back."
     @State private var debugNotifyText = "Build succeeded for main."
+    @State private var polishModeSelection = Config.TranscriptPostProcessingMode.smart.rawValue
+    @State private var polishTaskSelection = Config.TranscriptPostProcessingTask.cleanDictation.rawValue
+    @State private var polishSampleSelection = DeveloperPolishSample.shortDictation.id
+    @State private var polishInputText = DeveloperPolishSample.shortDictation.text
+    @State private var polishOutputText = ""
+    @State private var polishRemoteBaseURL = ""
+    @State private var polishRemoteModel = ""
+    @State private var polishRemoteAPIKey = ""
+    @State private var isPolishAPIKeyRevealed = false
+    @State private var polishStatusText = L10n.Settings.ttsStatusIdle
+    @State private var polishStatusTone: ServerStatusCapsule.Tone = .soft
+    @State private var isRunningPolish = false
     @State private var notifyLevelSelection = TTSNotifyLevel.info.rawValue
     @State private var notifyStatusText = L10n.Settings.ttsStatusIdle
     @State private var notifyStatusTone: ServerStatusCapsule.Tone = .soft
@@ -50,6 +62,87 @@ struct DeveloperToolsPage: View {
                     ("3", L10n.Settings.developerHowToTestStep3),
                     (L10n.Settings.developerHowToTestExpectedLabel, L10n.Settings.developerHowToTestExpected)
                 ])
+            }
+
+            SettingsDashboardCard(title: L10n.Settings.developerPolishProbeTitle, subtitle: L10n.Settings.developerPolishProbeSubtitle) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 10) {
+                        Text(L10n.Settings.developerPolishModeLabel)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        SettingsChipSelector(
+                            selection: $polishModeSelection,
+                            options: [
+                                (Config.TranscriptPostProcessingMode.smart.rawValue, L10n.Settings.developerPolishModeSmart),
+                                (Config.TranscriptPostProcessingMode.rules.rawValue, L10n.Settings.developerPolishModeRules),
+                                (Config.TranscriptPostProcessingMode.remote.rawValue, L10n.Settings.developerPolishModeRemote)
+                            ]
+                        )
+
+                        Text(L10n.Settings.developerPolishTaskLabel)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        SettingsChipSelector(
+                            selection: $polishTaskSelection,
+                            options: [
+                                (Config.TranscriptPostProcessingTask.cleanDictation.rawValue, L10n.Settings.developerPolishTaskClean),
+                                (Config.TranscriptPostProcessingTask.rewriteMessage.rawValue, L10n.Settings.developerPolishTaskMessage),
+                                (Config.TranscriptPostProcessingTask.meetingNotes.rawValue, L10n.Settings.developerPolishTaskMeeting)
+                            ]
+                        )
+                    }
+
+                    SettingsSection(title: L10n.Settings.developerPolishRemoteTitle) {
+                        SettingsFormRow(label: L10n.Settings.labelBaseURL) {
+                            SettingsInlineTextField(text: $polishRemoteBaseURL, placeholder: "https://api.openai.com/v1", width: SettingsTokens.Size.remoteFieldWidth)
+                        }
+                        SettingsFormRow(label: L10n.Settings.sttRemoteModelLabel) {
+                            SettingsInlineTextField(text: $polishRemoteModel, placeholder: "gpt-4.1-mini", width: SettingsTokens.Size.remoteFieldWidth)
+                        }
+                        SettingsFormRow(label: L10n.Settings.sttRemoteAPIKeyLabel, helpText: polishAPIKeyHelpText) {
+                            SettingsInlineSecureField(
+                                text: $polishRemoteAPIKey,
+                                isRevealed: $isPolishAPIKeyRevealed,
+                                placeholder: polishAPIKeyPlaceholder,
+                                width: SettingsTokens.Size.remoteFieldWidth,
+                                onReveal: {
+                                    polishRemoteAPIKey = loadPostProcessingAPIKey() ?? ""
+                                }
+                            )
+                        }
+                    }
+
+                    SettingsFormRow(label: L10n.Settings.developerPolishSampleLabel) {
+                        SettingsDropdown(
+                            selection: $polishSampleSelection,
+                            options: DeveloperPolishSample.allCases.map { .init(id: $0.id, title: $0.title) },
+                            width: SettingsTokens.Size.remoteFieldWidth
+                        )
+                    }
+
+                    TTSMultilineFormRow(label: L10n.Settings.developerPolishInputLabel) {
+                        SettingsInlineMultilineTextField(text: $polishInputText, placeholder: L10n.Settings.developerPolishInputPlaceholder, width: nil)
+                    }
+
+                    TTSMultilineFormRow(label: L10n.Settings.developerPolishOutputLabel) {
+                        DeveloperPolishOutputView(text: polishOutputText.isEmpty ? L10n.Settings.developerPolishOutputPlaceholder : polishOutputText)
+                    }
+
+                    HStack(spacing: 10) {
+                        Button(L10n.Settings.developerPolishSaveButton) {
+                            savePostProcessingDraft()
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(isRunningPolish ? L10n.Settings.developerPolishRunning : L10n.Settings.developerPolishRunButton) {
+                            runPolishProbe()
+                        }
+                        .buttonStyle(SettingsAccentButtonStyle())
+                        .disabled(isRunningPolish || polishInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        ServerStatusCapsule(title: polishStatusText, tone: polishStatusTone)
+                    }
+                }
             }
 
             SettingsDashboardCard(title: L10n.Settings.developerTTSProbeTitle, subtitle: L10n.Settings.developerTTSProbeSubtitle) {
@@ -119,6 +212,17 @@ struct DeveloperToolsPage: View {
         .onReceive(NotificationCenter.default.publisher(for: .tsutaeTTSPlaybackDidChange)) { _ in
             playbackSnapshot = TTSPlaybackManager.shared.snapshot()
         }
+        .onAppear {
+            syncPostProcessingDraftFromStore()
+        }
+        .onChange(of: polishSampleSelection) { _, newValue in
+            guard let sample = DeveloperPolishSample(rawValue: newValue) else { return }
+            polishInputText = sample.text
+            polishTaskSelection = sample.task.rawValue
+            polishOutputText = ""
+            polishStatusText = L10n.Settings.ttsStatusIdle
+            polishStatusTone = .soft
+        }
     }
 
     private func triggerDebugSpeak() {
@@ -175,6 +279,114 @@ struct DeveloperToolsPage: View {
         }
     }
 
+    private func runPolishProbe() {
+        isRunningPolish = true
+        polishStatusText = L10n.Settings.developerPolishRunning
+        polishStatusTone = .soft
+        let config = postProcessingConfigFromDraft(enabled: true)
+        let task = Config.TranscriptPostProcessingTask(rawValue: polishTaskSelection) ?? .cleanDictation
+        let apiKey = resolvedPostProcessingAPIKey()
+        Task {
+            do {
+                let result = try await TranscriptPostProcessor.process(
+                    polishInputText,
+                    config: config,
+                    task: task,
+                    language: store.config.stt.language,
+                    dictionaryContext: TranscriptDictionaryContext(config: store.config, appContext: "developer"),
+                    apiKeyOverride: apiKey
+                )
+                await MainActor.run {
+                    isRunningPolish = false
+                    polishOutputText = result.processedText
+                    let route = polishRouteLabel(for: result.mode)
+                    polishStatusText = result.dictionaryMatches.isEmpty
+                        ? L10n.Settings.developerPolishDone(route, result.elapsedMs)
+                        : L10n.Settings.developerPolishDoneWithTerms(route, result.elapsedMs, result.dictionaryMatches.count)
+                    polishStatusTone = .active
+                }
+            } catch {
+                await MainActor.run {
+                    isRunningPolish = false
+                    polishStatusText = L10n.Settings.notifyFailed(error.localizedDescription)
+                    polishStatusTone = .warning
+                }
+            }
+        }
+    }
+
+    private func syncPostProcessingDraftFromStore() {
+        let config = (try? ConfigLoader.load()) ?? .default
+        polishModeSelection = config.postProcessing.mode.rawValue
+        polishTaskSelection = config.postProcessing.defaultTask.rawValue
+        polishRemoteBaseURL = config.postProcessing.remote.baseURL ?? ""
+        polishRemoteModel = config.postProcessing.remote.model ?? ""
+        polishRemoteAPIKey = ""
+        isPolishAPIKeyRevealed = false
+    }
+
+    private func savePostProcessingDraft() {
+        do {
+            var config = try ConfigLoader.load()
+            config.postProcessing = postProcessingConfigFromDraft(enabled: config.postProcessing.enabled)
+            let trimmedAPIKey = polishRemoteAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedAPIKey.isEmpty == false {
+                let ref = config.postProcessing.remote.apiKeyRef ?? "tsutae.remote_polish"
+                try SecretsManager.set(trimmedAPIKey, for: ref)
+                config.postProcessing.remote.apiKeyRef = ref
+                polishRemoteAPIKey = ""
+                isPolishAPIKeyRevealed = false
+            }
+            try ConfigLoader.save(config)
+            polishStatusText = L10n.Settings.developerPolishSaved
+            polishStatusTone = .active
+        } catch {
+            polishStatusText = L10n.Settings.notifyFailed(error.localizedDescription)
+            polishStatusTone = .warning
+        }
+    }
+
+    private func postProcessingConfigFromDraft(enabled: Bool) -> Config.TranscriptPostProcessingConfig {
+        let stored = (try? ConfigLoader.load())?.postProcessing ?? Config.TranscriptPostProcessingConfig()
+        return Config.TranscriptPostProcessingConfig(
+            enabled: enabled,
+            mode: Config.TranscriptPostProcessingMode(rawValue: polishModeSelection) ?? .smart,
+            defaultTask: Config.TranscriptPostProcessingTask(rawValue: polishTaskSelection) ?? .cleanDictation,
+            remote: Config.TranscriptPostProcessingRemoteConfig(
+                enabled: true,
+                baseURL: polishRemoteBaseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                model: polishRemoteModel.trimmingCharacters(in: .whitespacesAndNewlines),
+                apiKeyRef: stored.remote.apiKeyRef
+            ),
+            dictionary: stored.dictionary
+        )
+    }
+
+    private func loadPostProcessingAPIKey() -> String? {
+        guard let ref = ((try? ConfigLoader.load()) ?? .default).postProcessing.remote.apiKeyRef else { return nil }
+        return try? SecretsManager.get(ref)
+    }
+
+    private func resolvedPostProcessingAPIKey() -> String? {
+        let draft = polishRemoteAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if draft.isEmpty == false {
+            return draft
+        }
+        return loadPostProcessingAPIKey()
+    }
+
+    private var polishAPIKeyPlaceholder: String {
+        hasStoredPostProcessingAPIKey ? L10n.Settings.sttRemoteAPIKeyStoredPlaceholder : "sk-…"
+    }
+
+    private var polishAPIKeyHelpText: String {
+        L10n.Settings.developerPolishAPIKeyHelp
+    }
+
+    private var hasStoredPostProcessingAPIKey: Bool {
+        ((try? ConfigLoader.load()) ?? .default).postProcessing.remote.apiKeyRef != nil
+    }
+
     private func notifyStatusText(for response: TTSNotifyResponse) -> String {
         if response.spoken && response.notificationDelivered {
             return L10n.Settings.notifySentBoth
@@ -199,5 +411,104 @@ struct DeveloperToolsPage: View {
         case .speaking, .stopping:
             return L10n.Settings.ttsStatusSpeaking
         }
+    }
+
+    private func polishRouteLabel(for mode: Config.TranscriptPostProcessingMode) -> String {
+        switch mode {
+        case .off:
+            return L10n.Settings.developerPolishModeOff
+        case .smart:
+            return L10n.Settings.developerPolishModeSmart
+        case .rules:
+            return L10n.Settings.developerPolishModeRules
+        case .remote:
+            return L10n.Settings.developerPolishModeRemote
+        }
+    }
+}
+
+private enum DeveloperPolishSample: String, CaseIterable, Identifiable {
+    case shortDictation
+    case chineseCorrection
+    case spokenPunctuation
+    case technicalTerms
+    case messageRewrite
+    case meetingNotes
+    case openQuestion
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .shortDictation:
+            return L10n.Settings.developerPolishSampleShort
+        case .chineseCorrection:
+            return L10n.Settings.developerPolishSampleCorrection
+        case .spokenPunctuation:
+            return L10n.Settings.developerPolishSamplePunctuation
+        case .technicalTerms:
+            return L10n.Settings.developerPolishSampleTerms
+        case .messageRewrite:
+            return L10n.Settings.developerPolishTaskMessage
+        case .meetingNotes:
+            return L10n.Settings.developerPolishSampleMeeting
+        case .openQuestion:
+            return L10n.Settings.developerPolishSampleOpenQuestion
+        }
+    }
+
+    var task: Config.TranscriptPostProcessingTask {
+        switch self {
+        case .shortDictation, .chineseCorrection, .spokenPunctuation, .technicalTerms:
+            return .cleanDictation
+        case .messageRewrite:
+            return .rewriteMessage
+        case .meetingNotes, .openQuestion:
+            return .meetingNotes
+        }
+    }
+
+    var text: String {
+        switch self {
+        case .shortDictation:
+            return "um let's ship the server token change today and then uh update the readme tomorrow"
+        case .chineseCorrection:
+            return "呃我们周四见等等不对其实周五三点见然后把 codex hook 的通知也测一下"
+        case .spokenPunctuation:
+            return "请打开 git hub actions 逗号看一下 json 配置有没有错 问号 换行 然后更新 readme 句号"
+        case .technicalTerms:
+            return "mac os 和 ios 上的 https url 要保留 swift package manager 也要跑 stt tts 的 test"
+        case .messageRewrite:
+            return "嗯帮我写一下就是说我们已经把 server token 和 hook 分应用配置做好了然后下周想重点看一下 llm 整理文案和会议纪要这个能力"
+        case .meetingNotes:
+            return "今天会议主要说 tsutae 的发布准备。第一文档还不完整，需要补 readme 和 server api。第二 stt 本地模型长录音还是容易失败，短期提示用户分段，后面做音频切片。第三 tts local 已经能播但是第一次比较慢，需要保留 warmup 状态。下周一前我负责整理测试 case，kanade 负责接入 server token。风险是本地模型下载进度和 keychain 权限还要再测。"
+        case .openQuestion:
+            return "今天讨论 post processing 默认先走 rules remote 只在手动整理时触发 决策是先不上自动 remote 开放问题是长文本什么时候自动触发还没确定"
+        }
+    }
+}
+
+private struct DeveloperPolishOutputView: View {
+    let text: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ScrollView {
+            Text(text)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(colorScheme == .dark ? DS.color.foregroundDark : DS.color.foreground)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .padding(12)
+        }
+        .frame(maxWidth: .infinity, minHeight: 86, maxHeight: 180, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(colorScheme == .dark ? DS.color.surface2Dark.opacity(0.92) : Color.white.opacity(0.88))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(colorScheme == .dark ? DS.color.borderDarkSoft.opacity(0.42) : DS.color.borderSoft.opacity(0.62), lineWidth: 1)
+                )
+        )
     }
 }

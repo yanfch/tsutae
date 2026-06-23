@@ -2,13 +2,24 @@ import AppKit
 import Carbon
 import Foundation
 
+public struct FocusedApplicationSnapshot: Codable, Sendable, Equatable {
+    public let localizedName: String?
+    public let bundleIdentifier: String?
+    public let processIdentifier: Int32
+
+    public init(localizedName: String?, bundleIdentifier: String?, processIdentifier: Int32) {
+        self.localizedName = localizedName
+        self.bundleIdentifier = bundleIdentifier
+        self.processIdentifier = processIdentifier
+    }
+}
+
 /// Injects text into the currently focused app by temporarily using pasteboard
 /// and sending Command-V.
 ///
 /// Accessibility permission is required for CGEvent keyboard injection.
 @MainActor
 public enum FocusedTextInjector {
-    
     public static func hasAccessibilityPermission(prompt: Bool = false) -> Bool {
         let options = [
             "AXTrustedCheckOptionPrompt": prompt
@@ -43,6 +54,21 @@ public enum FocusedTextInjector {
                 pasteboard.writeObjects(oldItems)
             }
         }
+    }
+
+    public static func focusedApplicationSnapshot(excludingBundleIdentifier excludedBundleIdentifier: String? = nil) -> FocusedApplicationSnapshot? {
+        guard let application = NSWorkspace.shared.frontmostApplication else {
+            return nil
+        }
+        if let excludedBundleIdentifier,
+           application.bundleIdentifier == excludedBundleIdentifier {
+            return nil
+        }
+        return FocusedApplicationSnapshot(
+            localizedName: application.localizedName,
+            bundleIdentifier: application.bundleIdentifier,
+            processIdentifier: application.processIdentifier
+        )
     }
     
     private static func sendPasteShortcut() {

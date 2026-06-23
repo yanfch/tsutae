@@ -29,6 +29,14 @@ enum RemoteCheckState: Equatable {
     }
 }
 
+struct STTLanguageModelRecommendation: Equatable {
+    let modelID: String
+    let modelTitle: String
+    let title: String
+    let message: String
+    let isDownloaded: Bool
+}
+
 @MainActor
 final class STTSettingsStore: ObservableObject {
     @Published private(set) var config: Config
@@ -127,6 +135,57 @@ final class STTSettingsStore: ObservableObject {
             return L10n.Settings.sttLanguageAutoDetectBadge
         }
     }
+
+    var languageModelRecommendation: STTLanguageModelRecommendation? {
+        let recommendedID: String
+        let message: String
+
+        switch normalizedLanguage(config.stt.language) {
+        case "zh":
+            recommendedID = "paraformer-large-zh"
+            guard selectedModelID != recommendedID else { return nil }
+        case "en":
+            recommendedID = "parakeet-tdt-v3"
+            guard selectedModelID != recommendedID else { return nil }
+        default:
+            guard let selectedGroup = LocalSTTModelCatalog.descriptor(id: selectedModelID)?.group,
+                  selectedGroup == .chinese || selectedGroup == .english || selectedGroup == .preview
+            else {
+                return nil
+            }
+            recommendedID = "sensevoice-small"
+            guard selectedModelID != recommendedID else { return nil }
+        }
+
+        guard let descriptor = LocalSTTModelCatalog.descriptor(id: recommendedID) else { return nil }
+
+        switch normalizedLanguage(config.stt.language) {
+        case "zh":
+            message = L10n.Settings.sttLanguageRecommendationChineseMessage(descriptor.displayName)
+        case "en":
+            message = L10n.Settings.sttLanguageRecommendationEnglishMessage(descriptor.displayName)
+        default:
+            message = L10n.Settings.sttLanguageRecommendationAutoMessage(
+                currentModel: selectedModelTitle,
+                recommendedModel: descriptor.displayName
+            )
+        }
+
+        let isDownloaded: Bool
+        if case .downloaded = downloadStates[recommendedID] ?? .notStarted {
+            isDownloaded = true
+        } else {
+            isDownloaded = false
+        }
+
+        return STTLanguageModelRecommendation(
+            modelID: recommendedID,
+            modelTitle: descriptor.displayName,
+            title: L10n.Settings.sttLanguageRecommendationTitle,
+            message: message,
+            isDownloaded: isDownloaded
+        )
+    }
     
     var modeTitle: String {
         switch config.stt.mode {
@@ -168,6 +227,88 @@ final class STTSettingsStore: ObservableObject {
         }
         return isRemoteConfigured ? L10n.Settings.sttReadyShort : L10n.Settings.sttNeedsSetup
     }
+
+    var cleanupModeTitle: String {
+        switch config.postProcessing.mode {
+        case .off:
+            return L10n.Settings.sttCleanupModeOff
+        case .smart:
+            return L10n.Settings.sttCleanupModeSmart
+        case .rules:
+            return L10n.Settings.sttCleanupModeRules
+        case .remote:
+            return L10n.Settings.sttCleanupModeRemote
+        }
+    }
+
+    var cleanupTaskTitle: String {
+        switch config.postProcessing.defaultTask {
+        case .cleanDictation:
+            return L10n.Settings.sttCleanupTaskDictation
+        case .rewriteMessage:
+            return L10n.Settings.sttCleanupTaskMessage
+        case .meetingNotes:
+            return L10n.Settings.sttCleanupTaskNotes
+        }
+    }
+
+    var cleanupBadgeTitle: String {
+        guard config.postProcessing.enabled else { return L10n.Settings.sttOffShort }
+        return cleanupModeTitle
+    }
+
+    var cleanupRouteSummary: String {
+        guard config.postProcessing.enabled else {
+            return L10n.Settings.sttCleanupRouteOff
+        }
+        switch config.postProcessing.mode {
+        case .off:
+            return L10n.Settings.sttCleanupRouteOff
+        case .rules:
+            return L10n.Settings.sttCleanupRouteRules
+        case .remote:
+            return cleanupRemoteConfigured ? L10n.Settings.sttCleanupRouteRemote : L10n.Settings.sttCleanupRouteRemoteNeedsSetup
+        case .smart:
+            if config.postProcessing.defaultTask == .cleanDictation {
+                return L10n.Settings.sttCleanupRouteSmartRules
+            }
+            return cleanupRemoteConfigured ? L10n.Settings.sttCleanupRouteSmartRemote : L10n.Settings.sttCleanupRouteSmartFallback
+        }
+    }
+
+    var cleanupRemoteConfigured: Bool {
+        config.postProcessing.remote.enabled
+            && config.postProcessing.remote.baseURL?.nilIfBlank != nil
+            && config.postProcessing.remote.model?.nilIfBlank != nil
+    }
+
+    var dictionarySummaryTitle: String {
+        guard config.postProcessing.dictionary.enabled else {
+            return L10n.Settings.sttDictionaryDisabledBadge
+        }
+        return L10n.Settings.sttDictionaryCustomCount(config.postProcessing.dictionary.entries.count)
+    }
+
+    var builtInDictionaryEntries: [Config.TranscriptDictionaryEntry] {
+        TranscriptDictionaryReplacer.builtInPreviewEntries
+    }
+
+    var dictionaryFeatureSummary: String {
+        guard config.postProcessing.dictionary.enabled else {
+            return L10n.Settings.sttDictionaryFeatureOff
+        }
+        var items: [String] = []
+        if config.postProcessing.dictionary.useBuiltIn {
+            items.append(L10n.Settings.sttDictionaryBuiltInShort)
+        }
+        if config.postProcessing.dictionary.useAutomatic {
+            items.append(L10n.Settings.sttDictionaryAutomaticShort)
+        }
+        if config.postProcessing.dictionary.entries.isEmpty == false {
+            items.append(L10n.Settings.sttDictionaryCustomShort(config.postProcessing.dictionary.entries.count))
+        }
+        return items.isEmpty ? L10n.Settings.sttDictionaryFeatureOff : items.joined(separator: " · ")
+    }
     
     var remoteBaseURL: String {
         config.stt.remote.baseURL ?? ""
@@ -193,6 +334,76 @@ final class STTSettingsStore: ObservableObject {
             set: { [weak self] value in
                 guard let self else { return }
                 self.config.stt.language = value == "auto" ? nil : value
+                self.save()
+            }
+        )
+    }
+
+    var cleanupEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { self.config.postProcessing.enabled },
+            set: { [weak self] value in
+                guard let self else { return }
+                self.config.postProcessing.enabled = value
+                if value, self.config.postProcessing.mode == .off {
+                    self.config.postProcessing.mode = .smart
+                }
+                self.save()
+            }
+        )
+    }
+
+    var cleanupModeBinding: Binding<String> {
+        Binding(
+            get: { self.config.postProcessing.mode.rawValue },
+            set: { [weak self] rawValue in
+                guard let self, let mode = Config.TranscriptPostProcessingMode(rawValue: rawValue) else { return }
+                self.config.postProcessing.mode = mode
+                self.config.postProcessing.enabled = mode != .off
+                self.save()
+            }
+        )
+    }
+
+    var cleanupTaskBinding: Binding<String> {
+        Binding(
+            get: { self.config.postProcessing.defaultTask.rawValue },
+            set: { [weak self] rawValue in
+                guard let self, let task = Config.TranscriptPostProcessingTask(rawValue: rawValue) else { return }
+                self.config.postProcessing.defaultTask = task
+                self.save()
+            }
+        )
+    }
+
+    var dictionaryEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { self.config.postProcessing.dictionary.enabled },
+            set: { [weak self] value in
+                guard let self else { return }
+                self.config.postProcessing.dictionary.enabled = value
+                self.save()
+            }
+        )
+    }
+
+    var dictionaryUseBuiltInBinding: Binding<Bool> {
+        Binding(
+            get: { self.config.postProcessing.dictionary.useBuiltIn },
+            set: { [weak self] value in
+                guard let self else { return }
+                self.config.postProcessing.dictionary.useBuiltIn = value
+                self.save()
+            }
+        )
+    }
+
+    var dictionaryUseAutomaticBinding: Binding<Bool> {
+        Binding(
+            get: { self.config.postProcessing.dictionary.useAutomatic },
+            set: { [weak self] value in
+                guard let self else { return }
+                self.config.postProcessing.dictionary.useAutomatic = value
                 self.save()
             }
         )
@@ -293,6 +504,11 @@ final class STTSettingsStore: ObservableObject {
     func prepareLocalModelsPresentation() {
         rebuildModelPresentationOrder()
     }
+
+    func applyLanguageModelRecommendation() {
+        guard let recommendation = languageModelRecommendation, recommendation.isDownloaded else { return }
+        selectModel(recommendation.modelID)
+    }
     
     func canDeleteModel(_ modelID: String) -> Bool {
         if case .downloaded = downloadStates[modelID] ?? .notStarted {
@@ -378,6 +594,62 @@ final class STTSettingsStore: ObservableObject {
         }
         
         refreshDownloadStates()
+        save()
+    }
+
+    func dictionaryEntryKeyBinding(_ id: String) -> Binding<String> {
+        Binding(
+            get: { self.config.postProcessing.dictionary.entries.first(where: { $0.id == id })?.key ?? "" },
+            set: { [weak self] value in
+                self?.updateDictionaryEntry(id: id, key: value)
+            }
+        )
+    }
+
+    func dictionaryEntryValueBinding(_ id: String) -> Binding<String> {
+        Binding(
+            get: { self.config.postProcessing.dictionary.entries.first(where: { $0.id == id })?.value ?? "" },
+            set: { [weak self] value in
+                self?.updateDictionaryEntry(id: id, value: value)
+            }
+        )
+    }
+
+    func dictionaryEntryEnabledBinding(_ id: String) -> Binding<Bool> {
+        Binding(
+            get: { self.config.postProcessing.dictionary.entries.first(where: { $0.id == id })?.enabled ?? false },
+            set: { [weak self] value in
+                self?.updateDictionaryEntry(id: id, enabled: value)
+            }
+        )
+    }
+
+    func addDictionaryEntry(key: String, value: String) {
+        let normalizedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedKey.isEmpty == false, normalizedValue.isEmpty == false else { return }
+        config.postProcessing.dictionary.entries.append(
+            Config.TranscriptDictionaryEntry(key: normalizedKey, value: normalizedValue)
+        )
+        save()
+    }
+
+    func deleteDictionaryEntry(_ id: String) {
+        config.postProcessing.dictionary.entries.removeAll { $0.id == id }
+        save()
+    }
+
+    private func updateDictionaryEntry(id: String, key: String? = nil, value: String? = nil, enabled: Bool? = nil) {
+        guard let index = config.postProcessing.dictionary.entries.firstIndex(where: { $0.id == id }) else { return }
+        if let key {
+            config.postProcessing.dictionary.entries[index].key = key
+        }
+        if let value {
+            config.postProcessing.dictionary.entries[index].value = value
+        }
+        if let enabled {
+            config.postProcessing.dictionary.entries[index].enabled = enabled
+        }
         save()
     }
     
@@ -580,5 +852,3 @@ enum STTDownloadState: Equatable {
     case downloaded
     case failed(String)
 }
-
-

@@ -65,3 +65,12 @@ relaunch: kill
 
 # 重启
 restart: run
+
+# 批量对比远程文本后处理模型。例：
+# just remote-eval "mimo-v2.5,mimo-v2-omni"
+remote-eval models="mimo-v2.5,mimo-v2-omni":
+    @python3 scripts/remote_eval.py --models "{{models}}"
+
+# 本地 rules + dictionary 转写后处理评测。
+local-eval:
+    @python3 scripts/local_eval.py

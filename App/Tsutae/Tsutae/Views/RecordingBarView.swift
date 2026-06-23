@@ -98,7 +98,7 @@ struct RecordingBarView: View {
     private func breathingDot(breathPhase: Double) -> some View {
         ZStack {
             Circle()
-                .fill(stateColor.opacity(isDarkMode ? 0.14 : 0.08))
+                .fill(dotColor.opacity(isDarkMode ? 0.14 : 0.08))
                 .frame(width: layout.dotGlowSize, height: layout.dotGlowSize)
                 .scaleEffect(1.0 + sin(breathPhase) * 0.08 + completionPulse)
                 .opacity(0.58 + sin(breathPhase) * 0.16)
@@ -119,9 +119,15 @@ struct RecordingBarView: View {
                         insertion: .scale(scale: 0.9).combined(with: .opacity),
                         removal: .opacity
                     ))
+            } else if preset == .minimal && showsProcessingIndicator {
+                processingRing(rotationPhase: breathPhase)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.9).combined(with: .opacity),
+                        removal: .opacity
+                    ))
             } else {
                 Circle()
-                    .fill(stateColor)
+                    .fill(dotColor)
                     .frame(width: layout.dotSize, height: layout.dotSize)
                     .transition(.opacity)
             }
@@ -130,6 +136,22 @@ struct RecordingBarView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.84), value: state)
     }
     
+    private func processingRing(rotationPhase: Double) -> some View {
+        ZStack {
+            Circle()
+                .stroke(dotColor.opacity(isDarkMode ? 0.24 : 0.18), lineWidth: 1.2)
+
+            Circle()
+                .trim(from: 0.06, to: 0.68)
+                .stroke(
+                    dotColor,
+                    style: StrokeStyle(lineWidth: 1.6, lineCap: .round)
+                )
+                .rotationEffect(.degrees(rotationPhase * 92))
+        }
+        .frame(width: layout.dotSize + 5, height: layout.dotSize + 5)
+    }
+
     private func waveformView(wavePhase: Double) -> some View {
         HStack(alignment: .center, spacing: layout.barSpacing) {
             ForEach(0..<layout.barCount, id: \.self) { index in
@@ -143,7 +165,7 @@ struct RecordingBarView: View {
         }
         .frame(width: layout.waveformWidth, height: layout.waveformHeight, alignment: .leading)
     }
-    
+
     // MARK: - 状态文字
     
     private var statusLabelSlot: some View {
@@ -239,7 +261,11 @@ struct RecordingBarView: View {
     private var keycapTracking: CGFloat {
         0.12
     }
-    
+
+    private var showsProcessingIndicator: Bool {
+        state == .waiting || state == .thinking
+    }
+
     // MARK: - 颜色
     
     private var isDarkMode: Bool {
@@ -258,6 +284,14 @@ struct RecordingBarView: View {
         isDarkMode ? DS.color.warningDark : DS.color.warning
     }
     
+    private var processingColor: Color {
+        isDarkMode ? DS.color.warningDark : DS.color.stateThinking
+    }
+
+    private var processingWaveformColor: Color {
+        processingColor.opacity(isDarkMode ? 0.68 : 0.62)
+    }
+
     private var dangerColor: Color {
         isDarkMode ? DS.color.dangerDark : DS.color.danger
     }
@@ -321,7 +355,18 @@ struct RecordingBarView: View {
         }
     }
     
+    private var dotColor: Color {
+        if preset == .minimal && showsProcessingIndicator {
+            return processingColor
+        }
+        return stateColor
+    }
+
     private var waveformColor: Color {
+        if preset == .minimal && showsProcessingIndicator {
+            return processingWaveformColor
+        }
+
         switch state {
         case .idle, .listening, .waiting, .thinking:
             return accentColor
@@ -353,7 +398,7 @@ struct RecordingBarView: View {
                 return dangerColor
             }
         }
-        
+
         switch state {
         case .idle:
             return DS.color.success
@@ -391,7 +436,7 @@ struct RecordingBarView: View {
                 return dangerColor.opacity(0.16)
             }
         }
-        
+
         switch state {
         case .idle:
             return DS.color.success.opacity(0.1)
@@ -451,6 +496,10 @@ struct RecordingBarView: View {
     // MARK: - 波形动画
     
     private func barScaleFactor(at index: Int, wavePhase: Double) -> CGFloat {
+        if preset == .minimal && showsProcessingIndicator {
+            return 1.0
+        }
+
         switch state {
         case .idle:
             return 1.0
@@ -470,6 +519,10 @@ struct RecordingBarView: View {
     }
     
     private func barOpacity(at index: Int, wavePhase: Double) -> Double {
+        if preset == .minimal && showsProcessingIndicator {
+            return 0.9
+        }
+
         switch state {
         case .idle:
             return 1.0
@@ -499,7 +552,7 @@ struct RecordingBarView: View {
         let normalized = (sin((wavePhase * 1.9) - offset) + 1) / 2
         return minValue + (maxValue - minValue) * normalized
     }
-    
+
     private func waveformPhase(for date: Date) -> Double {
         date.timeIntervalSinceReferenceDate * 2.4
     }
@@ -527,6 +580,7 @@ struct RecordingBarView: View {
         RecordingBarView(state: .thinking, preset: .standard, colorScheme: .light)
         RecordingBarView(state: .idle, preset: .standard, colorScheme: .light)
         RecordingBarView(state: .listening, preset: .minimal, colorScheme: .light)
+        RecordingBarView(state: .thinking, preset: .minimal, colorScheme: .light)
         RecordingBarView(state: .idle, preset: .minimal, colorScheme: .light)
     }
     .padding(40)

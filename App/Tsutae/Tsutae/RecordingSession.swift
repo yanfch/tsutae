@@ -4,6 +4,11 @@ import Foundation
 import OSLog
 import TsutaeCore
 
+private struct ProcessedTranscriptOutcome {
+    let text: String
+    let postProcessing: TranscriptPostProcessingResult?
+}
+
 @MainActor
 final class RecordingSession: ObservableObject {
     
@@ -27,6 +32,7 @@ final class RecordingSession: ObservableObject {
     private var activeWarmupTask: Task<Void, Never>?
     private var activeTranscriptionTask: Task<Void, Never>?
     private var activeOperationID = UUID()
+    private var activeTargetApplication: FocusedApplicationSnapshot?
     
     private init() {}
     
@@ -49,6 +55,7 @@ final class RecordingSession: ObservableObject {
         FloatingRecordingBar.shared.hide()
         isBusy = false
         isRecording = false
+        activeTargetApplication = nil
         hasShownLongRecordingWarning = false
         liveRecordedBytes = 0
         statusText = "cancelled"
@@ -64,6 +71,14 @@ final class RecordingSession: ObservableObject {
         let operationID = UUID()
         activeOperationID = operationID
         activeWarmupTask?.cancel()
+        activeTargetApplication = FocusedTextInjector.focusedApplicationSnapshot(
+            excludingBundleIdentifier: Bundle.main.bundleIdentifier
+        )
+        if let activeTargetApplication {
+            let targetMessage = "Recording target captured. app=\(activeTargetApplication.localizedName ?? "") bundle=\(activeTargetApplication.bundleIdentifier ?? "") pid=\(activeTargetApplication.processIdentifier)"
+            logger.info("\(targetMessage, privacy: .public)")
+            PerformanceLog.record(category: "RecordingSession", message: targetMessage)
+        }
         
         activeWarmupTask = Task {
             defer {
@@ -107,6 +122,7 @@ final class RecordingSession: ObservableObject {
             } catch {
                 self.isBusy = false
                 self.isRecording = false
+                self.activeTargetApplication = nil
                 self.statusText = "start failed"
                 self.lastError = error.localizedDescription
                 self.presentStartError(error)
@@ -146,6 +162,7 @@ final class RecordingSession: ObservableObject {
         let operationID = UUID()
         activeOperationID = operationID
         activeTranscriptionTask?.cancel()
+        let recordingStartApplication = activeTargetApplication
         activeTranscriptionTask = Task {
             let transcriptionStartedAt = CFAbsoluteTimeGetCurrent()
             defer {
@@ -157,7 +174,8 @@ final class RecordingSession: ObservableObject {
             
             do {
                 let transcript = try await ConfiguredSTTRouter.transcribe(audio)
-                let transcribeDoneMessage = "RecordingSession transcription finished. chars=\(transcript.text.count) elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                let transcriptionElapsedMs = self.elapsedMs(since: transcriptionStartedAt)
+                let transcribeDoneMessage = "RecordingSession transcription finished. chars=\(transcript.text.count) elapsed_ms=\(self.formatElapsedMs(transcriptionElapsedMs))"
                 self.logger.info("\(transcribeDoneMessage, privacy: .public)")
                 PerformanceLog.record(category: "RecordingSession", message: transcribeDoneMessage)
                 guard !Task.isCancelled, self.activeOperationID == operationID else {
@@ -165,7 +183,16 @@ final class RecordingSession: ObservableObject {
                     return
                 }
                 
-                self.lastTranscript = transcript.text
+                let config = (try? ConfigLoader.load()) ?? .default
+                let processed = await self.postProcessedTranscriptText(
+                    transcript.text,
+                    config: config,
+                    operationStartedAt: transcriptionStartedAt,
+                    context: "recording"
+                )
+                let finalText = processed.text
+
+                self.lastTranscript = finalText
                 self.lastError = nil
                 self.statusText = "done"
                 
@@ -183,15 +210,42 @@ final class RecordingSession: ObservableObject {
                     return
                 }
                 
+                let injectStartedAt = CFAbsoluteTimeGetCurrent()
+                let insertionApplication = FocusedTextInjector.focusedApplicationSnapshot(
+                    excludingBundleIdentifier: Bundle.main.bundleIdentifier
+                )
+                let targetApplication = insertionApplication ?? recordingStartApplication
                 do {
-                    let injectStartedAt = CFAbsoluteTimeGetCurrent()
-                    try FocusedTextInjector.inject(transcript.text)
+                    try FocusedTextInjector.inject(finalText)
                     guard !Task.isCancelled, self.activeOperationID == operationID else {
                         self.logger.info("Cancelled session after injection completed")
                         return
                     }
                     FloatingRecordingBar.shared.hide()
-                    let injectDoneMessage = "Transcription injected. chars=\(transcript.text.count) inject_elapsed_ms=\(self.formatElapsedMs(since: injectStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                    let injectElapsedMs = self.elapsedMs(since: injectStartedAt)
+                    let endToEndElapsedMs = self.elapsedMs(since: transcriptionStartedAt)
+                    ASRSampleLog.record(
+                        ASRSampleLog.makeRecord(
+                            context: "recording",
+                            audio: audio,
+                            transcript: transcript,
+                            config: config,
+                            transcriptionElapsedMs: transcriptionElapsedMs,
+                            totalElapsedMs: endToEndElapsedMs,
+                            postProcessing: processed.postProcessing,
+                            targetApplication: targetApplication,
+                            recordingStartApplication: recordingStartApplication,
+                            insertionApplication: insertionApplication,
+                            insertion: ASRSampleLog.InsertionSnapshot(
+                                method: "focused_app",
+                                succeeded: true,
+                                elapsedMs: injectElapsedMs
+                            ),
+                            endToEndElapsedMs: endToEndElapsedMs
+                        )
+                    )
+                    self.activeTargetApplication = nil
+                    let injectDoneMessage = "Transcription injected. raw_chars=\(transcript.text.count) chars=\(finalText.count) target_app=\(targetApplication?.bundleIdentifier ?? "") output_method=focused_app inject_elapsed_ms=\(self.formatElapsedMs(injectElapsedMs)) total_elapsed_ms=\(self.formatElapsedMs(endToEndElapsedMs))"
                     self.logger.info("\(injectDoneMessage, privacy: .public)")
                     PerformanceLog.record(category: "RecordingSession", message: injectDoneMessage)
                 } catch {
@@ -200,11 +254,35 @@ final class RecordingSession: ObservableObject {
                         return
                     }
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(transcript.text, forType: .string)
+                    NSPasteboard.general.setString(finalText, forType: .string)
                     self.lastError = "Inject failed, copied to clipboard: \(error.localizedDescription)"
                     self.statusText = "inject failed"
                     self.presentInjectionError(error)
-                    let injectFailedMessage = "Injection failed: \(error.localizedDescription) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                    let injectElapsedMs = self.elapsedMs(since: injectStartedAt)
+                    let endToEndElapsedMs = self.elapsedMs(since: transcriptionStartedAt)
+                    ASRSampleLog.record(
+                        ASRSampleLog.makeRecord(
+                            context: "recording",
+                            audio: audio,
+                            transcript: transcript,
+                            config: config,
+                            transcriptionElapsedMs: transcriptionElapsedMs,
+                            totalElapsedMs: endToEndElapsedMs,
+                            postProcessing: processed.postProcessing,
+                            targetApplication: targetApplication,
+                            recordingStartApplication: recordingStartApplication,
+                            insertionApplication: insertionApplication,
+                            insertion: ASRSampleLog.InsertionSnapshot(
+                                method: "clipboard_fallback",
+                                succeeded: true,
+                                elapsedMs: injectElapsedMs,
+                                error: error.localizedDescription
+                            ),
+                            endToEndElapsedMs: endToEndElapsedMs
+                        )
+                    )
+                    self.activeTargetApplication = nil
+                    let injectFailedMessage = "Injection failed: \(error.localizedDescription) target_app=\(targetApplication?.bundleIdentifier ?? "") output_method=clipboard_fallback inject_elapsed_ms=\(self.formatElapsedMs(injectElapsedMs)) total_elapsed_ms=\(self.formatElapsedMs(endToEndElapsedMs))"
                     self.logger.error("\(injectFailedMessage, privacy: .public)")
                     PerformanceLog.record(category: "RecordingSession", message: injectFailedMessage)
                 }
@@ -418,6 +496,7 @@ final class RecordingSession: ObservableObject {
         logger.info("\(retryMessage, privacy: .public)")
         PerformanceLog.record(category: "RecordingSession", message: retryMessage)
 
+        let recordingStartApplication = activeTargetApplication
         activeTranscriptionTask = Task {
             let transcriptionStartedAt = CFAbsoluteTimeGetCurrent()
             defer {
@@ -429,31 +508,94 @@ final class RecordingSession: ObservableObject {
 
             do {
                 let transcript = try await ConfiguredSTTRouter.transcribe(audio, config: config)
-                let doneMessage = "Remote STT retry finished. chars=\(transcript.text.count) audio_seconds=\(self.audioDurationSeconds(audio)) elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                let transcriptionElapsedMs = self.elapsedMs(since: transcriptionStartedAt)
+                let doneMessage = "Remote STT retry finished. chars=\(transcript.text.count) audio_seconds=\(self.audioDurationSeconds(audio)) elapsed_ms=\(self.formatElapsedMs(transcriptionElapsedMs))"
                 self.logger.info("\(doneMessage, privacy: .public)")
                 PerformanceLog.record(category: "RecordingSession", message: doneMessage)
                 guard !Task.isCancelled, self.activeOperationID == operationID else { return }
 
-                self.lastTranscript = transcript.text
+                let processed = await self.postProcessedTranscriptText(
+                    transcript.text,
+                    config: config,
+                    operationStartedAt: transcriptionStartedAt,
+                    context: "remote_retry"
+                )
+                let finalText = processed.text
+
+                self.lastTranscript = finalText
                 self.lastError = nil
                 self.statusText = "done"
                 FloatingRecordingBar.shared.update(state: .idle)
 
+                let injectStartedAt = CFAbsoluteTimeGetCurrent()
+                let insertionApplication = FocusedTextInjector.focusedApplicationSnapshot(
+                    excludingBundleIdentifier: Bundle.main.bundleIdentifier
+                )
+                let targetApplication = insertionApplication ?? recordingStartApplication
                 do {
-                    let injectStartedAt = CFAbsoluteTimeGetCurrent()
-                    try FocusedTextInjector.inject(transcript.text)
+                    try FocusedTextInjector.inject(finalText)
                     guard !Task.isCancelled, self.activeOperationID == operationID else { return }
                     FloatingRecordingBar.shared.hide()
-                    let injectDoneMessage = "Remote retry transcription injected. chars=\(transcript.text.count) inject_elapsed_ms=\(self.formatElapsedMs(since: injectStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: transcriptionStartedAt))"
+                    let injectElapsedMs = self.elapsedMs(since: injectStartedAt)
+                    let endToEndElapsedMs = self.elapsedMs(since: transcriptionStartedAt)
+                    ASRSampleLog.record(
+                        ASRSampleLog.makeRecord(
+                            context: "remote_retry",
+                            audio: audio,
+                            transcript: transcript,
+                            config: config,
+                            transcriptionElapsedMs: transcriptionElapsedMs,
+                            totalElapsedMs: endToEndElapsedMs,
+                            postProcessing: processed.postProcessing,
+                            targetApplication: targetApplication,
+                            recordingStartApplication: recordingStartApplication,
+                            insertionApplication: insertionApplication,
+                            insertion: ASRSampleLog.InsertionSnapshot(
+                                method: "focused_app",
+                                succeeded: true,
+                                elapsedMs: injectElapsedMs
+                            ),
+                            endToEndElapsedMs: endToEndElapsedMs
+                        )
+                    )
+                    self.activeTargetApplication = nil
+                    let injectDoneMessage = "Remote retry transcription injected. raw_chars=\(transcript.text.count) chars=\(finalText.count) target_app=\(targetApplication?.bundleIdentifier ?? "") output_method=focused_app inject_elapsed_ms=\(self.formatElapsedMs(injectElapsedMs)) total_elapsed_ms=\(self.formatElapsedMs(endToEndElapsedMs))"
                     self.logger.info("\(injectDoneMessage, privacy: .public)")
                     PerformanceLog.record(category: "RecordingSession", message: injectDoneMessage)
                 } catch {
                     guard !Task.isCancelled, self.activeOperationID == operationID else { return }
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(transcript.text, forType: .string)
+                    NSPasteboard.general.setString(finalText, forType: .string)
                     self.lastError = "Inject failed, copied to clipboard: \(error.localizedDescription)"
                     self.statusText = "inject failed"
                     self.presentInjectionError(error)
+                    let injectElapsedMs = self.elapsedMs(since: injectStartedAt)
+                    let endToEndElapsedMs = self.elapsedMs(since: transcriptionStartedAt)
+                    ASRSampleLog.record(
+                        ASRSampleLog.makeRecord(
+                            context: "remote_retry",
+                            audio: audio,
+                            transcript: transcript,
+                            config: config,
+                            transcriptionElapsedMs: transcriptionElapsedMs,
+                            totalElapsedMs: endToEndElapsedMs,
+                            postProcessing: processed.postProcessing,
+                            targetApplication: targetApplication,
+                            recordingStartApplication: recordingStartApplication,
+                            insertionApplication: insertionApplication,
+                            insertion: ASRSampleLog.InsertionSnapshot(
+                                method: "clipboard_fallback",
+                                succeeded: true,
+                                elapsedMs: injectElapsedMs,
+                                error: error.localizedDescription
+                            ),
+                            endToEndElapsedMs: endToEndElapsedMs
+                        )
+                    )
+                    self.activeTargetApplication = nil
+                    let injectFailedMessage = "Remote retry injection failed: \(error.localizedDescription) target_app=\(targetApplication?.bundleIdentifier ?? "") output_method=clipboard_fallback inject_elapsed_ms=\(self.formatElapsedMs(injectElapsedMs)) total_elapsed_ms=\(self.formatElapsedMs(endToEndElapsedMs))"
+                    self.logger.error("\(injectFailedMessage, privacy: .public)")
+                    PerformanceLog.record(category: "RecordingSession", message: injectFailedMessage)
                 }
             } catch {
                 guard !Task.isCancelled, self.activeOperationID == operationID else { return }
@@ -464,6 +606,39 @@ final class RecordingSession: ObservableObject {
                 self.logger.error("\(failedMessage, privacy: .public)")
                 PerformanceLog.record(category: "RecordingSession", message: failedMessage)
             }
+        }
+    }
+
+    private func postProcessedTranscriptText(
+        _ rawText: String,
+        config: Config,
+        operationStartedAt: CFAbsoluteTime,
+        context: String
+    ) async -> ProcessedTranscriptOutcome {
+        guard config.postProcessing.enabled else {
+            let skippedMessage = "Transcript post-processing skipped. context=\(context) reason=disabled chars=\(rawText.count) total_elapsed_ms=\(formatElapsedMs(since: operationStartedAt))"
+            logger.info("\(skippedMessage, privacy: .public)")
+            PerformanceLog.record(category: "RecordingSession", message: skippedMessage)
+            return ProcessedTranscriptOutcome(text: rawText, postProcessing: nil)
+        }
+
+        do {
+            let result = try await TranscriptPostProcessor.process(
+                rawText,
+                config: config.postProcessing,
+                language: config.stt.language,
+                appContext: context,
+                dictionaryContext: TranscriptDictionaryContext(config: config, appContext: context)
+            )
+            let message = "Transcript post-processing finished. context=\(context) mode=\(result.mode.rawValue) provider=\(result.provider) model=\(result.model ?? "") raw_chars=\(rawText.count) chars=\(result.processedText.count) postprocess_elapsed_ms=\(String(format: "%.1f", result.elapsedMs)) total_elapsed_ms=\(formatElapsedMs(since: operationStartedAt))"
+            logger.info("\(message, privacy: .public)")
+            PerformanceLog.record(category: "RecordingSession", message: message)
+            return ProcessedTranscriptOutcome(text: result.processedText, postProcessing: result)
+        } catch {
+            let message = "Transcript post-processing failed. context=\(context) error=\(error.localizedDescription) fallback=raw total_elapsed_ms=\(formatElapsedMs(since: operationStartedAt))"
+            logger.error("\(message, privacy: .public)")
+            PerformanceLog.record(category: "RecordingSession", message: message)
+            return ProcessedTranscriptOutcome(text: rawText, postProcessing: nil)
         }
     }
     
@@ -694,7 +869,15 @@ final class RecordingSession: ObservableObject {
     }
     
     private func formatElapsedMs(since startedAt: CFAbsoluteTime) -> String {
-        String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - startedAt) * 1000)
+        formatElapsedMs(elapsedMs(since: startedAt))
+    }
+
+    private func formatElapsedMs(_ elapsedMs: Double) -> String {
+        String(format: "%.1f", elapsedMs)
+    }
+
+    private func elapsedMs(since startedAt: CFAbsoluteTime) -> Double {
+        (CFAbsoluteTimeGetCurrent() - startedAt) * 1000
     }
 
     private func recordingDurationSeconds(sampleBytes: Int, sampleRate: Int = 16_000, channels: Int = 1) -> Double {

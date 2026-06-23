@@ -24,6 +24,9 @@ public struct Config: Codable, Sendable {
 
     /// 系统通知设置
     public var notifications: NotificationsConfig
+
+    /// 转写后处理设置
+    public var postProcessing: TranscriptPostProcessingConfig
     
     // MARK: - 子类型
     
@@ -65,6 +68,131 @@ public struct Config: Codable, Sendable {
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             self.soundPolicy = try container.decodeIfPresent(NotificationSoundPolicy.self, forKey: .soundPolicy) ?? .important
+        }
+    }
+
+    public enum TranscriptPostProcessingMode: String, Codable, CaseIterable, Sendable {
+        case off
+        case smart
+        case rules
+        case remote
+    }
+
+    public enum TranscriptPostProcessingTask: String, Codable, CaseIterable, Sendable {
+        case cleanDictation
+        case rewriteMessage
+        case meetingNotes
+    }
+
+    public struct TranscriptPostProcessingRemoteConfig: Codable, Sendable {
+        public var enabled: Bool
+        public var baseURL: String?
+        public var model: String?
+        public var apiKeyRef: String?
+
+        public init(
+            enabled: Bool = false,
+            baseURL: String? = nil,
+            model: String? = nil,
+            apiKeyRef: String? = nil
+        ) {
+            self.enabled = enabled
+            self.baseURL = baseURL
+            self.model = model
+            self.apiKeyRef = apiKeyRef
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+            self.baseURL = try container.decodeIfPresent(String.self, forKey: .baseURL)
+            self.model = try container.decodeIfPresent(String.self, forKey: .model)
+            self.apiKeyRef = try container.decodeIfPresent(String.self, forKey: .apiKeyRef)
+        }
+    }
+
+    public struct TranscriptDictionaryEntry: Codable, Sendable, Identifiable, Equatable {
+        public var id: String
+        public var key: String
+        public var value: String
+        public var enabled: Bool
+
+        public init(
+            id: String = UUID().uuidString,
+            key: String,
+            value: String,
+            enabled: Bool = true
+        ) {
+            self.id = id
+            self.key = key
+            self.value = value
+            self.enabled = enabled
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+            self.key = try container.decodeIfPresent(String.self, forKey: .key) ?? ""
+            self.value = try container.decodeIfPresent(String.self, forKey: .value) ?? ""
+            self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        }
+    }
+
+    public struct TranscriptDictionaryConfig: Codable, Sendable {
+        public var enabled: Bool
+        public var useBuiltIn: Bool
+        public var useAutomatic: Bool
+        public var entries: [TranscriptDictionaryEntry]
+
+        public init(
+            enabled: Bool = true,
+            useBuiltIn: Bool = true,
+            useAutomatic: Bool = true,
+            entries: [TranscriptDictionaryEntry] = []
+        ) {
+            self.enabled = enabled
+            self.useBuiltIn = useBuiltIn
+            self.useAutomatic = useAutomatic
+            self.entries = entries
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+            self.useBuiltIn = try container.decodeIfPresent(Bool.self, forKey: .useBuiltIn) ?? true
+            self.useAutomatic = try container.decodeIfPresent(Bool.self, forKey: .useAutomatic) ?? true
+            self.entries = try container.decodeIfPresent([TranscriptDictionaryEntry].self, forKey: .entries) ?? []
+        }
+    }
+
+    public struct TranscriptPostProcessingConfig: Codable, Sendable {
+        public var enabled: Bool
+        public var mode: TranscriptPostProcessingMode
+        public var defaultTask: TranscriptPostProcessingTask
+        public var remote: TranscriptPostProcessingRemoteConfig
+        public var dictionary: TranscriptDictionaryConfig
+
+        public init(
+            enabled: Bool = true,
+            mode: TranscriptPostProcessingMode = .smart,
+            defaultTask: TranscriptPostProcessingTask = .cleanDictation,
+            remote: TranscriptPostProcessingRemoteConfig = TranscriptPostProcessingRemoteConfig(),
+            dictionary: TranscriptDictionaryConfig = TranscriptDictionaryConfig()
+        ) {
+            self.enabled = enabled
+            self.mode = mode
+            self.defaultTask = defaultTask
+            self.remote = remote
+            self.dictionary = dictionary
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+            self.mode = try container.decodeIfPresent(TranscriptPostProcessingMode.self, forKey: .mode) ?? .smart
+            self.defaultTask = try container.decodeIfPresent(TranscriptPostProcessingTask.self, forKey: .defaultTask) ?? .cleanDictation
+            self.remote = try container.decodeIfPresent(TranscriptPostProcessingRemoteConfig.self, forKey: .remote) ?? TranscriptPostProcessingRemoteConfig()
+            self.dictionary = try container.decodeIfPresent(TranscriptDictionaryConfig.self, forKey: .dictionary) ?? TranscriptDictionaryConfig()
         }
     }
     
@@ -610,7 +738,7 @@ public struct Config: Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case general, stt, tts, vad, server, notifications
+        case general, stt, tts, vad, server, notifications, postProcessing
     }
 
     public init(
@@ -619,7 +747,8 @@ public struct Config: Codable, Sendable {
         tts: TTSConfig = TTSConfig(),
         vad: VADConfig = VADConfig(),
         server: ServerConfig = ServerConfig(),
-        notifications: NotificationsConfig = NotificationsConfig()
+        notifications: NotificationsConfig = NotificationsConfig(),
+        postProcessing: TranscriptPostProcessingConfig = TranscriptPostProcessingConfig()
     ) {
         self.general = general
         self.stt = stt
@@ -627,6 +756,7 @@ public struct Config: Codable, Sendable {
         self.vad = vad
         self.server = server
         self.notifications = notifications
+        self.postProcessing = postProcessing
     }
 
     public init(from decoder: Decoder) throws {
@@ -637,6 +767,7 @@ public struct Config: Codable, Sendable {
         self.vad = try container.decodeIfPresent(VADConfig.self, forKey: .vad) ?? VADConfig()
         self.server = try container.decodeIfPresent(ServerConfig.self, forKey: .server) ?? ServerConfig()
         self.notifications = try container.decodeIfPresent(NotificationsConfig.self, forKey: .notifications) ?? NotificationsConfig()
+        self.postProcessing = try container.decodeIfPresent(TranscriptPostProcessingConfig.self, forKey: .postProcessing) ?? TranscriptPostProcessingConfig()
     }
     
     // MARK: - 默认配置
@@ -647,7 +778,8 @@ public struct Config: Codable, Sendable {
         tts: TTSConfig(),
         vad: VADConfig(),
         server: ServerConfig(),
-        notifications: NotificationsConfig()
+        notifications: NotificationsConfig(),
+        postProcessing: TranscriptPostProcessingConfig()
     )
 }
 
@@ -670,13 +802,15 @@ public enum ConfigLoader {
             return config
         }
         
-        // 读取并解析 YAML
+        return try load(from: url)
+    }
+
+    /// 从指定 YAML 文件加载配置，不创建默认文件。
+    public static func load(from url: URL) throws -> Config {
         let data = try Data(contentsOf: url)
         let yaml = String(data: data, encoding: .utf8) ?? ""
         let decoder = YAMLDecoder()
-        let config = try decoder.decode(Config.self, from: yaml)
-        
-        return config
+        return try decoder.decode(Config.self, from: yaml)
     }
     
     /// 保存配置到 `~/.tsutae/config.yml`
