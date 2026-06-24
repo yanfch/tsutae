@@ -6,6 +6,7 @@ import Foundation
 /// It records microphone input into 16 kHz mono 16-bit PCM, which is the
 /// internal format expected by STT/VAD components.
 public final class AudioInput: @unchecked Sendable {
+    public typealias FrameObserver = @Sendable (AudioFrame) -> Void
     
     public static let shared = AudioInput()
     
@@ -15,6 +16,8 @@ public final class AudioInput: @unchecked Sendable {
     private var outputFormat: AVAudioFormat?
     private var recordedSamples = Data()
     private var isRecording = false
+    private var frameObserver: FrameObserver?
+    private var nextFrameIndex = 0
     
     public init() {}
     
@@ -28,6 +31,12 @@ public final class AudioInput: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return recordedSamples.count
+    }
+
+    public func setFrameObserver(_ observer: FrameObserver?) {
+        lock.lock()
+        frameObserver = observer
+        lock.unlock()
     }
     
     public func requestPermission() async -> Bool {
@@ -80,6 +89,7 @@ public final class AudioInput: @unchecked Sendable {
         }
         
         recordedSamples.removeAll(keepingCapacity: true)
+        nextFrameIndex = 0
         self.engine = engine
         self.converter = converter
         self.outputFormat = outputFormat
@@ -116,6 +126,8 @@ public final class AudioInput: @unchecked Sendable {
         self.engine = nil
         self.converter = nil
         self.outputFormat = nil
+        self.frameObserver = nil
+        self.nextFrameIndex = 0
         self.recordedSamples = Data()
         self.isRecording = false
         
@@ -135,6 +147,8 @@ public final class AudioInput: @unchecked Sendable {
         engine = nil
         converter = nil
         outputFormat = nil
+        frameObserver = nil
+        nextFrameIndex = 0
         recordedSamples = Data()
         isRecording = false
     }
@@ -169,8 +183,13 @@ public final class AudioInput: @unchecked Sendable {
         }
         
         lock.lock()
+        let frameIndex = nextFrameIndex
+        nextFrameIndex += 1
         recordedSamples.append(int16Data)
+        let observer = frameObserver
         lock.unlock()
+
+        observer?(AudioFrame(samples: int16Data, frameIndex: frameIndex))
     }
 }
 

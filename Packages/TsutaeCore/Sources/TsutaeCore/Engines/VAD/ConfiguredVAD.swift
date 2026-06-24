@@ -12,7 +12,9 @@ public enum ConfiguredVADDetector {
             throw EngineError.engineNotFound(id: engineID)
         }
 
-        engine.sensitivity = resolvedConfig.vad.sensitivity
+        if abs(engine.sensitivity - resolvedConfig.vad.sensitivity) > 0.0001 {
+            engine.sensitivity = resolvedConfig.vad.sensitivity
+        }
         if engine.status != .ready {
             try await engine.load()
         }

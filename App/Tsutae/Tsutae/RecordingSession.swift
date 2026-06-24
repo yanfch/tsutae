@@ -31,6 +31,7 @@ final class RecordingSession: ObservableObject {
     private var hasShownLongRecordingWarning = false
     private var activeWarmupTask: Task<Void, Never>?
     private var activeTranscriptionTask: Task<Void, Never>?
+    private var activeVADObservation: VADObservationSession?
     private var activeOperationID = UUID()
     private var activeTargetApplication: FocusedApplicationSnapshot?
     private var pendingEscapeCancelDeadline: Date?
@@ -56,6 +57,7 @@ final class RecordingSession: ObservableObject {
         activeWarmupTask = nil
         activeTranscriptionTask?.cancel()
         activeTranscriptionTask = nil
+        finishVADObservation(reason: "cancelled")
         audioInput.cancelRecording()
         FloatingRecordingBar.shared.hide()
         isBusy = false
@@ -130,9 +132,11 @@ final class RecordingSession: ObservableObject {
                 }
                 
                 try Paths.ensureDirectories()
+                self.startVADObservation(config: config)
                 try await audioInput.startRecording()
                 try Task.checkCancellation()
                 guard self.activeOperationID == operationID else {
+                    self.finishVADObservation(reason: "cancelled_before_capture")
                     audioInput.cancelRecording()
                     return
                 }
@@ -152,6 +156,7 @@ final class RecordingSession: ObservableObject {
                 self.statusText = "start failed"
                 self.lastError = error.localizedDescription
                 self.presentStartError(error)
+                self.finishVADObservation(reason: "start_failed")
                 self.logger.error("Failed to start recording: \(error.localizedDescription, privacy: .public)")
             }
         }
@@ -162,6 +167,7 @@ final class RecordingSession: ObservableObject {
         let stopStartedAt = CFAbsoluteTimeGetCurrent()
         do {
             audio = try audioInput.stopRecording()
+            finishVADObservation(reason: "stopped")
             let stopElapsedMs = formatElapsedMs(since: stopStartedAt)
             isRecording = false
             liveRecordedBytes = 0
@@ -183,6 +189,7 @@ final class RecordingSession: ObservableObject {
             statusText = "stop failed"
             lastError = error.localizedDescription
             presentStopError(error)
+            finishVADObservation(reason: "stop_failed")
             logger.error("Failed to stop recording: \(error.localizedDescription, privacy: .public)")
             return
         }
@@ -343,6 +350,27 @@ final class RecordingSession: ObservableObject {
                 }
                 try? await Task.sleep(for: .milliseconds(250))
             }
+        }
+    }
+
+    private func startVADObservation(config: Config) {
+        var observeConfig = config
+        observeConfig.vad.engine = "fluid_audio_vad"
+        let session = VADObservationSession(sessionID: activeOperationID, config: observeConfig)
+        activeVADObservation = session
+        audioInput.setFrameObserver { frame in
+            Task(priority: .utility) {
+                await session.observe(frame)
+            }
+        }
+    }
+
+    private func finishVADObservation(reason: String) {
+        audioInput.setFrameObserver(nil)
+        guard let session = activeVADObservation else { return }
+        activeVADObservation = nil
+        Task(priority: .utility) {
+            await session.finish(reason: reason)
         }
     }
 
