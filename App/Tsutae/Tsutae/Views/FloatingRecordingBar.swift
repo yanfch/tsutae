@@ -69,6 +69,7 @@ final class FloatingRecordingBar {
     }
     
     private func show(state: AppState, initialDisplayState: RecordingBarVisualState?, companion: RecordingBarCompanion?) {
+        let showStartedAt = CFAbsoluteTimeGetCurrent()
         logger.info("show() called. isShowing=\(self.isShowing, privacy: .public)")
         currentState = state
         
@@ -204,9 +205,17 @@ final class FloatingRecordingBar {
                 panel.contentView?.animator().layer?.setAffineTransform(.identity)
             }
             self.logger.info("Panel ordered front without activating app")
+            PerformanceLog.record(
+                category: "FloatingRecordingBar",
+                message: "Recording panel ordered front. elapsed_ms=\(Self.formatElapsedMs(since: showStartedAt))"
+            )
         }
         
         logger.info("show() completed")
+        PerformanceLog.record(
+            category: "FloatingRecordingBar",
+            message: "Recording panel show completed. elapsed_ms=\(Self.formatElapsedMs(since: showStartedAt))"
+        )
     }
     
     func update(state: AppState) {
@@ -508,6 +517,10 @@ final class FloatingRecordingBar {
         presentationModel = nil
         isShowing = false
         currentState = .idle
+    }
+
+    private static func formatElapsedMs(since startedAt: CFAbsoluteTime) -> String {
+        String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - startedAt) * 1_000.0)
     }
 }
 

@@ -16,8 +16,17 @@ public enum ConfiguredVADDetector {
             engine.sensitivity = resolvedConfig.vad.sensitivity
         }
         if engine.status != .ready {
+            let loadStartedAt = CFAbsoluteTimeGetCurrent()
             try await engine.load()
+            PerformanceLog.record(
+                category: "VADObserve",
+                message: "VAD engine load finished. engine=\(engineID) elapsed_ms=\(formatElapsedMs(since: loadStartedAt))"
+            )
         }
         return try await engine.detect(frame)
+    }
+
+    private static func formatElapsedMs(since startedAt: CFAbsoluteTime) -> String {
+        String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - startedAt) * 1_000.0)
     }
 }

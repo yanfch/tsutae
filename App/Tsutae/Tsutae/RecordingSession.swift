@@ -93,10 +93,15 @@ final class RecordingSession: ObservableObject {
             return
         }
         
+        let startRequestedAt = CFAbsoluteTimeGetCurrent()
         isBusy = true
         statusText = "requesting microphone permission"
         let operationID = UUID()
         activeOperationID = operationID
+        PerformanceLog.record(
+            category: "RecordingSession",
+            message: "Recording start requested. operation=\(operationID.uuidString)"
+        )
         pendingEscapeCancelDeadline = nil
         activeWarmupTask?.cancel()
         activeTargetApplication = FocusedTextInjector.focusedApplicationSnapshot(
@@ -116,8 +121,20 @@ final class RecordingSession: ObservableObject {
             }
             
             do {
+                let configLoadStartedAt = CFAbsoluteTimeGetCurrent()
                 let config = (try? ConfigLoader.load()) ?? .default
-                if await LocalSTTResidencyCoordinator.shared.requiresWarmupGate(config: config) {
+                PerformanceLog.record(
+                    category: "RecordingSession",
+                    message: "Recording config loaded. operation=\(operationID.uuidString) elapsed_ms=\(self.formatElapsedMs(since: configLoadStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: startRequestedAt))"
+                )
+
+                let warmupCheckStartedAt = CFAbsoluteTimeGetCurrent()
+                let requiresWarmup = await LocalSTTResidencyCoordinator.shared.requiresWarmupGate(config: config)
+                PerformanceLog.record(
+                    category: "RecordingSession",
+                    message: "Recording warmup gate checked. operation=\(operationID.uuidString) required=\(requiresWarmup) elapsed_ms=\(self.formatElapsedMs(since: warmupCheckStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: startRequestedAt))"
+                )
+                if requiresWarmup {
                     self.statusText = "warming local model"
                     FloatingRecordingBar.shared.show(state: .idle)
                     self.presentCompanion(
@@ -126,14 +143,28 @@ final class RecordingSession: ObservableObject {
                         tone: .info,
                         displayState: .waiting
                     )
+                    let warmupStartedAt = CFAbsoluteTimeGetCurrent()
                     try await LocalSTTResidencyCoordinator.shared.waitUntilLocalModelReady(config: config)
+                    PerformanceLog.record(
+                        category: "RecordingSession",
+                        message: "Recording warmup gate finished. operation=\(operationID.uuidString) elapsed_ms=\(self.formatElapsedMs(since: warmupStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: startRequestedAt))"
+                    )
                     try Task.checkCancellation()
                     guard self.activeOperationID == operationID else { return }
                 }
                 
                 try Paths.ensureDirectories()
                 self.startVADObservation(config: config)
+                PerformanceLog.record(
+                    category: "RecordingSession",
+                    message: "Recording VAD observation attached. operation=\(operationID.uuidString) total_elapsed_ms=\(self.formatElapsedMs(since: startRequestedAt))"
+                )
+                let audioStartStartedAt = CFAbsoluteTimeGetCurrent()
                 try await audioInput.startRecording()
+                PerformanceLog.record(
+                    category: "RecordingSession",
+                    message: "Recording audio input started. operation=\(operationID.uuidString) elapsed_ms=\(self.formatElapsedMs(since: audioStartStartedAt)) total_elapsed_ms=\(self.formatElapsedMs(since: startRequestedAt))"
+                )
                 try Task.checkCancellation()
                 guard self.activeOperationID == operationID else {
                     self.finishVADObservation(reason: "cancelled_before_capture")
@@ -146,6 +177,10 @@ final class RecordingSession: ObservableObject {
                 self.statusText = "recording"
                 self.startRecordingProgressPolling()
                 FloatingRecordingBar.shared.show(state: .listening)
+                PerformanceLog.record(
+                    category: "RecordingSession",
+                    message: "Recording capsule show requested. operation=\(operationID.uuidString) total_elapsed_ms=\(self.formatElapsedMs(since: startRequestedAt))"
+                )
                 self.logger.info("Recording started")
             } catch is CancellationError {
                 self.logger.info("Recording start cancelled before microphone capture began")
