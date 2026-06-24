@@ -8,7 +8,37 @@ final class TranscriptPostProcessorTests: XCTestCase {
             id: "zh_filler_product_terms",
             category: "dictionary",
             raw: "呃我们今天先把 code x 的 hook 通知测一下然后那个 kanade 的 token 我已经配好了但是 github issue 那个入口还没确认",
-            expected: "我们今天先把 Codex 的 hook 通知测一下然后那个 Kanade 的 token 我已经配好了但是 GitHub Issue 那个入口还没确认。"
+            expected: "我们今天先把 Codex 的 hook 通知测一下，然后那个 Kanade 的 token 我已经配好了，但是 GitHub Issue 那个入口还没确认。"
+        ),
+        .init(
+            id: "zh_paraformer_current_request_run_on",
+            category: "segmentation",
+            raw: "我们还需要探索一下在目前的这个模型下我们 asr 输出的句子里面是没有标点符号的没有短句",
+            expected: "我们还需要探索一下，在目前的这个模型下我们 ASR 输出的句子里面是没有标点符号的没有短句。"
+        ),
+        .init(
+            id: "zh_paraformer_question_continuation",
+            category: "segmentation",
+            raw: "我们测试一下重新输出一下看看是不是能输出带标点符号的长句看一下断句是不是自然的然后结果是正确的吗",
+            expected: "我们测试一下重新输出一下看看，是不是能输出带标点符号的长句看一下断句，是不是自然的，然后结果是正确的吗？"
+        ),
+        .init(
+            id: "zh_paraformer_repeated_then_continuation",
+            category: "segmentation",
+            raw: "可以那我们现在先只处理中文然后我们继续多用然后多增加一些 case 然后我们再看效果怎么样",
+            expected: "可以，那我们现在先只处理中文，然后我们继续多用，然后多增加一些 case，然后我们再看效果怎么样。"
+        ),
+        .init(
+            id: "zh_paraformer_memory_run_on",
+            category: "segmentation",
+            raw: "我想统计一下我们所有的 locallocal 的模型每个模型实际占用的内存是多少就比如我现在跑的这个模型可能实际也就几百兆可能跟我们模型描述里的不太符合我想重新测一遍然后看看",
+            expected: "我想统计一下我们所有的 locallocal 的模型每个模型实际占用的内存是多少，就比如我现在跑的这个模型可能实际也就几百兆，可能跟我们模型描述里的不太符合。我想重新测一遍然后看看。"
+        ),
+        .init(
+            id: "zh_paraformer_ui_memory_question",
+            category: "segmentation",
+            raw: "有点空我们再调整调整宽度然后你再看一下我们的 app 的内存目前好像涨到了五百兆左右了是什么占的是模型涨的吗",
+            expected: "有点空，我们再调整调整宽度，然后你再看一下我们的 app 的内存，目前好像涨到了五百兆左右了，是什么占的是模型涨的吗？"
         ),
         .init(
             id: "zh_question_api_latency",
@@ -284,7 +314,7 @@ final class TranscriptPostProcessorTests: XCTestCase {
             id: "artifact_paraformer_scope_type",
             category: "artifact",
             raw: "ty@@pe是不是改成s@@co@@pety@@pe然后从enjoypro@@mo@@tion的s@@co@@pety@@pe赋一下值",
-            expected: "type 是不是改成 scopeType 然后从 enjoypromotion 的 scopeType 赋一下值？"
+            expected: "type 是不是改成 scopeType，然后从 enjoypromotion 的 scopeType 赋一下值？"
         ),
         .init(
             id: "guardrail_amount_not_filler",
@@ -296,7 +326,7 @@ final class TranscriptPostProcessorTests: XCTestCase {
             id: "guardrail_amount_question_not_filler",
             category: "guardrail",
             raw: "我们还需要再看一下分摊因为金额是非零然后见面以后会有分摊问题吗",
-            expected: "我们还需要再看一下分摊因为金额是非零然后见面以后会有分摊问题吗？"
+            expected: "我们还需要再看一下分摊因为金额是非零，然后见面以后会有分摊问题吗？"
         ),
         .init(
             id: "en_question_where",

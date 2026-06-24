@@ -506,37 +506,50 @@ public enum TranscriptDictionaryReplacer {
 
 public enum RuleBasedTranscriptCleaner {
     public static func clean(_ text: String) -> String {
-        var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        cleaned = cleaned.replacingOccurrences(of: "\r\n", with: "\n")
-        cleaned = cleaned.replacingOccurrences(of: "\r", with: "\n")
-        cleaned = normalizeTokenizerArtifacts(cleaned)
-        cleaned = cleaned.replacingOccurrences(of: #"(?m)^[\s"'“”‘’]+|[\s"'“”‘’]+$"#, with: "", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: #"\b(um+|uh+|erm)\b[,\s]*"#, with: "", options: [.regularExpression, .caseInsensitive])
-        cleaned = cleaned.replacingOccurrences(of: #"(嗯啊+|呃+|嗯+|啊{2,})[，,、\s]*"#, with: "", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: #"(^|[，,、\s])额+[，,、\s]+"#, with: "$1", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: #"(^|[，,、\s])啊[，,、\s]*"#, with: "$1", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: #"[^。！？.!?\n]*[，,、\s]*(等等)?不对[，,、\s]*其实"#, with: "", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: #"(然后|就是|那个|这个)(?:[，,、\s]*\1)+"#, with: "$1", options: .regularExpression)
-        cleaned = normalizeSpokenPunctuation(cleaned)
-        cleaned = cleaned.replacingOccurrences(of: #"[ \t]+"#, with: " ", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: #"[ \t]*\n[ \t]*"#, with: "\n", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: #"\s+([，。！？；：、,.!?;:])"#, with: "$1", options: .regularExpression)
-        cleaned = cleaned.replacingOccurrences(of: #"(\p{Han})[ \t]+(\p{Han})"#, with: "$1$2", options: .regularExpression)
-        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        cleaned = appendTerminalPunctuationIfNeeded(cleaned)
+        var cleaned = TranscriptInitialNormalizer.normalize(text)
+        cleaned = TranscriptFillerCleaner.clean(cleaned)
+        cleaned = SpokenPunctuationNormalizer.normalize(cleaned)
+        cleaned = ChineseRunOnSegmenter.segment(cleaned)
+        cleaned = TranscriptSpacingNormalizer.normalize(cleaned)
+        cleaned = TerminalPunctuationAppender.appendIfNeeded(cleaned)
         return cleaned
     }
+}
 
-    private static func normalizeTokenizerArtifacts(_ text: String) -> String {
-        text.replacingOccurrences(
+private enum TranscriptInitialNormalizer {
+    static func normalize(_ text: String) -> String {
+        var output = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        output = output.replacingOccurrences(of: "\r\n", with: "\n")
+        output = output.replacingOccurrences(of: "\r", with: "\n")
+        output = output.replacingOccurrences(
             of: #"(?<=[A-Za-z])@@(?=[A-Za-z])"#,
             with: "",
             options: .regularExpression
         )
+        output = output.replacingOccurrences(
+            of: #"(?m)^[\s"'“”‘’]+|[\s"'“”‘’]+$"#,
+            with: "",
+            options: .regularExpression
+        )
+        return output
     }
+}
 
-    private static func normalizeSpokenPunctuation(_ text: String) -> String {
+private enum TranscriptFillerCleaner {
+    static func clean(_ text: String) -> String {
+        var output = text
+        output = output.replacingOccurrences(of: #"\b(um+|uh+|erm)\b[,\s]*"#, with: "", options: [.regularExpression, .caseInsensitive])
+        output = output.replacingOccurrences(of: #"(嗯啊+|呃+|嗯+|啊{2,})[，,、\s]*"#, with: "", options: .regularExpression)
+        output = output.replacingOccurrences(of: #"(^|[，,、\s])额+[，,、\s]+"#, with: "$1", options: .regularExpression)
+        output = output.replacingOccurrences(of: #"(^|[，,、\s])啊[，,、\s]*"#, with: "$1", options: .regularExpression)
+        output = output.replacingOccurrences(of: #"[^。！？.!?\n]*[，,、\s]*(等等)?不对[，,、\s]*其实"#, with: "", options: .regularExpression)
+        output = output.replacingOccurrences(of: #"(然后|就是|那个|这个)(?:[，,、\s]*\1)+"#, with: "$1", options: .regularExpression)
+        return output
+    }
+}
+
+private enum SpokenPunctuationNormalizer {
+    static func normalize(_ text: String) -> String {
         var output = text
         let chineseCommands: [(String, String)] = [
             ("新段落", "\n\n"),
@@ -573,40 +586,240 @@ public enum RuleBasedTranscriptCleaner {
         }
         return output
     }
+}
 
-    private static func appendTerminalPunctuationIfNeeded(_ text: String) -> String {
+private enum ChineseRunOnSegmenter {
+    static func segment(_ text: String) -> String {
+        guard TranscriptPunctuationHeuristics.containsCJK(text), text.count >= 24 else { return text }
+
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        return lines
+            .map { segmentParagraph(String($0)) }
+            .joined(separator: "\n")
+    }
+
+    private static func segmentParagraph(_ paragraph: String) -> String {
+        guard paragraph.count >= 24,
+              TranscriptPunctuationHeuristics.containsCJK(paragraph),
+              paragraph.range(of: #"[。！？!?]"#, options: .regularExpression) == nil else {
+            return paragraph
+        }
+
+        var output = paragraph
+        output = insertChineseBoundary(
+            in: output,
+            before: ["另外", "接下来", "我想", "我们需要", "我们可以", "你觉得"],
+            punctuation: "。",
+            minPrefix: 8,
+            minSuffix: 8
+        )
+        output = insertChineseBoundary(
+            in: output,
+            before: ["然后", "但是", "所以", "不过"],
+            punctuation: "，",
+            minPrefix: 6,
+            minSuffix: 3
+        )
+        output = insertChineseBoundary(
+            in: output,
+            before: ["在目前", "目前", "现在", "当前", "后面", "之前", "其实", "就比如", "比如", "感觉", "我觉得", "可能跟", "是不是", "是什么", "怎么", "为什么", "能不能", "可不可以", "有没有"],
+            punctuation: "，",
+            minPrefix: 8,
+            minSuffix: 3
+        )
+        output = output.replacingOccurrences(
+            of: #"(可以啊|可以|没问题|有点空|好多了|行|好)(我们|我|你|这个|那)"#,
+            with: "$1，$2",
+            options: .regularExpression
+        )
+        return output
+    }
+
+    private static func insertChineseBoundary(
+        in text: String,
+        before markers: [String],
+        punctuation: String,
+        minPrefix: Int,
+        minSuffix: Int
+    ) -> String {
+        var output = text
+        var searchStart = output.startIndex
+
+        while searchStart < output.endIndex {
+            guard let match = nextMarker(in: output, markers: markers, from: searchStart) else {
+                break
+            }
+            let markerOffset = output.distance(from: output.startIndex, to: match.range.lowerBound)
+
+            if shouldInsertBoundary(
+                in: output,
+                at: match.range.lowerBound,
+                markerEnd: match.range.upperBound,
+                punctuation: punctuation,
+                minPrefix: minPrefix,
+                minSuffix: minSuffix
+            ) {
+                output = String(output[..<match.range.lowerBound]) + punctuation + String(output[match.range.lowerBound...])
+                let nextOffset = min(markerOffset + punctuation.count + match.marker.count, output.count)
+                searchStart = output.index(output.startIndex, offsetBy: nextOffset)
+            } else {
+                if punctuation == "。",
+                   shouldInsertQuestionContinuationBoundary(
+                       in: output,
+                       at: match.range.lowerBound,
+                       markerEnd: match.range.upperBound,
+                       minSuffix: 4
+                   ) {
+                    output = String(output[..<match.range.lowerBound]) + "，" + String(output[match.range.lowerBound...])
+                    let nextOffset = min(markerOffset + 1 + match.marker.count, output.count)
+                    searchStart = output.index(output.startIndex, offsetBy: nextOffset)
+                } else {
+                    searchStart = match.range.upperBound
+                }
+            }
+        }
+
+        return output
+    }
+
+    private static func nextMarker(
+        in text: String,
+        markers: [String],
+        from start: String.Index
+    ) -> (range: Range<String.Index>, marker: String)? {
+        var selected: (range: Range<String.Index>, marker: String)?
+        for marker in markers {
+            guard let range = text.range(of: marker, range: start..<text.endIndex) else { continue }
+            if selected == nil || range.lowerBound < selected!.range.lowerBound {
+                selected = (range, marker)
+            }
+        }
+        return selected
+    }
+
+    private static func shouldInsertBoundary(
+        in text: String,
+        at markerStart: String.Index,
+        markerEnd: String.Index,
+        punctuation: String,
+        minPrefix: Int,
+        minSuffix: Int
+    ) -> Bool {
+        guard markerStart > text.startIndex else { return false }
+        guard hasBoundaryBeforeMarker(in: text, at: markerStart) == false else {
+            return false
+        }
+
+        let prefixCount = countSinceLastBoundary(in: text[..<markerStart])
+        let suffixCount = countUntilNextBoundary(in: text[markerEnd...])
+        if punctuation == "。", TranscriptPunctuationHeuristics.isLikelyChineseQuestion(String(text[..<markerStart])) {
+            return false
+        }
+        return prefixCount >= minPrefix && suffixCount >= minSuffix
+    }
+
+    private static func shouldInsertQuestionContinuationBoundary(
+        in text: String,
+        at markerStart: String.Index,
+        markerEnd: String.Index,
+        minSuffix: Int
+    ) -> Bool {
+        guard markerStart > text.startIndex else { return false }
+        let previousIndex = text.index(before: markerStart)
+        let previous = String(text[previousIndex])
+        let boundaryCharacters = CharacterSet(charactersIn: "，,、。！？!?；;：:\n ")
+        guard previous.rangeOfCharacter(from: boundaryCharacters) == nil else {
+            return false
+        }
+        guard TranscriptPunctuationHeuristics.isLikelyChineseQuestion(String(text[..<markerStart])) else {
+            return false
+        }
+        return countUntilNextBoundary(in: text[markerEnd...]) >= minSuffix
+    }
+
+    private static func hasBoundaryBeforeMarker(in text: String, at markerStart: String.Index) -> Bool {
+        var index = text.index(before: markerStart)
+        while text[index].isWhitespace, index > text.startIndex {
+            index = text.index(before: index)
+        }
+        let previous = String(text[index])
+        let boundaryCharacters = CharacterSet(charactersIn: "，,、。！？!?；;：:\n")
+        return previous.rangeOfCharacter(from: boundaryCharacters) != nil
+    }
+
+    private static func countSinceLastBoundary(in prefix: Substring) -> Int {
+        var count = 0
+        let boundaries = CharacterSet(charactersIn: "，,、。！？!?；;：:\n")
+        for character in prefix.reversed() {
+            if String(character).rangeOfCharacter(from: boundaries) != nil {
+                break
+            }
+            count += 1
+        }
+        return count
+    }
+
+    private static func countUntilNextBoundary(in suffix: Substring) -> Int {
+        var count = 0
+        let boundaries = CharacterSet(charactersIn: "，,、。！？!?；;：:\n")
+        for character in suffix {
+            if String(character).rangeOfCharacter(from: boundaries) != nil {
+                break
+            }
+            count += 1
+        }
+        return count
+    }
+}
+
+private enum TranscriptSpacingNormalizer {
+    static func normalize(_ text: String) -> String {
+        var output = text
+        output = output.replacingOccurrences(of: #"[ \t]+"#, with: " ", options: .regularExpression)
+        output = output.replacingOccurrences(of: #"[ \t]*\n[ \t]*"#, with: "\n", options: .regularExpression)
+        output = output.replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+        output = output.replacingOccurrences(of: #"\s+([，。！？；：、,.!?;:])"#, with: "$1", options: .regularExpression)
+        output = output.replacingOccurrences(of: #"(\p{Han})[ \t]+(\p{Han})"#, with: "$1$2", options: .regularExpression)
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private enum TerminalPunctuationAppender {
+    static func appendIfNeeded(_ text: String) -> String {
         guard let last = text.last else { return text }
         let terminal = CharacterSet(charactersIn: "。.!?！？")
         if String(last).rangeOfCharacter(from: terminal) != nil {
             return text
         }
-        if containsCJK(text) {
+        if TranscriptPunctuationHeuristics.containsCJK(text) {
             return text + chineseTerminalPunctuation(for: text)
         }
         return text + englishTerminalPunctuation(for: text)
     }
 
     private static func chineseTerminalPunctuation(for text: String) -> String {
-        if isLikelyChineseQuestion(text) {
+        if TranscriptPunctuationHeuristics.isLikelyChineseQuestion(text) {
             return "？"
         }
-        if isLikelyChineseExclamation(text) {
+        if TranscriptPunctuationHeuristics.isLikelyChineseExclamation(text) {
             return "！"
         }
         return "。"
     }
 
     private static func englishTerminalPunctuation(for text: String) -> String {
-        if isLikelyEnglishQuestion(text) {
+        if TranscriptPunctuationHeuristics.isLikelyEnglishQuestion(text) {
             return "?"
         }
-        if isLikelyEnglishExclamation(text) {
+        if TranscriptPunctuationHeuristics.isLikelyEnglishExclamation(text) {
             return "!"
         }
         return "."
     }
+}
 
-    private static func isLikelyChineseQuestion(_ text: String) -> Bool {
+private enum TranscriptPunctuationHeuristics {
+    static func isLikelyChineseQuestion(_ text: String) -> Bool {
         let compact = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let terminalQuestionPattern = #"(吗|么|呢|什么|为什么|怎么|如何|哪里|哪儿|哪个|哪种|谁|多少|几点|能不能|是不是|可不可以|要不要|有没有|行不行|对不对|好不好|可以吗|对吗)$"#
         if compact.range(of: terminalQuestionPattern, options: .regularExpression) != nil {
@@ -620,7 +833,7 @@ public enum RuleBasedTranscriptCleaner {
         return compact.range(of: leadingQuestionPattern, options: .regularExpression) != nil
     }
 
-    private static func isLikelyChineseExclamation(_ text: String) -> Bool {
+    static func isLikelyChineseExclamation(_ text: String) -> Bool {
         let compact = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let imperativePattern = #"^(注意|小心|别|不要|必须|一定)"#
         if compact.range(of: imperativePattern, options: .regularExpression) != nil {
@@ -630,19 +843,19 @@ public enum RuleBasedTranscriptCleaner {
         return compact.range(of: emphasisPattern, options: .regularExpression) != nil
     }
 
-    private static func isLikelyEnglishQuestion(_ text: String) -> Bool {
+    static func isLikelyEnglishQuestion(_ text: String) -> Bool {
         let compact = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let leadingQuestionPattern = #"^(what|why|how|where|when|who|which|can|could|should|would|will|do|does|did|is|are|was|were|am|may|might)\b"#
         return compact.range(of: leadingQuestionPattern, options: .regularExpression) != nil
     }
 
-    private static func isLikelyEnglishExclamation(_ text: String) -> Bool {
+    static func isLikelyEnglishExclamation(_ text: String) -> Bool {
         let compact = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let expressionPattern = #"^(great|awesome|nice|perfect|warning|stop|don'?t)\b"#
         return compact.range(of: expressionPattern, options: .regularExpression) != nil
     }
 
-    private static func containsCJK(_ text: String) -> Bool {
+    static func containsCJK(_ text: String) -> Bool {
         text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
     }
 }
