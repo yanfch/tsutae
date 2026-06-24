@@ -669,7 +669,7 @@ enum L10n {
         }
         static var sttBackToSTT: String { tr("settings.stt_back_to_stt", default: "Back to STT") }
         static var sttLocalModelsTitle: String { tr("settings.stt_local_models_title", default: "Local Models") }
-        static var sttLocalModelsSubtitle: String { tr("settings.stt_local_models_subtitle", default: "Browse the on-device library here. Use Downloaded to quickly filter what is already on this Mac. Rough size and RAM numbers are planning values for now; later we will replace them with measured values.") }
+        static var sttLocalModelsSubtitle: String { tr("settings.stt_local_models_subtitle", default: "Browse the on-device library here. Use Downloaded to filter what is already on this Mac. Warm memory includes shared runtime and system cache, so Activity Monitor can vary.") }
         static var sttModelLibraryTitle: String { tr("settings.stt_model_library_title", default: "Model Library") }
         static var sttModelLibrarySubtitle: String { tr("settings.stt_model_library_subtitle", default: "Filter, download, and choose the default local model used by Local First.") }
         static var sttSelectedLabel: String { tr("settings.stt_selected_label", default: "Selected") }
@@ -842,6 +842,7 @@ enum L10n {
         static var sttModelGroupEnglish: String { tr("settings.stt_model_group_english", default: "English") }
         static var sttModelGroupPreview: String { tr("settings.stt_model_group_preview", default: "Preview") }
         static var sttModelTopPick: String { tr("settings.stt_model_top_pick", default: "Top Pick") }
+        static var sttModelRuntimeNotMeasured: String { tr("settings.stt_model_runtime_not_measured", default: "Not measured") }
         static var sttModelSummarySenseVoiceSmall: String { tr("settings.stt_model_summary_sensevoice_small", default: "Balanced local model for mixed Chinese and English speech.") }
         static var sttModelSummaryQwen3ASRInt8: String { tr("settings.stt_model_summary_qwen3_asr_int8", default: "Mixed-language option with better coverage but slower runtime.") }
         static var sttModelSummaryParaformerLargeZH: String { tr("settings.stt_model_summary_paraformer_large_zh", default: "Fast local model tuned for Chinese transcription.") }
@@ -850,9 +851,9 @@ enum L10n {
         static var sttModelSummaryParakeetEOU: String { tr("settings.stt_model_summary_parakeet_eou", default: "Preview-only streaming candidate for future partial transcription.") }
         static var sttModelTagBestForMixed: String { tr("settings.stt_model_tag_best_for_mixed", default: "Best for Mixed") }
         static var sttModelTagBalanced: String { tr("settings.stt_model_tag_balanced", default: "Balanced") }
-        static var sttModelTagLowMemory: String { tr("settings.stt_model_tag_low_memory", default: "Low Memory") }
+        static var sttModelTagLowMemory: String { tr("settings.stt_model_tag_low_memory", default: "Low Runtime") }
         static var sttModelTagMixedLanguage: String { tr("settings.stt_model_tag_mixed_language", default: "Mixed Language") }
-        static var sttModelTagHigherMemory: String { tr("settings.stt_model_tag_higher_memory", default: "Higher Memory") }
+        static var sttModelTagHigherMemory: String { tr("settings.stt_model_tag_higher_memory", default: "High Runtime") }
         static var sttModelTagSlower: String { tr("settings.stt_model_tag_slower", default: "Slower") }
         static var sttModelTagBestForChinese: String { tr("settings.stt_model_tag_best_for_chinese", default: "Best for Chinese") }
         static var sttModelTagChineseFocused: String { tr("settings.stt_model_tag_chinese_focused", default: "Chinese Focused") }

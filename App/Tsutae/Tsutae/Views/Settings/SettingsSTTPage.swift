@@ -515,7 +515,7 @@ struct STTSettingsPage: View {
             }
             
             SettingsDashboardCard(title: L10n.Settings.sttModelLibraryTitle, subtitle: L10n.Settings.sttModelLibrarySubtitle) {
-                SettingsTwoColumnGrid {
+                STTLocalModelGrid {
                     ForEach(store.filteredModels) { descriptor in
                         STTLocalModelCard(
                             descriptor: descriptor,
@@ -784,6 +784,22 @@ struct STTSettingsPage: View {
             }
         } catch {
             store.remoteCheckState = .failed(error.localizedDescription)
+        }
+    }
+}
+
+private struct STTLocalModelGrid<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(minimum: 280), spacing: SettingsTokens.Spacing.card, alignment: .top),
+                GridItem(.flexible(minimum: 280), spacing: SettingsTokens.Spacing.card, alignment: .top)
+            ],
+            spacing: SettingsTokens.Spacing.card
+        ) {
+            content
         }
     }
 }
@@ -1184,16 +1200,15 @@ private struct STTLocalModelCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(minHeight: 88, alignment: .topLeading)
                     
                     ModelStateBadge(title: stateBadgeTitle, tone: stateBadgeTone, icon: stateBadgeIcon)
                 }
                 
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
+                    FlowLayout(spacing: 8, lineSpacing: 8) {
                         SettingsMetricPill(title: descriptor.runtime)
                         SettingsMetricPill(title: descriptor.size)
-                        SettingsMetricPill(title: descriptor.memory)
+                        SettingsMetricPill(title: runtimeMemoryValue)
                     }
                     
                     FlowLayout(spacing: 8, lineSpacing: 8) {
@@ -1206,8 +1221,6 @@ private struct STTLocalModelCard: View {
                         }
                     }
                 }
-                
-                Spacer(minLength: 0)
                 
                 Divider()
                     .overlay(colorScheme == .dark ? Color.white.opacity(0.08) : DS.color.borderSoft.opacity(0.56))
@@ -1231,7 +1244,7 @@ private struct STTLocalModelCard: View {
                 }
             }
             .padding(SettingsTokens.Padding.localModelCard)
-            .frame(maxWidth: .infinity, minHeight: 244, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 204, alignment: .topLeading)
         }
         .background(cardBackground)
         .overlay(cardBorder)
@@ -1271,6 +1284,10 @@ private struct STTLocalModelCard: View {
         default:
             return descriptor.summary
         }
+    }
+
+    private var runtimeMemoryValue: String {
+        descriptor.memory == "Not measured" ? L10n.Settings.sttModelRuntimeNotMeasured : descriptor.memory
     }
     
     private func localizedTag(_ tag: String) -> String {

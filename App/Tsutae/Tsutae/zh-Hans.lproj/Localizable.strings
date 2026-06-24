@@ -476,7 +476,7 @@
 "settings.stt_warming_model_format" = "正在预热 %@…";
 "settings.stt_back_to_stt" = "返回转写设置";
 "settings.stt_local_models_title" = "本地模型";
-"settings.stt_local_models_subtitle" = "在这里浏览本地模型库。用“已下载”可以快速筛出这台 Mac 上已有的模型。体积和内存数据目前还是估算值，后续会替换为实测值。";
+"settings.stt_local_models_subtitle" = "在这里浏览本地模型库。用“已下载”可以快速筛出这台 Mac 上已有的模型。预热内存包含运行时和系统缓存，所以活动监视器里的数值会有波动。";
 "settings.stt_model_library_title" = "模型库管理";
 "settings.stt_model_library_subtitle" = "筛选、下载，并选择“本地优先”默认使用的本地模型。";
 "settings.stt_selected_label" = "当前选择";
@@ -625,6 +625,7 @@
 "settings.stt_model_group_english" = "英文";
 "settings.stt_model_group_preview" = "预览";
 "settings.stt_model_top_pick" = "首选";
+"settings.stt_model_runtime_not_measured" = "未实测";
 "settings.stt_model_summary_sensevoice_small" = "适合中英混说场景的均衡型本地模型。";
 "settings.stt_model_summary_qwen3_asr_int8" = "混合语言覆盖更广，但运行速度更慢。";
 "settings.stt_model_summary_paraformer_large_zh" = "面向中文转写优化，速度也更快。";
@@ -633,9 +634,9 @@
 "settings.stt_model_summary_parakeet_eou" = "面向未来局部转写能力的预览型流式候选模型。";
 "settings.stt_model_tag_best_for_mixed" = "混合场景优先";
 "settings.stt_model_tag_balanced" = "均衡";
-"settings.stt_model_tag_low_memory" = "更省内存";
+"settings.stt_model_tag_low_memory" = "运行内存低";
 "settings.stt_model_tag_mixed_language" = "混合语言";
-"settings.stt_model_tag_higher_memory" = "内存占用更高";
+"settings.stt_model_tag_higher_memory" = "运行内存高";
 "settings.stt_model_tag_slower" = "更慢";
 "settings.stt_model_tag_best_for_chinese" = "中文场景优先";
 "settings.stt_model_tag_chinese_focused" = "偏中文场景";

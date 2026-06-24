@@ -7,6 +7,7 @@ let package = Package(
 	platforms: [.macOS(.v14)],
 	products: [
 		.library(name: "TsutaeCore", targets: ["TsutaeCore"]),
+		.executable(name: "LocalModelMemoryBench", targets: ["LocalModelMemoryBench"]),
 	],
 	dependencies: [
 		.package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
@@ -22,6 +23,22 @@ let package = Package(
 				.product(name: "Yams", package: "Yams"),
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				.product(name: "FluidAudio", package: "FluidAudio"),
+			],
+			exclude: [
+				"Audio/README.md",
+				"Config/README.md",
+				"Engines/README.md",
+				"Hotkeys/README.md",
+				"Recipes/README.md",
+				"Secrets/README.md",
+				"Server/README.md",
+				"Tracing/README.md",
+			]
+		),
+		.executableTarget(
+			name: "LocalModelMemoryBench",
+			dependencies: [
+				"TsutaeCore",
 			]
 		),
 		.testTarget(

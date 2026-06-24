@@ -74,3 +74,12 @@ remote-eval models="mimo-v2.5,mimo-v2-omni":
 # 本地 rules + dictionary 转写后处理评测。
 local-eval:
     @python3 scripts/local_eval.py
+
+# 测量本地 STT 模型实际运行内存；每个模型单独子进程，默认只测已下载模型。
+stt-memory-bench:
+    @mkdir -p reports
+    @app_home="$HOME/Library/Containers/dev.yanfch.Tsutae/Data"; \
+    if [ ! -d "$app_home/Library/Application Support/FluidAudio" ]; then app_home="$HOME"; fi; \
+    (cd Packages/TsutaeCore && swift build --product LocalModelMemoryBench >/dev/null && \
+      HOME="$app_home" CFFIXED_USER_HOME="$app_home" \
+      .build/debug/LocalModelMemoryBench --all-stt --output ../../reports/stt-model-memory.jsonl --timeout-seconds 300)

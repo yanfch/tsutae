@@ -59,6 +59,7 @@ fastlane/test_output
 coverage/
 dist/
 out/
+reports/
 
 # Models / logs
 models/
