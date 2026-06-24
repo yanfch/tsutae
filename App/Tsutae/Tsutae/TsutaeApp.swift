@@ -525,6 +525,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         logger.info("applicationDidFinishLaunching")
+        PerformanceLog.record(category: "AppDelegate", message: "applicationDidFinishLaunching")
         installApplicationIcon()
         AppPresentationController.shared.applyCurrentDockPreference()
         EngineManager.shared.registerTTS(AppleTTSEngine.shared)
@@ -568,7 +569,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupHotkeys() {
         logger.info("Registering global hotkey")
         GlobalHotkeyManager.shared.start {
-            self.logger.info("Global hotkey fired")
+            let message = "Global hotkey fired"
+            self.logger.info("\(message, privacy: .public)")
+            PerformanceLog.record(category: "Hotkey", message: message)
             Task { @MainActor in
                 RecordingSession.shared.toggle()
             }

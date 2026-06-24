@@ -49,7 +49,7 @@ install-dev: build
 
 # 杀掉应用
 kill:
-    @pkill -x Tsutae >/dev/null 2>&1 || true
+    @bash -c 'pkill -x Tsutae >/dev/null 2>&1 || true; for _ in {1..30}; do pgrep -x Tsutae >/dev/null 2>&1 || break; sleep 0.1; done; if pgrep -x Tsutae >/dev/null 2>&1; then pkill -9 -x Tsutae >/dev/null 2>&1 || true; fi'
     @echo "KILL_OK"
 
 # 启动应用（会先杀掉旧进程，确保加载最新构建）

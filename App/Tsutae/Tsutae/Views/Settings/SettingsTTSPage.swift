@@ -80,6 +80,7 @@ struct TTSSettingsPage: View {
     @State private var localModelSearchQuery = ""
     @State private var localModelFilter: TTSLocalModelFilter = .all
     @State private var localModelDialog: TTSLocalModelDialog?
+    @State private var rateDraft: Double?
 
     private let remoteEngineID = OpenAICompatibleRemoteTTSEngine.shared.id
     private let localEngineID = FluidAudioLocalTTSEngine.shared.id
@@ -200,7 +201,10 @@ struct TTSSettingsPage: View {
                         if isRemoteSelected {
                             ServerStatusCapsule(title: L10n.Settings.ttsRateProviderManaged, tone: .soft)
                         } else {
-                            TTSRateControl(rate: rateBinding)
+                            TTSRateControl(
+                                rate: rateBinding,
+                                onEditingChanged: handleRateEditingChanged
+                            )
                         }
                     }
                 }
@@ -750,11 +754,26 @@ struct TTSSettingsPage: View {
 
     private var rateBinding: Binding<Double> {
         Binding(
-            get: { config.tts.rate },
+            get: { rateDraft ?? config.tts.rate },
             set: { newValue in
-                updateConfig { $0.tts.rate = max(0.5, min(newValue, 2.0)) }
+                rateDraft = clampedTTSRate(newValue)
             }
         )
+    }
+
+    private func handleRateEditingChanged(_ isEditing: Bool) {
+        if isEditing {
+            rateDraft = config.tts.rate
+            return
+        }
+        let finalRate = clampedTTSRate(rateDraft ?? config.tts.rate)
+        rateDraft = nil
+        guard abs(config.tts.rate - finalRate) > 0.0001 else { return }
+        updateConfig { $0.tts.rate = finalRate }
+    }
+
+    private func clampedTTSRate(_ value: Double) -> Double {
+        max(0.5, min(value, 2.0))
     }
 
     private var remoteBadgeTitle: String {
@@ -1526,11 +1545,12 @@ private struct TTSLocalModelCard: View {
 
 private struct TTSRateControl: View {
     @Binding var rate: Double
+    let onEditingChanged: (Bool) -> Void
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 12) {
-            Slider(value: $rate, in: 0.5...2.0, step: 0.1)
+            Slider(value: $rate, in: 0.5...2.0, step: 0.1, onEditingChanged: onEditingChanged)
                 .tint(DS.color.accent)
                 .frame(width: 190)
 

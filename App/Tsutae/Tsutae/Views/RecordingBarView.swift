@@ -2,6 +2,7 @@ import SwiftUI
 
 enum RecordingBarVisualState {
     case idle
+    case copied
     case listening
     case waiting
     case thinking
@@ -74,7 +75,7 @@ struct RecordingBarView: View {
             )
         }
         .onChange(of: state) { _, newState in
-            if newState == .idle {
+            if newState == .idle || newState == .copied {
                 triggerCompletionPulse()
             }
         }
@@ -225,6 +226,7 @@ struct RecordingBarView: View {
     private var stateLabel: String {
         switch state {
         case .idle: return "Done"
+        case .copied: return "Copied"
         case .listening: return "Listen"
         case .waiting: return "Wait"
         case .thinking: return "Think"
@@ -237,6 +239,7 @@ struct RecordingBarView: View {
     private var keycapText: String {
         switch state {
         case .idle: return "✓"
+        case .copied: return "✓"
         case .listening: return "Esc"
         case .waiting: return "Esc"
         case .thinking: return "Esc"
@@ -338,7 +341,7 @@ struct RecordingBarView: View {
     
     private var stateColor: Color {
         switch state {
-        case .idle:
+        case .idle, .copied:
             return preset == .standard ? accentColor : successColor
         case .listening:
             return accentColor
@@ -368,7 +371,7 @@ struct RecordingBarView: View {
         }
 
         switch state {
-        case .idle, .listening, .waiting, .thinking:
+        case .idle, .copied, .listening, .waiting, .thinking:
             return accentColor
         case .speaking:
             return successColor
@@ -382,7 +385,7 @@ struct RecordingBarView: View {
     private var keycapForegroundColor: Color {
         if isDarkMode {
             switch state {
-            case .idle:
+            case .idle, .copied:
                 return successColor
             case .listening:
                 return DS.color.mutedDark
@@ -400,7 +403,7 @@ struct RecordingBarView: View {
         }
 
         switch state {
-        case .idle:
+        case .idle, .copied:
             return DS.color.success
         case .listening:
             return DS.color.soft
@@ -420,7 +423,7 @@ struct RecordingBarView: View {
     private var keycapBackgroundColor: Color {
         if isDarkMode {
             switch state {
-            case .idle:
+            case .idle, .copied:
                 return successColor.opacity(0.14)
             case .listening:
                 return DS.color.surface2Dark
@@ -438,7 +441,7 @@ struct RecordingBarView: View {
         }
 
         switch state {
-        case .idle:
+        case .idle, .copied:
             return DS.color.success.opacity(0.1)
         case .listening:
             return Color.white.opacity(0.55)
@@ -458,7 +461,7 @@ struct RecordingBarView: View {
     private var keycapBorderColor: Color {
         if isDarkMode {
             switch state {
-            case .idle:
+            case .idle, .copied:
                 return successColor.opacity(0.34)
             case .listening:
                 return DS.color.borderDark.opacity(0.9)
@@ -476,7 +479,7 @@ struct RecordingBarView: View {
         }
         
         switch state {
-        case .idle:
+        case .idle, .copied:
             return DS.color.success.opacity(0.3)
         case .listening:
             return DS.color.border.opacity(0.38)
@@ -501,7 +504,7 @@ struct RecordingBarView: View {
         }
 
         switch state {
-        case .idle:
+        case .idle, .copied:
             return 1.0
         case .listening:
             return animatedBarValue(at: index, wavePhase: wavePhase, min: 0.72, max: 1.18)
@@ -524,7 +527,7 @@ struct RecordingBarView: View {
         }
 
         switch state {
-        case .idle:
+        case .idle, .copied:
             return 1.0
         case .listening:
             return animatedBarOpacity(at: index, wavePhase: wavePhase, min: 0.56, max: 1.0)

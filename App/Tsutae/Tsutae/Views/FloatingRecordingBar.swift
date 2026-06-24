@@ -245,6 +245,33 @@ final class FloatingRecordingBar {
         }
         logger.info("Recording bar state updated to \(state.rawValue, privacy: .public)")
     }
+
+    func showCompletion(copied: Bool = false) {
+        currentState = .idle
+        let displayState: RecordingBarVisualState = copied ? .copied : .idle
+
+        guard isShowing else {
+            show(state: .idle, initialDisplayState: displayState, companion: nil)
+            return
+        }
+
+        guard let presentationModel else {
+            logger.error("Failed to show recording completion because presentation model is missing")
+            return
+        }
+
+        let appearanceMode = UserDefaults.standard.string(forKey: "settings.appearanceMode") ?? "system"
+        companionDismissWorkItem?.cancel()
+        companionDismissWorkItem = nil
+        restoreBarOnlyPositionIfNeeded()
+        withAnimation(.easeInOut(duration: 0.18)) {
+            presentationModel.displayState = displayState
+            presentationModel.preset = DS.recordingBar.currentPreset
+            presentationModel.colorScheme = resolvedColorScheme(for: appearanceMode)
+            presentationModel.companion = nil
+        }
+        logger.info("Recording bar completion shown. copied=\(copied, privacy: .public)")
+    }
     
     func showCompanion(_ companion: RecordingBarCompanion, displayState: RecordingBarVisualState = .failed) {
         companionDismissWorkItem?.cancel()

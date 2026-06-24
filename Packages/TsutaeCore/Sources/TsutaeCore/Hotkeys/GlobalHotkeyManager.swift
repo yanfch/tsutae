@@ -82,6 +82,7 @@ public final class GlobalHotkeyManager: ObservableObject {
     
     public func start(onToggleRecordingBar: @escaping () -> Void) {
         self.onToggleRecording = onToggleRecordingBar
+        PerformanceLog.record(category: "Hotkey", message: "Global hotkey manager starting")
         applyConfiguredShortcutID(loadConfiguredShortcutID(), persist: false, registerHotKeyIfPossible: false)
         
         guard eventHandlerRef == nil else {
@@ -118,6 +119,7 @@ public final class GlobalHotkeyManager: ObservableObject {
         
         guard status == noErr else {
             eventHandlerRef = nil
+            PerformanceLog.record(category: "Hotkey", message: "Global hotkey event handler install failed. status=\(status)")
             return
         }
         
@@ -196,6 +198,9 @@ public final class GlobalHotkeyManager: ObservableObject {
         
         if status != noErr {
             hotKeyRef = nil
+            PerformanceLog.record(category: "Hotkey", message: "Global hotkey registration failed. shortcut=\(currentShortcutDefinition.id) status=\(status)")
+        } else {
+            PerformanceLog.record(category: "Hotkey", message: "Global hotkey registered. shortcut=\(currentShortcutDefinition.id)")
         }
     }
     
