@@ -26,7 +26,7 @@ public protocol VADEngine: Sendable {
     /// 检测单帧
     /// - Parameter frame: 音频帧
     /// - Returns: 检测结果
-    func detect(_ frame: AudioFrame) -> VADResult
+    func detect(_ frame: AudioFrame) async throws -> VADResult
     
     /// 重置状态（如切换说话人时）
     func reset()

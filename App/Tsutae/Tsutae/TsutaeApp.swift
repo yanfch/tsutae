@@ -530,6 +530,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         EngineManager.shared.registerTTS(AppleTTSEngine.shared)
         EngineManager.shared.registerTTS(FluidAudioLocalTTSEngine.shared)
         EngineManager.shared.registerTTS(OpenAICompatibleRemoteTTSEngine.shared)
+        EngineManager.shared.registerVAD(EnergyVADEngine.shared)
+        EngineManager.shared.registerVAD(FluidAudioVADEngine.shared)
         UNUserNotificationCenter.current().delegate = self
         _ = LocalSTTResidencyCoordinator.shared
         _ = LocalTTSResidencyCoordinator.shared

@@ -522,7 +522,7 @@ public final class FluidAudioSTT: STTEngine, @unchecked Sendable {
     
     public func transcribe(_ audio: AudioData, language: String?) async throws -> Transcript {
         let effectiveLanguage = normalizedLanguage(language ?? languageHint)
-        let samples = decodePCM16(audio)
+        let samples = PCM16Audio.decode(audio)
         let text = try await FluidAudioSTTRuntime.shared.transcribe(modelID: modelID, samples: samples, language: effectiveLanguage)
         return Transcript(text: text, language: effectiveLanguage, durationMs: nil, confidence: nil, isFinal: true)
     }
@@ -542,15 +542,6 @@ public final class FluidAudioSTT: STTEngine, @unchecked Sendable {
                     continuation.finish(throwing: error)
                 }
             }
-        }
-    }
-    
-    private func decodePCM16(_ audio: AudioData) -> [Float] {
-        let sampleCount = audio.samples.count / MemoryLayout<Int16>.size
-        return audio.samples.withUnsafeBytes { rawBuffer in
-            let buffer = rawBuffer.bindMemory(to: Int16.self)
-            guard buffer.count >= sampleCount else { return [] }
-            return Array(buffer.prefix(sampleCount)).map { Float($0) / Float(Int16.max) }
         }
     }
     

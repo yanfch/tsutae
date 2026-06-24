@@ -20,6 +20,23 @@ struct STTMemoryBenchResult: Codable {
     let error: String?
 }
 
+struct VADMemoryBenchResult: Codable {
+    let kind: String
+    let engineID: String
+    let displayName: String
+    let baseline: MemorySample
+    let loaded: MemorySample
+    let detected: MemorySample
+    let unloaded: MemorySample
+    let deltaLoadedMB: Double
+    let deltaDetectedMB: Double
+    let loadElapsedMs: Double
+    let detectElapsedMs: Double
+    let probability: Double
+    let isSpeech: Bool
+    let error: String?
+}
+
 struct MemorySample: Codable {
     let rssBytes: UInt64
     let physicalFootprintBytes: UInt64?
@@ -45,6 +62,12 @@ enum LocalModelMemoryBench {
                 )
             case .model(let modelID):
                 let result = await measureSTTModel(modelID: modelID, runInference: options.runInference)
+                try printJSON(result)
+                if result.error != nil {
+                    Foundation.exit(2)
+                }
+            case .vad:
+                let result = await measureFluidAudioVAD()
                 try printJSON(result)
                 if result.error != nil {
                     Foundation.exit(2)
@@ -181,6 +204,63 @@ enum LocalModelMemoryBench {
         }
     }
 
+    private static func measureFluidAudioVAD() async -> VADMemoryBenchResult {
+        let engine = FluidAudioVADEngine(sensitivity: 0.5)
+        let baseline = MemoryMeter.sample()
+
+        do {
+            let loadStartedAt = Date()
+            try await engine.load()
+            let loadElapsedMs = elapsedMs(since: loadStartedAt)
+            let loaded = MemoryMeter.sample()
+
+            let detectStartedAt = Date()
+            let result = try await engine.detect(speechFrame())
+            let detectElapsedMs = elapsedMs(since: detectStartedAt)
+            let detected = MemoryMeter.sample()
+
+            engine.unload()
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            let unloaded = MemoryMeter.sample()
+
+            return VADMemoryBenchResult(
+                kind: "vad",
+                engineID: engine.id,
+                displayName: engine.displayName,
+                baseline: baseline,
+                loaded: loaded,
+                detected: detected,
+                unloaded: unloaded,
+                deltaLoadedMB: mb(loaded.primaryBytes, minus: baseline.primaryBytes),
+                deltaDetectedMB: mb(detected.primaryBytes, minus: baseline.primaryBytes),
+                loadElapsedMs: loadElapsedMs,
+                detectElapsedMs: detectElapsedMs,
+                probability: result.probability,
+                isSpeech: result.isSpeech,
+                error: nil
+            )
+        } catch {
+            let current = MemoryMeter.sample()
+            engine.unload()
+            return VADMemoryBenchResult(
+                kind: "vad",
+                engineID: engine.id,
+                displayName: engine.displayName,
+                baseline: baseline,
+                loaded: current,
+                detected: current,
+                unloaded: MemoryMeter.sample(),
+                deltaLoadedMB: mb(current.primaryBytes, minus: baseline.primaryBytes),
+                deltaDetectedMB: mb(current.primaryBytes, minus: baseline.primaryBytes),
+                loadElapsedMs: 0,
+                detectElapsedMs: 0,
+                probability: 0,
+                isSpeech: false,
+                error: error.localizedDescription
+            )
+        }
+    }
+
     private static func runChild(
         executablePath: String,
         modelID: String,
@@ -297,7 +377,7 @@ enum LocalModelMemoryBench {
         fflush(stdout)
     }
 
-    private static func printJSON(_ result: STTMemoryBenchResult) throws {
+    private static func printJSON<T: Encodable>(_ result: T) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(result)
@@ -311,8 +391,10 @@ enum LocalModelMemoryBench {
             Usage:
               LocalModelMemoryBench --all-stt [--output path] [--include-missing] [--skip-inference] [--timeout-seconds n]
               LocalModelMemoryBench --model <model-id> [--skip-inference]
+              LocalModelMemoryBench --vad
 
             Measures STT local model memory in a fresh child process per model.
+            Measures FluidAudio VAD load and detect memory with --vad.
             Primary memory is physical footprint when available, otherwise RSS.
             """
         )
@@ -320,6 +402,14 @@ enum LocalModelMemoryBench {
 
     private static func silentAudio(seconds: Int) -> AudioData {
         AudioData(samples: Data(count: 16_000 * 2 * seconds), sampleRate: 16_000, channels: 1, container: .pcm16)
+    }
+
+    private static func speechFrame() -> AudioFrame {
+        let sampleRate = 16_000.0
+        let samples = (0..<4096).map { index in
+            Float(0.35 * sin(2.0 * Double.pi * 220.0 * Double(index) / sampleRate))
+        }
+        return AudioFrame(samples: PCM16Audio.encode(samples))
     }
 
     private static func languageHint(for modelID: String) -> String? {
@@ -358,6 +448,7 @@ private struct BenchOptions {
     enum Mode {
         case allSTT
         case model(String)
+        case vad
         case help
     }
 
@@ -384,6 +475,8 @@ private struct BenchOptions {
                 index += 1
                 guard index < arguments.count else { throw BenchError.missingValue(argument) }
                 mode = .model(arguments[index])
+            case "--vad":
+                mode = .vad
             case "--output":
                 index += 1
                 guard index < arguments.count else { throw BenchError.missingValue(argument) }
