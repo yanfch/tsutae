@@ -1205,10 +1205,10 @@ private struct STTLocalModelCard: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 10) {
-                    FlowLayout(spacing: 8, lineSpacing: 8) {
+                    FlowLayout(spacing: 6, lineSpacing: 8) {
                         SettingsMetricPill(title: descriptor.runtime)
-                        SettingsMetricPill(title: descriptor.size)
-                        SettingsMetricPill(title: runtimeMemoryValue)
+                        SettingsMetricPill(title: L10n.Settings.sttModelDiskMetric(compactMetricValue(descriptor.size)))
+                        SettingsMetricPill(title: L10n.Settings.sttModelMemoryMetric(compactMetricValue(runtimeMemoryValue)))
                     }
                     
                     FlowLayout(spacing: 8, lineSpacing: 8) {
@@ -1222,6 +1222,8 @@ private struct STTLocalModelCard: View {
                     }
                 }
                 
+                Spacer(minLength: 0)
+
                 Divider()
                     .overlay(colorScheme == .dark ? Color.white.opacity(0.08) : DS.color.borderSoft.opacity(0.56))
                 
@@ -1244,7 +1246,8 @@ private struct STTLocalModelCard: View {
                 }
             }
             .padding(SettingsTokens.Padding.localModelCard)
-            .frame(maxWidth: .infinity, minHeight: 204, alignment: .topLeading)
+            .frame(height: 360, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(cardBackground)
         .overlay(cardBorder)
@@ -1288,6 +1291,12 @@ private struct STTLocalModelCard: View {
 
     private var runtimeMemoryValue: String {
         descriptor.memory == "Not measured" ? L10n.Settings.sttModelRuntimeNotMeasured : descriptor.memory
+    }
+
+    private func compactMetricValue(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: " GB", with: "GB")
+            .replacingOccurrences(of: " MB", with: "MB")
     }
     
     private func localizedTag(_ tag: String) -> String {

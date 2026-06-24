@@ -33,6 +33,10 @@ final class RecordingSession: ObservableObject {
     private var activeTranscriptionTask: Task<Void, Never>?
     private var activeOperationID = UUID()
     private var activeTargetApplication: FocusedApplicationSnapshot?
+    private var pendingEscapeCancelDeadline: Date?
+
+    private static let escapeCancelConfirmationWindow: TimeInterval = 2.0
+    private static let meaningfulAudioSeconds: Double = 0.8
     
     private init() {}
     
@@ -46,6 +50,7 @@ final class RecordingSession: ObservableObject {
     
     func cancel() {
         logger.info("Cancelling current recording/transcription session")
+        pendingEscapeCancelDeadline = nil
         activeOperationID = UUID()
         activeWarmupTask?.cancel()
         activeWarmupTask = nil
@@ -60,6 +65,26 @@ final class RecordingSession: ObservableObject {
         liveRecordedBytes = 0
         statusText = "cancelled"
     }
+
+    func requestEscapeCancel() {
+        guard isBusy || isRecording || audioInput.recording else {
+            return
+        }
+
+        if shouldCancelImmediatelyForEscape {
+            cancel()
+            return
+        }
+
+        let now = Date()
+        if let pendingEscapeCancelDeadline, now <= pendingEscapeCancelDeadline {
+            cancel()
+            return
+        }
+
+        pendingEscapeCancelDeadline = now.addingTimeInterval(Self.escapeCancelConfirmationWindow)
+        presentEscapeCancelConfirmation()
+    }
     
     private func startRecording() {
         guard !isBusy else {
@@ -70,6 +95,7 @@ final class RecordingSession: ObservableObject {
         statusText = "requesting microphone permission"
         let operationID = UUID()
         activeOperationID = operationID
+        pendingEscapeCancelDeadline = nil
         activeWarmupTask?.cancel()
         activeTargetApplication = FocusedTextInjector.focusedApplicationSnapshot(
             excludingBundleIdentifier: Bundle.main.bundleIdentifier
@@ -139,6 +165,7 @@ final class RecordingSession: ObservableObject {
             let stopElapsedMs = formatElapsedMs(since: stopStartedAt)
             isRecording = false
             liveRecordedBytes = 0
+            pendingEscapeCancelDeadline = nil
             lastRecordingBytes = audio.samples.count
             statusText = "transcribing"
             let saveStartedAt = CFAbsoluteTimeGetCurrent()
@@ -152,6 +179,7 @@ final class RecordingSession: ObservableObject {
             isBusy = false
             isRecording = false
             liveRecordedBytes = 0
+            pendingEscapeCancelDeadline = nil
             statusText = "stop failed"
             lastError = error.localizedDescription
             presentStopError(error)
@@ -315,6 +343,44 @@ final class RecordingSession: ObservableObject {
                 }
                 try? await Task.sleep(for: .milliseconds(250))
             }
+        }
+    }
+
+    private var shouldCancelImmediatelyForEscape: Bool {
+        let bytes: Int
+        if isRecording || audioInput.recording {
+            bytes = max(liveRecordedBytes, audioInput.recordedByteCount)
+        } else {
+            bytes = max(lastRecordingBytes, liveRecordedBytes)
+        }
+        return recordingDurationSeconds(sampleBytes: bytes) < Self.meaningfulAudioSeconds
+    }
+
+    private func presentEscapeCancelConfirmation() {
+        let displayState: RecordingBarVisualState = isRecording || audioInput.recording ? .listening : .thinking
+        presentCompanion(
+            title: L10n.RecordingCompanion.cancelConfirmationTitle,
+            message: L10n.RecordingCompanion.cancelConfirmationMessage,
+            tone: .warning,
+            primaryAction: .init(title: L10n.RecordingCompanion.cancelRecording, style: .primary) {
+                self.cancel()
+            },
+            secondaryAction: .init(title: L10n.RecordingCompanion.keepRecording, style: .secondary) {
+                self.pendingEscapeCancelDeadline = nil
+                FloatingRecordingBar.shared.clearCompanion(displayState: displayState)
+            },
+            displayState: .warning
+        )
+
+        let operationID = activeOperationID
+        Task {
+            try? await Task.sleep(for: .seconds(Self.escapeCancelConfirmationWindow))
+            guard self.activeOperationID == operationID else { return }
+            guard let pendingEscapeCancelDeadline = self.pendingEscapeCancelDeadline else { return }
+            guard Date() >= pendingEscapeCancelDeadline else { return }
+            self.pendingEscapeCancelDeadline = nil
+            guard self.isBusy || self.isRecording || self.audioInput.recording else { return }
+            FloatingRecordingBar.shared.clearCompanion(displayState: displayState)
         }
     }
 

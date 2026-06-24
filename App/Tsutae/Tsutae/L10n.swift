@@ -107,6 +107,10 @@ enum L10n {
         }
         static var longRecordingWarningTitle: String { tr("companion.long_recording_warning_title", default: "Long Recording") }
         static var longRecordingKeepGoing: String { tr("companion.long_recording_keep_going", default: "Keep Recording") }
+        static var cancelConfirmationTitle: String { tr("companion.cancel_confirmation_title", default: "Cancel Current Input?") }
+        static var cancelConfirmationMessage: String { tr("companion.cancel_confirmation_message", default: "Press Esc again to cancel. If you were closing another window, Tsutae will keep recording.") }
+        static var cancelRecording: String { tr("companion.cancel_recording", default: "Cancel") }
+        static var keepRecording: String { tr("companion.keep_recording", default: "Keep Recording") }
         static var longTranscriptionFailedTitle: String { tr("companion.long_transcription_failed_title", default: "Recording Was Too Long") }
         static var longTranscriptionFailedMessage: String { tr("companion.long_transcription_failed_message", default: "The local model could not process this clip, and fallback did not return text. Retry the saved audio with remote STT or record shorter segments.") }
         static var retryRemoteTranscription: String { tr("companion.retry_remote_transcription", default: "Retry Remote") }
@@ -843,6 +847,12 @@ enum L10n {
         static var sttModelGroupPreview: String { tr("settings.stt_model_group_preview", default: "Preview") }
         static var sttModelTopPick: String { tr("settings.stt_model_top_pick", default: "Top Pick") }
         static var sttModelRuntimeNotMeasured: String { tr("settings.stt_model_runtime_not_measured", default: "Not measured") }
+        static func sttModelDiskMetric(_ value: String) -> String {
+            String(format: tr("settings.stt_model_disk_metric_format", default: "Disk %@"), value)
+        }
+        static func sttModelMemoryMetric(_ value: String) -> String {
+            String(format: tr("settings.stt_model_memory_metric_format", default: "RAM %@"), value)
+        }
         static var sttModelSummarySenseVoiceSmall: String { tr("settings.stt_model_summary_sensevoice_small", default: "Balanced local model for mixed Chinese and English speech.") }
         static var sttModelSummaryQwen3ASRInt8: String { tr("settings.stt_model_summary_qwen3_asr_int8", default: "Mixed-language option with better coverage but slower runtime.") }
         static var sttModelSummaryParaformerLargeZH: String { tr("settings.stt_model_summary_paraformer_large_zh", default: "Fast local model tuned for Chinese transcription.") }

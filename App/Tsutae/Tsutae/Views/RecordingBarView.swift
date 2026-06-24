@@ -240,7 +240,7 @@ struct RecordingBarView: View {
         case .listening: return "Esc"
         case .waiting: return "Esc"
         case .thinking: return "Esc"
-        case .speaking: return "⌥R"
+        case .speaking: return "Esc"
         case .warning: return "Esc"
         case .failed: return "Esc"
         }

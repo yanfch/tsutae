@@ -264,6 +264,19 @@ final class FloatingRecordingBar {
         guard presentationModel != nil else { return }
         hide(animated: true)
     }
+
+    func clearCompanion(displayState: RecordingBarVisualState? = nil) {
+        companionDismissWorkItem?.cancel()
+        companionDismissWorkItem = nil
+        guard isShowing, let presentationModel else { return }
+        restoreBarOnlyPositionIfNeeded()
+        withAnimation(.easeInOut(duration: 0.18)) {
+            if let displayState {
+                presentationModel.displayState = displayState
+            }
+            presentationModel.companion = nil
+        }
+    }
     
     func openAppSettings(tab: String? = nil, focus: String? = nil) {
         if tab == "permissions" {

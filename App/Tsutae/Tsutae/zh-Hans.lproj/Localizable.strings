@@ -32,6 +32,10 @@
 "companion.long_recording_warning_title" = "录音时间较长";
 "companion.long_recording_warning_message" = "已经录了约 %d 秒。当前模型「%@」建议单段不超过 %d 秒，建议先停止转写，下一段再继续。";
 "companion.long_recording_keep_going" = "继续录音";
+"companion.cancel_confirmation_title" = "要取消当前输入吗？";
+"companion.cancel_confirmation_message" = "再次按 Esc 才会取消。如果你只是关闭其他窗口，Tsutae 会继续录音。";
+"companion.cancel_recording" = "取消";
+"companion.keep_recording" = "继续录音";
 "companion.long_transcription_failed_title" = "这段录音太长";
 "companion.long_transcription_failed_message" = "本地模型无法处理这段录音，备用识别也没有返回文字。可以用远程 STT 重试刚才的录音，或分成几段再录。";
 "companion.retry_remote_transcription" = "远程重试";
@@ -626,6 +630,8 @@
 "settings.stt_model_group_preview" = "预览";
 "settings.stt_model_top_pick" = "首选";
 "settings.stt_model_runtime_not_measured" = "未实测";
+"settings.stt_model_disk_metric_format" = "磁盘 %@";
+"settings.stt_model_memory_metric_format" = "内存 %@";
 "settings.stt_model_summary_sensevoice_small" = "适合中英混说场景的均衡型本地模型。";
 "settings.stt_model_summary_qwen3_asr_int8" = "混合语言覆盖更广，但运行速度更慢。";
 "settings.stt_model_summary_paraformer_large_zh" = "面向中文转写优化，速度也更快。";

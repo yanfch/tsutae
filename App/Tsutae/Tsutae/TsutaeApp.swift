@@ -593,7 +593,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if FloatingRecordingBar.shared.isShowing {
             logger.info("Escape pressed while recording bar is visible")
             Task { @MainActor in
-                RecordingSession.shared.cancel()
+                RecordingSession.shared.requestEscapeCancel()
             }
             return true
         }
