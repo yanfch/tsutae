@@ -1,6 +1,10 @@
 # tsutae 常用命令
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
+xcode_project := "App/Tsutae/Tsutae.xcodeproj"
+xcode_scheme := "Tsutae"
+derived_data := ".build/xcode"
+
 default:
     @just --list
 
@@ -31,7 +35,7 @@ test-core:
 # 构建 App（静默模式；失败时输出日志尾部）
 build:
     @log_file=$(mktemp -t tsutae-build.XXXXXX.log); \
-    if xcodebuild -project App/Tsutae/Tsutae.xcodeproj -scheme Tsutae -destination 'platform=macOS' build >"$log_file" 2>&1; then \
+    if xcodebuild -project "{{xcode_project}}" -scheme "{{xcode_scheme}}" -destination 'platform=macOS' -derivedDataPath "{{derived_data}}" build >"$log_file" 2>&1; then \
       echo "BUILD_OK"; \
     else \
       echo "BUILD_FAILED"; \
@@ -44,7 +48,7 @@ build:
 install-dev: build
     @mkdir -p dist
     @rm -rf dist/Tsutae.app
-    @cp -R ~/Library/Developer/Xcode/DerivedData/Tsutae-bvzzerrtrykdtkdqdxgmcmcrzltu/Build/Products/Debug/Tsutae.app dist/Tsutae.app
+    @cp -R "{{derived_data}}/Build/Products/Debug/Tsutae.app" dist/Tsutae.app
     @echo "INSTALL_DEV_OK"
 
 # 杀掉应用
@@ -65,6 +69,16 @@ relaunch: kill
 
 # 重启
 restart: run
+
+# 跟随 App 诊断日志。沙箱 App 写入容器内；命令行工具通常写入真实 HOME。
+logs:
+    @app_home="$HOME/Library/Containers/dev.yanfch.Tsutae/Data"; \
+    log_dir="$app_home/.tsutae/logs"; \
+    if [ ! -d "$log_dir" ]; then log_dir="$HOME/.tsutae/logs"; fi; \
+    mkdir -p "$log_dir"; \
+    touch "$log_dir/stt-perf.log"; \
+    echo "tailing $log_dir/stt-perf.log"; \
+    tail -f "$log_dir/stt-perf.log"
 
 # 批量对比远程文本后处理模型。例：
 # just remote-eval "mimo-v2.5,mimo-v2-omni"
