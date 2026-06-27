@@ -38,6 +38,8 @@ jobs:
             -scheme Tsutae \
             -destination 'platform=macOS' \
             -derivedDataPath .build/xcode \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             build
 
       - name: Check whitespace
