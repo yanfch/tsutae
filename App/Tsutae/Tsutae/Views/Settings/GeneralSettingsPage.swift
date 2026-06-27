@@ -5,10 +5,6 @@ import TsutaeCore
 struct GeneralSettingsPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SettingsTokens.Spacing.section) {
-            SettingsDashboardCard(title: L10n.Settings.generalWorkflowTitle, subtitle: L10n.Settings.generalWorkflowSubtitle) {
-                WorkflowOverviewRow()
-            }
-            
             GeneralSettingsView()
         }
     }

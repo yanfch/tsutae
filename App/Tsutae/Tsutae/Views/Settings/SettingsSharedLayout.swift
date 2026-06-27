@@ -89,31 +89,6 @@ struct SettingsMetricStack: View {
     }
 }
 
-struct WorkflowOverviewRow: View {
-    private let items = [
-        L10n.Settings.workflowCapture,
-        L10n.Settings.workflowTranscribe,
-        L10n.Settings.workflowInsert,
-        L10n.Settings.workflowSpeak,
-        L10n.Settings.workflowServe,
-    ]
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(items.indices, id: \.self) { index in
-                if index > 0 {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                
-                ServerStatusCapsule(title: items[index], tone: index < 3 ? .active : .soft)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-}
-
 enum PermissionKind: String {
     case microphone
     case speechRecognition

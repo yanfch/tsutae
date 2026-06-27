@@ -131,13 +131,6 @@
 "settings.chrome_cloud_optional" = "云端可选";
 "settings.chrome_stt_tts" = "STT · TTS";
 "settings.chrome_hooks_planned" = "Hooks 规划中";
-"settings.general_workflow_title" = "工作流";
-"settings.general_workflow_subtitle" = "快速概览当前语音链路。";
-"settings.workflow_capture" = "采集";
-"settings.workflow_transcribe" = "转写";
-"settings.workflow_insert" = "插入";
-"settings.workflow_speak" = "朗读";
-"settings.workflow_serve" = "服务";
 "settings.usage_hero_title" = "今天";
 "settings.usage_hero_subtitle" = "开始转写后，这里会显示本地用量统计。";
 "settings.usage_no_activity" = "今天还没有转写记录。";

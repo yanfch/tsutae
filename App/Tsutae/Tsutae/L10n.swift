@@ -208,13 +208,6 @@ enum L10n {
         static var chromeCloudOptional: String { tr("settings.chrome_cloud_optional", default: "Cloud Optional") }
         static var chromeSTTTTS: String { tr("settings.chrome_stt_tts", default: "STT · TTS") }
         static var chromeHooksPlanned: String { tr("settings.chrome_hooks_planned", default: "Hooks Planned") }
-        static var generalWorkflowTitle: String { tr("settings.general_workflow_title", default: "Workflow") }
-        static var generalWorkflowSubtitle: String { tr("settings.general_workflow_subtitle", default: "A quick overview of the current voice pipeline.") }
-        static var workflowCapture: String { tr("settings.workflow_capture", default: "Capture") }
-        static var workflowTranscribe: String { tr("settings.workflow_transcribe", default: "Transcribe") }
-        static var workflowInsert: String { tr("settings.workflow_insert", default: "Insert") }
-        static var workflowSpeak: String { tr("settings.workflow_speak", default: "Speak") }
-        static var workflowServe: String { tr("settings.workflow_serve", default: "Serve") }
         static var usageHeroTitle: String { tr("settings.usage_hero_title", default: "Today") }
         static var usageHeroSubtitle: String { tr("settings.usage_hero_subtitle", default: "Start dictating to see local usage stats here.") }
         static var usageNoActivity: String { tr("settings.usage_no_activity", default: "No dictation activity yet today.") }
