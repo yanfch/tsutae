@@ -79,8 +79,6 @@ enum L10n {
         }
         static var stopAndTranscribe: String { tr("menu.stop_and_transcribe", default: "Stop and Transcribe") }
         static var startRecording: String { tr("menu.start_recording", default: "Start Recording") }
-        static var github: String { tr("menu.github", default: "GitHub") }
-        static var reportIssue: String { tr("menu.report_issue", default: "Report Issue") }
         static var settings: String { tr("menu.settings", default: "Settings…") }
         static var quit: String { tr("menu.quit", default: "Quit Tsutae") }
     }

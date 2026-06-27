@@ -407,16 +407,6 @@ private struct MenuBarMenuContent: View {
 
         Divider()
 
-        Button(L10n.Menu.github) {
-            TsutaeLinks.openGitHubRepository()
-        }
-
-        Button(L10n.Menu.reportIssue) {
-            TsutaeLinks.openGitHubIssue()
-        }
-
-        Divider()
-
         OpenSettingsMenuButton()
             .keyboardShortcut(",", modifiers: .command)
 
