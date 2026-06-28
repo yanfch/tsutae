@@ -26,6 +26,7 @@ final class FloatingRecordingBar {
     private var hostingView: NSHostingView<RecordingBarWrapper>?
     private var presentationModel: RecordingBarPresentationModel?
     private var companionDismissWorkItem: DispatchWorkItem?
+    private var showsReleaseToFinishHint = false
     private(set) var isShowing = false
     private var currentState: AppState = .idle
     
@@ -156,7 +157,8 @@ final class FloatingRecordingBar {
             displayState: initialDisplayState ?? visualState(for: state),
             preset: DS.recordingBar.currentPreset,
             colorScheme: colorScheme,
-            companionPlacement: initialPlacement
+            companionPlacement: initialPlacement,
+            showsReleaseHint: showsReleaseToFinishHint
         )
         self.presentationModel = presentationModel
         
@@ -241,6 +243,7 @@ final class FloatingRecordingBar {
             presentationModel.displayState = visualState(for: state)
             presentationModel.preset = DS.recordingBar.currentPreset
             presentationModel.colorScheme = colorScheme
+            presentationModel.showsReleaseHint = showsReleaseToFinishHint
             presentationModel.companion = nil
         }
         logger.info("Recording bar state updated to \(state.rawValue, privacy: .public)")
@@ -248,6 +251,7 @@ final class FloatingRecordingBar {
 
     func showCompletion(copied: Bool = false) {
         currentState = .idle
+        showsReleaseToFinishHint = false
         let displayState: RecordingBarVisualState = copied ? .copied : .idle
 
         guard isShowing else {
@@ -268,9 +272,18 @@ final class FloatingRecordingBar {
             presentationModel.displayState = displayState
             presentationModel.preset = DS.recordingBar.currentPreset
             presentationModel.colorScheme = resolvedColorScheme(for: appearanceMode)
+            presentationModel.showsReleaseHint = false
             presentationModel.companion = nil
         }
         logger.info("Recording bar completion shown. copied=\(copied, privacy: .public)")
+    }
+    
+    func setReleaseToFinishHintVisible(_ isVisible: Bool) {
+        showsReleaseToFinishHint = isVisible
+        guard isShowing, let presentationModel else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            presentationModel.showsReleaseHint = isVisible
+        }
     }
     
     func showCompanion(_ companion: RecordingBarCompanion, displayState: RecordingBarVisualState = .failed) {
@@ -289,6 +302,7 @@ final class FloatingRecordingBar {
         applyBestCompanionPlacement()
         withAnimation(.easeInOut(duration: 0.22)) {
             presentationModel.displayState = displayState
+            presentationModel.showsReleaseHint = showsReleaseToFinishHint
             presentationModel.companion = companion
         }
         scheduleCompanionAutoDismissIfNeeded(companion)
@@ -310,6 +324,7 @@ final class FloatingRecordingBar {
             if let displayState {
                 presentationModel.displayState = displayState
             }
+            presentationModel.showsReleaseHint = showsReleaseToFinishHint
             presentationModel.companion = nil
         }
     }
@@ -542,6 +557,7 @@ final class FloatingRecordingBar {
         panel = nil
         hostingView = nil
         presentationModel = nil
+        showsReleaseToFinishHint = false
         isShowing = false
         currentState = .idle
     }
@@ -632,13 +648,21 @@ private final class RecordingBarPresentationModel: ObservableObject {
     @Published var colorScheme: ColorScheme
     @Published var companionPlacement: RecordingBarCompanionPlacement
     @Published var companion: RecordingBarCompanion?
+    @Published var showsReleaseHint: Bool
     
-    init(displayState: RecordingBarVisualState, preset: DS.recordingBar.Preset, colorScheme: ColorScheme, companionPlacement: RecordingBarCompanionPlacement) {
+    init(
+        displayState: RecordingBarVisualState,
+        preset: DS.recordingBar.Preset,
+        colorScheme: ColorScheme,
+        companionPlacement: RecordingBarCompanionPlacement,
+        showsReleaseHint: Bool
+    ) {
         self.displayState = displayState
         self.preset = preset
         self.colorScheme = colorScheme
         self.companionPlacement = companionPlacement
         self.companion = nil
+        self.showsReleaseHint = showsReleaseHint
     }
 }
 
@@ -671,7 +695,8 @@ private struct RecordingBarWrapper: View {
             RecordingBarView(
                 state: model.displayState,
                 preset: model.preset,
-                colorScheme: model.colorScheme
+                colorScheme: model.colorScheme,
+                showsReleaseHint: model.showsReleaseHint
             )
             .offset(x: 0, y: barOffsetY)
             

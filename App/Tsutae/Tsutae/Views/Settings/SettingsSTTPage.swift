@@ -19,6 +19,7 @@ private struct LocalModelDialog: Identifiable {
 
 struct STTSettingsPage: View {
     @ObservedObject var store: STTSettingsStore
+    var onRequestScrollToTop: () -> Void = {}
     @ObservedObject private var residencyCoordinator = LocalSTTResidencyCoordinator.shared
     @State private var screen: STTSettingsScreen = .overview
     @State private var isRemoteConfigExpanded = false
@@ -117,7 +118,7 @@ struct STTSettingsPage: View {
                                     store.applyLanguageModelRecommendation()
                                 } else {
                                     store.prepareLocalModelsPresentation()
-                                    screen = .localModels
+                                    navigate(to: .localModels)
                                 }
                             }
                         )
@@ -142,7 +143,7 @@ struct STTSettingsPage: View {
                     HStack(spacing: 10) {
                         Button(L10n.Settings.sttManageModelsButton) {
                             store.prepareLocalModelsPresentation()
-                            screen = .localModels
+                            navigate(to: .localModels)
                         }
                         .buttonStyle(SettingsAccentButtonStyle())
                         
@@ -339,7 +340,7 @@ struct STTSettingsPage: View {
 
                 HStack(spacing: 10) {
                     Button(L10n.Settings.sttManageDictionaryButton) {
-                        screen = .dictionary
+                        navigate(to: .dictionary)
                     }
                     .buttonStyle(SettingsAccentButtonStyle())
 
@@ -353,7 +354,7 @@ struct STTSettingsPage: View {
         VStack(alignment: .leading, spacing: SettingsTokens.Spacing.card) {
             HStack(spacing: 12) {
                 Button {
-                    screen = .overview
+                    navigate(to: .overview)
                 } label: {
                     Label(L10n.Settings.sttBackToSTT, systemImage: "chevron.left")
                 }
@@ -428,12 +429,12 @@ struct STTSettingsPage: View {
                         SettingsTextInputField(
                             text: $dictionaryDraftKey,
                             placeholder: L10n.Settings.sttDictionaryKeyPlaceholder,
-                            width: 260
+                            width: DictionaryLayout.keyFieldWidth
                         )
                         SettingsTextInputField(
                             text: $dictionaryDraftValue,
                             placeholder: L10n.Settings.sttDictionaryValuePlaceholder,
-                            width: 260
+                            width: DictionaryLayout.valueFieldWidth
                         )
                         Button {
                             addDictionaryDraft()
@@ -473,7 +474,7 @@ struct STTSettingsPage: View {
         VStack(alignment: .leading, spacing: SettingsTokens.Spacing.card) {
             HStack(spacing: 12) {
                 Button {
-                    screen = .overview
+                    navigate(to: .overview)
                 } label: {
                     Label(L10n.Settings.sttBackToSTT, systemImage: "chevron.left")
                 }
@@ -564,6 +565,12 @@ struct STTSettingsPage: View {
         store.addDictionaryEntry(key: dictionaryDraftKey, value: dictionaryDraftValue)
         dictionaryDraftKey = ""
         dictionaryDraftValue = ""
+    }
+
+    private func navigate(to nextScreen: STTSettingsScreen) {
+        guard screen != nextScreen else { return }
+        screen = nextScreen
+        onRequestScrollToTop()
     }
     
     private func promptDeleteModel(_ modelID: String) {
@@ -927,6 +934,11 @@ private struct DictionaryReadOnlyEntryRow: View {
     }
 }
 
+private enum DictionaryLayout {
+    static let keyFieldWidth: CGFloat = 240
+    static let valueFieldWidth: CGFloat = 260
+}
+
 private struct DictionaryEntryRow: View {
     let entry: Config.TranscriptDictionaryEntry
     let key: Binding<String>
@@ -937,36 +949,35 @@ private struct DictionaryEntryRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Toggle("", isOn: isEnabled)
-                .labelsHidden()
-                .toggleStyle(SettingsSwitchToggleStyle())
-
             SettingsTextInputField(
                 text: key,
                 placeholder: L10n.Settings.sttDictionaryKeyPlaceholder,
-                width: 240
+                width: DictionaryLayout.keyFieldWidth
             )
 
             SettingsTextInputField(
                 text: value,
                 placeholder: L10n.Settings.sttDictionaryValuePlaceholder,
-                width: 280
+                width: DictionaryLayout.valueFieldWidth
             )
 
             Spacer(minLength: 0)
 
-            ServerStatusCapsule(
-                title: entry.enabled ? L10n.Settings.sttDictionaryEntryOn : L10n.Settings.sttOffShort,
-                tone: entry.enabled ? .active : .neutral
-            )
+            HStack(spacing: 8) {
+                Toggle("", isOn: isEnabled)
+                    .labelsHidden()
+                    .toggleStyle(SettingsSwitchToggleStyle())
+                    .help(entry.enabled ? L10n.Settings.sttDictionaryEntryOn : L10n.Settings.sttOffShort)
 
-            Button {
-                onDelete()
-            } label: {
-                Image(systemName: "trash")
+                Button {
+                    onDelete()
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(SettingsDangerIconButtonStyle())
+                .help(L10n.Settings.sttDeleteAction)
             }
-            .buttonStyle(SettingsDangerIconButtonStyle())
-            .help(L10n.Settings.sttDeleteAction)
+            .fixedSize(horizontal: true, vertical: false)
         }
         .padding(12)
         .background(

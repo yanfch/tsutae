@@ -2,6 +2,84 @@ import Foundation
 import OSLog
 import TsutaeCore
 
+struct VADObservationSegmentSummary: Sendable, Equatable {
+    let index: Int
+    let startMs: Double
+    let endMs: Double
+    let byteStart: Int
+    let byteEnd: Int
+    let reason: String
+
+    var byteRange: Range<Int> {
+        byteStart..<byteEnd
+    }
+
+    var durationMs: Double {
+        max(0, endMs - startMs)
+    }
+}
+
+struct VADObservationSummary: Sendable, Equatable {
+    let sessionID: UUID
+    let reason: String
+    let engine: String
+    let audioMs: Double
+    let processedMs: Double
+    let completedMs: Double
+    let speechWindows: Int
+    let silenceWindows: Int
+    let maxProbability: Double
+    let firstSpeechMs: Double?
+    let lastSpeechMs: Double?
+    let longestSilenceMs: Double
+    let detectAverageMs: Double
+    let detectMaxMs: Double
+    let errors: Int
+    let audioBytes: Int
+    let pendingBytes: Int
+    let segments: [VADObservationSegmentSummary]
+
+    var segmentBytes: Int {
+        segments.reduce(0) { $0 + max(0, $1.byteEnd - $1.byteStart) }
+    }
+
+    var segmentSavedPercent: Double {
+        guard audioBytes > 0 else { return 0 }
+        return max(0, (1.0 - Double(segmentBytes) / Double(audioBytes)) * 100.0)
+    }
+
+    var segmentByteRanges: [Range<Int>] {
+        segments.map(\.byteRange)
+    }
+
+    var asASRSampleLogSnapshot: ASRSampleLog.VADSnapshot {
+        ASRSampleLog.VADSnapshot(
+            engine: engine,
+            reason: reason,
+            audioMs: audioMs,
+            processedMs: processedMs,
+            speechWindows: speechWindows,
+            silenceWindows: silenceWindows,
+            maxProbability: maxProbability,
+            firstSpeechMs: firstSpeechMs,
+            lastSpeechMs: lastSpeechMs,
+            longestSilenceMs: longestSilenceMs,
+            segmentBytes: segmentBytes,
+            segmentSavedPercent: segmentSavedPercent,
+            segments: segments.map {
+                ASRSampleLog.VADSegmentSnapshot(
+                    index: $0.index,
+                    startMs: $0.startMs,
+                    endMs: $0.endMs,
+                    byteStart: $0.byteStart,
+                    byteEnd: $0.byteEnd,
+                    reason: $0.reason
+                )
+            }
+        )
+    }
+}
+
 actor VADObservationSession {
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "VADObserve")
     private let sessionID: UUID
@@ -42,6 +120,8 @@ actor VADObservationSession {
     private var isFinished = false
     private var pendingFinishReason: String?
     private var summaryLogged = false
+    private var cachedSummary: VADObservationSummary?
+    private var finishWaiters: [CheckedContinuation<VADObservationSummary?, Never>] = []
     private var segmentCandidates: [SegmentCandidate] = []
     private var segmentStartMs: Double?
     private var segmentHasSpeech = false
@@ -76,13 +156,26 @@ actor VADObservationSession {
         }
     }
 
-    func finish(reason: String) {
-        guard isFinished == false else { return }
+    func finish(reason: String) async -> VADObservationSummary? {
+        if let cachedSummary {
+            return cachedSummary
+        }
+
+        guard isFinished == false else {
+            return await withCheckedContinuation { continuation in
+                finishWaiters.append(continuation)
+            }
+        }
+
         isFinished = true
         pendingFinishReason = reason
 
-        guard inFlightWindowCount == 0 else { return }
-        logSummary(reason: reason)
+        guard inFlightWindowCount == 0 else {
+            return await withCheckedContinuation { continuation in
+                finishWaiters.append(continuation)
+            }
+        }
+        return logSummary(reason: reason)
     }
 
     private func processWindow(_ samples: Data, frameIndex: Int) async {
@@ -151,17 +244,49 @@ actor VADObservationSession {
 
     private func logPendingSummaryIfReady() {
         guard isFinished, inFlightWindowCount == 0, let reason = pendingFinishReason else { return }
-        logSummary(reason: reason)
+        _ = logSummary(reason: reason)
     }
 
-    private func logSummary(reason: String) {
-        guard summaryLogged == false else { return }
+    private func logSummary(reason: String) -> VADObservationSummary? {
+        guard summaryLogged == false else { return cachedSummary }
         summaryLogged = true
         pendingFinishReason = nil
         finalizeSegment(endMs: completedAudioMs, reason: reason)
 
+        let totalObservedBytes = observedBytes
+        let segmentSummaries = segmentCandidates.map { candidate in
+            let range = candidate.byteRange(totalBytes: totalObservedBytes, sampleRate: sampleRate, bytesPerSample: bytesPerSample)
+            return VADObservationSegmentSummary(
+                index: candidate.index,
+                startMs: candidate.startMs,
+                endMs: candidate.endMs,
+                byteStart: range.lowerBound,
+                byteEnd: range.upperBound,
+                reason: candidate.reason
+            )
+        }
         let detectAverageMs = completedWindowCount > 0 ? detectTotalMs / Double(completedWindowCount) : 0
         let segmentTotalMs = segmentCandidates.reduce(0) { $0 + $1.durationMs }
+        let summary = VADObservationSummary(
+            sessionID: sessionID,
+            reason: reason,
+            engine: config.vad.engine,
+            audioMs: observedAudioMs,
+            processedMs: processedAudioMs,
+            completedMs: completedAudioMs,
+            speechWindows: speechWindows,
+            silenceWindows: silenceWindows,
+            maxProbability: maxProbability,
+            firstSpeechMs: firstSpeechMs,
+            lastSpeechMs: lastSpeechMs,
+            longestSilenceMs: longestSilenceMs,
+            detectAverageMs: detectAverageMs,
+            detectMaxMs: detectMaxMs,
+            errors: errors,
+            audioBytes: totalObservedBytes,
+            pendingBytes: pendingSamples.count,
+            segments: segmentSummaries
+        )
         let message = [
             "VAD observe summary.",
             "session=\(sessionID.uuidString)",
@@ -194,6 +319,13 @@ actor VADObservationSession {
         logger.info("\(message, privacy: .public)")
         PerformanceLog.record(category: "VADObserve", message: message)
         logSegmentSummary()
+        cachedSummary = summary
+        let waiters = finishWaiters
+        finishWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume(returning: summary)
+        }
+        return summary
     }
 
     private func recordSpeechWindow(

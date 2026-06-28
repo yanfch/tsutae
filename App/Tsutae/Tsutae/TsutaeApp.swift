@@ -495,6 +495,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var localEscapeMonitor: Any?
     private var globalEscapeMonitor: Any?
+    private var didStartRecordingFromHoldShortcut = false
     private var isDuplicateInstance = false
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "AppDelegate")
     private let appController = DefaultAppController()
@@ -558,14 +559,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// 注册全局快捷键
     private func setupHotkeys() {
         logger.info("Registering global hotkey")
-        GlobalHotkeyManager.shared.start {
-            let message = "Global hotkey fired"
-            self.logger.info("\(message, privacy: .public)")
-            PerformanceLog.record(category: "Hotkey", message: message)
-            Task { @MainActor in
-                RecordingSession.shared.toggle()
+        GlobalHotkeyManager.shared.start(
+            onToggleRecordingBar: {
+                let message = "Global hotkey fired"
+                self.logger.info("\(message, privacy: .public)")
+                PerformanceLog.record(category: "Hotkey", message: message)
+                Task { @MainActor in
+                    RecordingSession.shared.toggle()
+                }
+            },
+            onHoldRecordingStart: {
+                let message = "Hold shortcut began"
+                self.logger.info("\(message, privacy: .public)")
+                PerformanceLog.record(category: "Hotkey", message: message)
+                Task { @MainActor in
+                    self.handleHoldShortcutBegan()
+                }
+            },
+            onHoldRecordingStop: {
+                let message = "Hold shortcut ended"
+                self.logger.info("\(message, privacy: .public)")
+                PerformanceLog.record(category: "Hotkey", message: message)
+                Task { @MainActor in
+                    self.handleHoldShortcutEnded()
+                }
             }
-        }
+        )
 
         localEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if self.handleEscapeKeyEvent(event) {
@@ -577,6 +596,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         globalEscapeMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             _ = self.handleEscapeKeyEvent(event)
+        }
+    }
+
+    @MainActor
+    private func handleHoldShortcutBegan() {
+        guard RecordingSession.shared.isBusy == false, RecordingSession.shared.isRecording == false else {
+            didStartRecordingFromHoldShortcut = false
+            FloatingRecordingBar.shared.setReleaseToFinishHintVisible(false)
+            return
+        }
+
+        didStartRecordingFromHoldShortcut = true
+        FloatingRecordingBar.shared.setReleaseToFinishHintVisible(true)
+        RecordingSession.shared.toggle()
+    }
+
+    @MainActor
+    private func handleHoldShortcutEnded() {
+        guard didStartRecordingFromHoldShortcut else {
+            return
+        }
+
+        didStartRecordingFromHoldShortcut = false
+        FloatingRecordingBar.shared.setReleaseToFinishHintVisible(false)
+        if RecordingSession.shared.isRecording {
+            RecordingSession.shared.toggle()
+        } else if RecordingSession.shared.isBusy {
+            RecordingSession.shared.cancel()
         }
     }
 

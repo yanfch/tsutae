@@ -78,7 +78,7 @@ struct GeneralSettingsView: View {
             
             SettingsSection(title: L10n.Settings.sectionBehavior) {
                 SettingsRow(label: L10n.Settings.recordingShortcutLabel) {
-                    SettingsShortcutRecorderField(
+                    SettingsRecordingShortcutControl(
                         shortcutID: hotkeyManager.toggleRecordingShortcutID,
                         onChange: { hotkeyManager.updateToggleRecordingShortcut(id: $0) }
                     )

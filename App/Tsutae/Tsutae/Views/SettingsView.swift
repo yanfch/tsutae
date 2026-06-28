@@ -6,6 +6,10 @@ extension Notification.Name {
     static let tsutaeConfigDidChange = Notification.Name("tsutae.configDidChange")
 }
 
+private enum SettingsScrollAnchor {
+    static let contentTop = "settings-content-top"
+}
+
 struct SettingsView: View {
     
     @Environment(\.colorScheme) private var colorScheme
@@ -16,6 +20,7 @@ struct SettingsView: View {
     @StateObject private var sttStore = STTSettingsStore()
     @State private var selectedTabState: SettingsTab = .usage
     @State private var titlebarCompensation: CGFloat = 0
+    @State private var contentScrollResetRequest = 0
     
     var body: some View {
         SettingsWindowHost(
@@ -80,15 +85,27 @@ struct SettingsView: View {
                         } else {
                             SettingsPageChrome(tab: selectedTab)
 
-                            ScrollView {
-                                currentTabView
-                                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                                    .padding(.horizontal, 28)
-                                    .padding(.top, 18)
-                                    .padding(.bottom, 24)
+                            ScrollViewReader { proxy in
+                                ScrollView {
+                                    Color.clear
+                                        .frame(height: 1)
+                                        .id(SettingsScrollAnchor.contentTop)
+
+                                    currentTabView
+                                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                                        .padding(.horizontal, 28)
+                                        .padding(.top, 18)
+                                        .padding(.bottom, 24)
+                                }
+                                .scrollIndicators(.never)
+                                .background(settingsBackground)
+                                .onChange(of: contentScrollResetRequest) { _, _ in
+                                    scrollSettingsContentToTop(proxy)
+                                }
+                                .onChange(of: selectedTabState) { _, _ in
+                                    scrollSettingsContentToTop(proxy)
+                                }
                             }
-                            .scrollIndicators(.never)
-                            .background(settingsBackground)
                         }
                     }
                     .background(settingsBackground)
@@ -127,7 +144,7 @@ struct SettingsView: View {
         case .general:
             GeneralSettingsPage()
         case .stt:
-            STTSettingsPage(store: sttStore)
+            STTSettingsPage(store: sttStore, onRequestScrollToTop: requestSettingsContentScrollToTop)
         case .tts:
             TTSSettingsPage()
         case .server:
@@ -154,6 +171,14 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+
+    private func requestSettingsContentScrollToTop() {
+        contentScrollResetRequest += 1
+    }
+
+    private func scrollSettingsContentToTop(_ proxy: ScrollViewProxy) {
+        proxy.scrollTo(SettingsScrollAnchor.contentTop, anchor: .top)
     }
     
     private var settingsBackground: Color {
