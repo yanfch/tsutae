@@ -1,6 +1,16 @@
 import Foundation
 import OSLog
 
+public struct TranscriptDictionaryReplacement: Codable, Sendable, Equatable {
+    public let key: String
+    public let value: String
+
+    public init(key: String, value: String) {
+        self.key = key
+        self.value = value
+    }
+}
+
 public struct TranscriptPostProcessingResult: Codable, Sendable, Equatable {
     public let rawText: String
     public let processedText: String
@@ -10,6 +20,7 @@ public struct TranscriptPostProcessingResult: Codable, Sendable, Equatable {
     public let model: String?
     public let elapsedMs: Double
     public let dictionaryMatches: [String]
+    public let dictionaryReplacements: [TranscriptDictionaryReplacement]
 
     public init(
         rawText: String,
@@ -19,7 +30,8 @@ public struct TranscriptPostProcessingResult: Codable, Sendable, Equatable {
         provider: String,
         model: String?,
         elapsedMs: Double,
-        dictionaryMatches: [String] = []
+        dictionaryMatches: [String] = [],
+        dictionaryReplacements: [TranscriptDictionaryReplacement] = []
     ) {
         self.rawText = rawText
         self.processedText = processedText
@@ -29,6 +41,7 @@ public struct TranscriptPostProcessingResult: Codable, Sendable, Equatable {
         self.model = model
         self.elapsedMs = elapsedMs
         self.dictionaryMatches = dictionaryMatches
+        self.dictionaryReplacements = dictionaryReplacements
     }
 }
 
@@ -172,7 +185,8 @@ public enum TranscriptPostProcessor {
                 provider: providerName(provider, requestedMode: mode, executionMode: executionMode),
                 model: nil,
                 elapsedMs: elapsedMs(since: startedAt),
-                dictionaryMatches: dictionaryResult.matches
+                dictionaryMatches: dictionaryResult.matches,
+                dictionaryReplacements: dictionaryResult.replacements
             )
         case .remote:
             let remote = config.remote
@@ -209,6 +223,7 @@ public enum TranscriptPostProcessor {
             )
             let normalizedText = normalizeRemoteOutput(dictionaryResult.text, sourceText: remoteInput, task: resolvedTask)
             let dictionaryMatches = mergedMatches(preparedInput.matches, dictionaryResult.matches)
+            let dictionaryReplacements = mergedReplacements(preparedInput.replacements, dictionaryResult.replacements)
             let provider = dictionaryMatches.isEmpty ? "openai_compatible" : "openai_compatible+dictionary"
             result = TranscriptPostProcessingResult(
                 rawText: rawText,
@@ -218,7 +233,8 @@ public enum TranscriptPostProcessor {
                 provider: providerName(provider, requestedMode: mode, executionMode: executionMode),
                 model: model,
                 elapsedMs: elapsedMs(since: startedAt),
-                dictionaryMatches: dictionaryMatches
+                dictionaryMatches: dictionaryMatches,
+                dictionaryReplacements: dictionaryReplacements
             )
         }
 
@@ -316,12 +332,28 @@ public enum TranscriptPostProcessor {
         }
         return merged
     }
+
+    private static func mergedReplacements(
+        _ lhs: [TranscriptDictionaryReplacement],
+        _ rhs: [TranscriptDictionaryReplacement]
+    ) -> [TranscriptDictionaryReplacement] {
+        var seen = Set<String>()
+        var merged: [TranscriptDictionaryReplacement] = []
+        for replacement in lhs + rhs {
+            let identity = "\(replacement.key.lowercased())\u{0}\(replacement.value)"
+            if seen.insert(identity).inserted {
+                merged.append(replacement)
+            }
+        }
+        return merged
+    }
 }
 
 public enum TranscriptDictionaryReplacer {
     public struct Result: Sendable, Equatable {
         public let text: String
         public let matches: [String]
+        public let replacements: [TranscriptDictionaryReplacement]
     }
 
     public static var builtInPreviewEntries: [Config.TranscriptDictionaryEntry] {
@@ -334,7 +366,7 @@ public enum TranscriptDictionaryReplacer {
         context: TranscriptDictionaryContext = .empty
     ) -> Result {
         guard config.enabled else {
-            return Result(text: text, matches: [])
+            return Result(text: text, matches: [], replacements: [])
         }
 
         let entries = resolvedEntries(config: config, context: context)
@@ -350,6 +382,7 @@ public enum TranscriptDictionaryReplacer {
         var output = normalizeMixedScriptSpacing(text)
         var lookupText = output.lowercased()
         var matches: [String] = []
+        var replacements: [TranscriptDictionaryReplacement] = []
         for entry in entries {
             guard lookupText.contains(entry.lookupKey) else { continue }
             let next = replace(entry.entry.key, with: entry.entry.value, in: output)
@@ -357,9 +390,10 @@ public enum TranscriptDictionaryReplacer {
                 output = next
                 lookupText = output.lowercased()
                 matches.append(entry.entry.key)
+                replacements.append(TranscriptDictionaryReplacement(key: entry.entry.key, value: entry.entry.value))
             }
         }
-        return Result(text: normalizeMixedScriptSpacing(output), matches: matches)
+        return Result(text: normalizeMixedScriptSpacing(output), matches: matches, replacements: replacements)
     }
 
     private static func resolvedEntries(
@@ -483,6 +517,7 @@ public enum TranscriptDictionaryReplacer {
         .init(key: "stt", value: "STT"),
         .init(key: "tts", value: "TTS"),
         .init(key: "asr", value: "ASR"),
+        .init(key: "vad", value: "VAD"),
         .init(key: "llm", value: "LLM"),
         .init(key: "transscribe", value: "transcribe"),
         .init(key: "condexapp", value: "Codex app"),
@@ -495,8 +530,18 @@ public enum TranscriptDictionaryReplacer {
         .init(key: "ui", value: "UI"),
         .init(key: "mimo", value: "Mimo"),
         .init(key: "kokoro", value: "Kokoro"),
+        .init(key: "dmg", value: "DMG"),
+        .init(key: "double tap", value: "Double Tap"),
+        .init(key: "doubletap", value: "Double Tap"),
+        .init(key: "double option", value: "Double Option"),
+        .init(key: "doubleoption", value: "Double Option"),
+        .init(key: "apple developer program", value: "Apple Developer Program"),
+        .init(key: "appledeveloperprogram", value: "Apple Developer Program"),
         .init(key: "卡纳德", value: "Kanade"),
         .init(key: "卡纳的", value: "Kanade"),
+        .init(key: "大菠态", value: "Double Tap"),
+        .init(key: "大波态", value: "Double Tap"),
+        .init(key: "按柱模式", value: "按住模式"),
         .init(key: "扣得克斯", value: "Codex"),
         .init(key: "扣的克斯", value: "Codex"),
         .init(key: "次他诶", value: "Tsutae"),

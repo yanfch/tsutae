@@ -570,6 +570,20 @@ final class TranscriptPostProcessorTests: XCTestCase {
         XCTAssertEqual(result.matches, ["github issue", "code x", "kanade"])
     }
 
+    func testDictionaryAppliesBuiltInTermsSeenInASRLogs() {
+        let result = TranscriptDictionaryReplacer.apply(
+            to: "看看vad和doubleoption还有appledeveloperprogram的dmg",
+            config: .init(enabled: true, useBuiltIn: true)
+        )
+
+        XCTAssertEqual(result.text, "看看 VAD 和 Double Option 还有 Apple Developer Program 的 DMG")
+        XCTAssertEqual(Set(result.matches), Set(["vad", "doubleoption", "appledeveloperprogram", "dmg"]))
+        XCTAssertEqual(
+            Set(result.replacements.map { "\($0.key)->\($0.value)" }),
+            Set(["vad->VAD", "doubleoption->Double Option", "appledeveloperprogram->Apple Developer Program", "dmg->DMG"])
+        )
+    }
+
     func testDictionaryAppliesAutomaticContextTerms() {
         let context = TranscriptDictionaryContext(terms: ["Linear", "MyCustomApp"])
 
