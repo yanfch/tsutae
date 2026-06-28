@@ -101,7 +101,7 @@ enum L10n {
         static var transcriptionTimeoutMessage: String { tr("companion.transcription_timeout_message", default: "The transcription service timed out. Try again or check the service status.") }
         static var transcriptionUnreachableMessage: String { tr("companion.transcription_unreachable_message", default: "Cannot reach the transcription service. Check network, endpoint, or model settings.") }
         static func longRecordingWarningMessage(seconds: Int, modelName: String, limitSeconds: Int) -> String {
-            String(format: tr("companion.long_recording_warning_message", default: "You’ve recorded for about %d seconds. %@ is best kept under %d seconds per clip; stop now and continue in the next round."), seconds, modelName, limitSeconds)
+            String(format: tr("companion.long_recording_warning_message", default: "You’ve recorded for about %d seconds. Tsutae will split long clips for local transcription; very long recordings may take longer to process."), seconds)
         }
         static var longRecordingWarningTitle: String { tr("companion.long_recording_warning_title", default: "Long Recording") }
         static var longRecordingKeepGoing: String { tr("companion.long_recording_keep_going", default: "Keep Recording") }
@@ -143,10 +143,17 @@ enum L10n {
         static var launchAtLoginLabel: String { tr("settings.launch_at_login_label", default: "Launch at Login") }
         static var showDockIconLabel: String { tr("settings.show_dock_icon_label", default: "Show in Dock") }
         static var recordingShortcutLabel: String { tr("settings.recording_shortcut_label", default: "Recording Shortcut") }
+        static var recordingShortcutModeKeyboard: String { tr("settings.recording_shortcut_mode_keyboard", default: "Shortcut") }
+        static var recordingShortcutModeDoubleTap: String { tr("settings.recording_shortcut_mode_double_tap", default: "Double Tap") }
+        static var recordingShortcutModeHold: String { tr("settings.recording_shortcut_mode_hold", default: "Press & Hold") }
         static var recordingShortcutPrompt: String { tr("settings.recording_shortcut_prompt", default: "Press") }
         static var recordingShortcutRecordHint: String { tr("settings.recording_shortcut_record_hint", default: "Set") }
         static var recordingShortcutCancelHint: String { tr("settings.recording_shortcut_cancel_hint", default: "Esc") }
         static var recordingShortcutModifierHint: String { tr("settings.recording_shortcut_modifier_hint", default: "Use at least one modifier.") }
+        static var recordingShortcutModifierControl: String { tr("settings.recording_shortcut_modifier_control", default: "Control") }
+        static var recordingShortcutModifierOption: String { tr("settings.recording_shortcut_modifier_option", default: "Option") }
+        static var recordingShortcutModifierShift: String { tr("settings.recording_shortcut_modifier_shift", default: "Shift") }
+        static var recordingShortcutModifierCommand: String { tr("settings.recording_shortcut_modifier_command", default: "Command") }
         static var toggleOff: String { tr("settings.toggle_off", default: "Off") }
         static var toggleOn: String { tr("settings.toggle_on", default: "On") }
         static var defaultActionLabel: String { tr("settings.default_action_label", default: "Default Action") }

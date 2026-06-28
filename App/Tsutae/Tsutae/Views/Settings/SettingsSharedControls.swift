@@ -397,6 +397,126 @@ private struct STTModelDownloadProgressBar: View {
     }
 }
 
+struct SettingsRecordingShortcutControl: View {
+    let shortcutID: String
+    let onChange: (String) -> Void
+
+    @State private var rememberedKeyboardShortcutID: String
+
+    init(shortcutID: String, onChange: @escaping (String) -> Void) {
+        self.shortcutID = shortcutID
+        self.onChange = onChange
+        _rememberedKeyboardShortcutID = State(
+            initialValue: RecordingShortcut.keyboardShortcutID(forShortcutID: shortcutID)
+                ?? RecordingShortcut.defaultKeyboardShortcutID
+        )
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            SettingsDropdown(
+                selection: modeSelection,
+                options: modeOptions,
+                width: 150,
+                menuWidth: 180
+            )
+
+            if currentMode == .keyboardShortcut {
+                SettingsShortcutRecorderField(
+                    shortcutID: rememberedKeyboardShortcutID,
+                    onChange: { newShortcutID in
+                        rememberedKeyboardShortcutID = newShortcutID
+                        onChange(RecordingShortcut.id(mode: .keyboardShortcut, keyboardShortcutID: newShortcutID))
+                    }
+                )
+            } else {
+                SettingsDropdown(
+                    selection: modifierSelection,
+                    options: modifierOptions,
+                    width: 150,
+                    menuWidth: 180
+                )
+            }
+        }
+        .onAppear {
+            syncRememberedKeyboardShortcut(from: shortcutID)
+        }
+        .onChange(of: shortcutID) { _, newValue in
+            syncRememberedKeyboardShortcut(from: newValue)
+        }
+    }
+
+    private var currentMode: RecordingShortcutMode {
+        RecordingShortcut.mode(forShortcutID: shortcutID)
+    }
+
+    private var currentModifier: RecordingShortcutModifier {
+        RecordingShortcut.modifier(forShortcutID: shortcutID) ?? RecordingShortcut.defaultModifier
+    }
+
+    private var modeSelection: Binding<String> {
+        Binding(
+            get: { currentMode.rawValue },
+            set: { newValue in
+                let newMode = RecordingShortcutMode(rawValue: newValue) ?? .keyboardShortcut
+                onChange(
+                    RecordingShortcut.id(
+                        mode: newMode,
+                        keyboardShortcutID: rememberedKeyboardShortcutID,
+                        modifier: currentModifier
+                    )
+                )
+            }
+        )
+    }
+
+    private var modifierSelection: Binding<String> {
+        Binding(
+            get: { currentModifier.rawValue },
+            set: { newValue in
+                let modifier = RecordingShortcutModifier(rawValue: newValue) ?? RecordingShortcut.defaultModifier
+                onChange(
+                    RecordingShortcut.id(
+                        mode: currentMode,
+                        keyboardShortcutID: rememberedKeyboardShortcutID,
+                        modifier: modifier
+                    )
+                )
+            }
+        )
+    }
+
+    private var modeOptions: [SettingsDropdownOption] {
+        [
+            SettingsDropdownOption(id: RecordingShortcutMode.keyboardShortcut.rawValue, title: L10n.Settings.recordingShortcutModeKeyboard),
+            SettingsDropdownOption(id: RecordingShortcutMode.doubleTapModifier.rawValue, title: L10n.Settings.recordingShortcutModeDoubleTap),
+            SettingsDropdownOption(id: RecordingShortcutMode.pressAndHoldModifier.rawValue, title: L10n.Settings.recordingShortcutModeHold),
+        ]
+    }
+
+    private var modifierOptions: [SettingsDropdownOption] {
+        RecordingShortcutModifier.allCases.map { modifier in
+            SettingsDropdownOption(id: modifier.rawValue, title: "\(modifier.glyph) \(modifierTitle(for: modifier))")
+        }
+    }
+
+    private func modifierTitle(for modifier: RecordingShortcutModifier) -> String {
+        switch modifier {
+        case .control: return L10n.Settings.recordingShortcutModifierControl
+        case .option: return L10n.Settings.recordingShortcutModifierOption
+        case .shift: return L10n.Settings.recordingShortcutModifierShift
+        case .command: return L10n.Settings.recordingShortcutModifierCommand
+        }
+    }
+
+    private func syncRememberedKeyboardShortcut(from id: String) {
+        guard let keyboardShortcutID = RecordingShortcut.keyboardShortcutID(forShortcutID: id) else {
+            return
+        }
+        rememberedKeyboardShortcutID = keyboardShortcutID
+    }
+}
+
 struct SettingsShortcutRecorderField: View {
     let shortcutID: String
     let onChange: (String) -> Void

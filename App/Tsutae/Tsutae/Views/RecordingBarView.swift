@@ -17,6 +17,7 @@ struct RecordingBarView: View {
     let state: RecordingBarVisualState
     let preset: DS.recordingBar.Preset
     let colorScheme: ColorScheme
+    let showsReleaseHint: Bool
     
     private let phaseOffsets: [Double] = [0, 0.7, 1.2, 1.8, 2.4, 3.0, 3.6, 4.2, 4.8]
     
@@ -29,11 +30,13 @@ struct RecordingBarView: View {
     init(
         state: RecordingBarVisualState,
         preset: DS.recordingBar.Preset = DS.recordingBar.defaultPreset,
-        colorScheme: ColorScheme = .light
+        colorScheme: ColorScheme = .light,
+        showsReleaseHint: Bool = false
     ) {
         self.state = state
         self.preset = preset
         self.colorScheme = colorScheme
+        self.showsReleaseHint = showsReleaseHint
     }
     
     var body: some View {
@@ -227,7 +230,7 @@ struct RecordingBarView: View {
         switch state {
         case .idle: return "Done"
         case .copied: return "Copied"
-        case .listening: return "Listen"
+        case .listening: return showsReleaseHint ? "Release" : "Listen"
         case .waiting: return "Wait"
         case .thinking: return "Think"
         case .speaking: return "Speak"

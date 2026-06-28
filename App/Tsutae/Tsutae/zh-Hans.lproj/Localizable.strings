@@ -28,7 +28,7 @@
 "companion.transcription_timeout_message" = "转写服务请求超时。请重试或检查服务状态。";
 "companion.transcription_unreachable_message" = "无法连接转写服务。请检查网络、接口地址或模型设置。";
 "companion.long_recording_warning_title" = "录音时间较长";
-"companion.long_recording_warning_message" = "已经录了约 %d 秒。当前模型「%@」建议单段不超过 %d 秒，建议先停止转写，下一段再继续。";
+"companion.long_recording_warning_message" = "已经录了约 %d 秒。Tsutae 会自动分段进行本地转写；特别长的录音可能需要更久处理。";
 "companion.long_recording_keep_going" = "继续录音";
 "companion.cancel_confirmation_title" = "要取消当前输入吗？";
 "companion.cancel_confirmation_message" = "再次按 Esc 才会取消。如果你只是关闭其他窗口，Tsutae 会继续录音。";
@@ -66,10 +66,17 @@
 "settings.launch_at_login_label" = "开机自动启动";
 "settings.show_dock_icon_label" = "显示 Dock 图标";
 "settings.recording_shortcut_label" = "唤起快捷键";
+"settings.recording_shortcut_mode_keyboard" = "组合键";
+"settings.recording_shortcut_mode_double_tap" = "双击";
+"settings.recording_shortcut_mode_hold" = "按住";
 "settings.recording_shortcut_prompt" = "按键";
 "settings.recording_shortcut_record_hint" = "设置";
 "settings.recording_shortcut_cancel_hint" = "Esc";
 "settings.recording_shortcut_modifier_hint" = "至少包含一个修饰键。";
+"settings.recording_shortcut_modifier_control" = "Control";
+"settings.recording_shortcut_modifier_option" = "Option";
+"settings.recording_shortcut_modifier_shift" = "Shift";
+"settings.recording_shortcut_modifier_command" = "Command";
 "settings.toggle_off" = "关";
 "settings.toggle_on" = "开";
 "settings.default_action_label" = "默认动作";
