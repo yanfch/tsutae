@@ -13,6 +13,71 @@ public enum ASRSampleLog {
         public let model: String?
         public let elapsedMs: Double
         public let dictionaryMatches: [String]
+        public let dictionaryReplacements: [TranscriptDictionaryReplacement]?
+    }
+
+    public struct VADSegmentSnapshot: Codable, Sendable, Equatable {
+        public let index: Int
+        public let startMs: Double
+        public let endMs: Double
+        public let byteStart: Int
+        public let byteEnd: Int
+        public let reason: String
+
+        public init(index: Int, startMs: Double, endMs: Double, byteStart: Int, byteEnd: Int, reason: String) {
+            self.index = index
+            self.startMs = startMs
+            self.endMs = endMs
+            self.byteStart = byteStart
+            self.byteEnd = byteEnd
+            self.reason = reason
+        }
+    }
+
+    public struct VADSnapshot: Codable, Sendable, Equatable {
+        public let engine: String
+        public let reason: String
+        public let audioMs: Double
+        public let processedMs: Double
+        public let speechWindows: Int
+        public let silenceWindows: Int
+        public let maxProbability: Double
+        public let firstSpeechMs: Double?
+        public let lastSpeechMs: Double?
+        public let longestSilenceMs: Double
+        public let segmentBytes: Int
+        public let segmentSavedPercent: Double
+        public let segments: [VADSegmentSnapshot]
+
+        public init(
+            engine: String,
+            reason: String,
+            audioMs: Double,
+            processedMs: Double,
+            speechWindows: Int,
+            silenceWindows: Int,
+            maxProbability: Double,
+            firstSpeechMs: Double?,
+            lastSpeechMs: Double?,
+            longestSilenceMs: Double,
+            segmentBytes: Int,
+            segmentSavedPercent: Double,
+            segments: [VADSegmentSnapshot]
+        ) {
+            self.engine = engine
+            self.reason = reason
+            self.audioMs = audioMs
+            self.processedMs = processedMs
+            self.speechWindows = speechWindows
+            self.silenceWindows = silenceWindows
+            self.maxProbability = maxProbability
+            self.firstSpeechMs = firstSpeechMs
+            self.lastSpeechMs = lastSpeechMs
+            self.longestSilenceMs = longestSilenceMs
+            self.segmentBytes = segmentBytes
+            self.segmentSavedPercent = segmentSavedPercent
+            self.segments = segments
+        }
     }
 
     public struct InsertionSnapshot: Codable, Sendable, Equatable {
@@ -59,6 +124,7 @@ public enum ASRSampleLog {
         public let rawChars: Int
         public let finalChars: Int
         public let postProcessing: PostProcessingSnapshot?
+        public let vad: VADSnapshot?
         public let insertion: InsertionSnapshot?
     }
 
@@ -74,7 +140,8 @@ public enum ASRSampleLog {
         recordingStartApplication: FocusedApplicationSnapshot? = nil,
         insertionApplication: FocusedApplicationSnapshot? = nil,
         insertion: InsertionSnapshot? = nil,
-        endToEndElapsedMs: Double? = nil
+        endToEndElapsedMs: Double? = nil,
+        vad: VADSnapshot? = nil
     ) -> Record {
         let resolvedTargetApplication = targetApplication ?? insertionApplication ?? recordingStartApplication
         return Record(
@@ -114,9 +181,11 @@ public enum ASRSampleLog {
                     provider: $0.provider,
                     model: $0.model,
                     elapsedMs: $0.elapsedMs,
-                    dictionaryMatches: $0.dictionaryMatches
+                    dictionaryMatches: $0.dictionaryMatches,
+                    dictionaryReplacements: $0.dictionaryReplacements
                 )
             },
+            vad: vad,
             insertion: insertion
         )
     }
@@ -125,11 +194,13 @@ public enum ASRSampleLog {
         guard isEnabled else { return }
         Task {
             await Writer.shared.append(record)
+            await TranscriptDictionaryCandidateLog.recordCandidates(from: record)
         }
     }
 
     public static func append(_ record: Record) async {
         await Writer.shared.append(record)
+        await TranscriptDictionaryCandidateLog.recordCandidates(from: record)
     }
 
     private static func audioSeconds(_ audio: AudioData) -> Double {

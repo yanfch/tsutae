@@ -274,6 +274,15 @@ public enum STTEngineFactory {
 
 public enum ConfiguredSTTRouter {
     private static let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "STTRouter")
+    private static let localChunkTargetSeconds: Double = 25.0
+    private static let localChunkHardSeconds: Double = 29.0
+    private static let localChunkOverlapSeconds: Double = 0.2
+    private static let chunkTextOverlapMaxCharacters = 12
+
+    private struct TranscriptionChunk {
+        let audio: AudioData
+        let sourceRange: Range<Int>
+    }
     
     public static func shouldKeepLocalModelWarmed(config: Config? = nil) throws -> Bool {
         let resolvedConfig = try config ?? ConfigLoader.load()
@@ -333,7 +342,22 @@ public enum ConfiguredSTTRouter {
             let primaryLoadMessage = "STT primary load finished. engine=\(primary.id) elapsed_ms=\(formatElapsedMs(since: primaryLoadStartedAt))"
             logger.info("\(primaryLoadMessage, privacy: .public)")
             PerformanceLog.record(category: "STTRouter", message: primaryLoadMessage)
-            
+
+            if shouldChunkLocalPrimary(audio: audio, engine: primary, config: resolvedConfig) {
+                let primaryTranscribeStartedAt = CFAbsoluteTimeGetCurrent()
+                let transcript = try await transcribeLocalChunks(
+                    audio,
+                    engine: primary,
+                    language: language,
+                    config: resolvedConfig,
+                    overallStartedAt: overallStartedAt
+                )
+                let primaryDoneMessage = "STT primary chunked transcription finished. engine=\(primary.id) model=\(modelID(for: primary.id, config: resolvedConfig.stt)) text_chars=\(transcript.text.count) audio_seconds=\(audioDurationSeconds(audio)) elapsed_ms=\(formatElapsedMs(since: primaryTranscribeStartedAt)) total_elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
+                logger.info("\(primaryDoneMessage, privacy: .public)")
+                PerformanceLog.record(category: "STTRouter", message: primaryDoneMessage)
+                return transcript
+            }
+
             let primaryTranscribeStartedAt = CFAbsoluteTimeGetCurrent()
             let transcript = try validateTranscript(
                 try await primary.transcribe(audio, language: language),
@@ -382,6 +406,142 @@ public enum ConfiguredSTTRouter {
         }
     }
 
+    private static func shouldChunkLocalPrimary(audio: AudioData, engine: STTEngine, config: Config) -> Bool {
+        guard config.stt.mode == .localFirst,
+              engine.id == "fluidaudio_local",
+              audio.container == .pcm16 else {
+            return false
+        }
+        return audio.samples.count > byteCount(
+            seconds: localChunkHardSeconds,
+            sampleRate: audio.sampleRate,
+            channels: audio.channels
+        )
+    }
+
+    private static func transcribeLocalChunks(
+        _ audio: AudioData,
+        engine: STTEngine,
+        language: String?,
+        config: Config,
+        overallStartedAt: CFAbsoluteTime
+    ) async throws -> Transcript {
+        let chunks = localChunks(for: audio)
+        let planMessage = "STT local chunk plan. engine=\(engine.id) model=\(modelID(for: engine.id, config: config.stt)) chunks=\(chunks.count) audio_bytes=\(audio.samples.count) chunk_bytes=\(chunks.map { $0.audio.samples.count }.map(String.init).joined(separator: ",")) target_seconds=\(String(format: "%.1f", localChunkTargetSeconds)) hard_seconds=\(String(format: "%.1f", localChunkHardSeconds)) overlap_ms=\(String(format: "%.0f", localChunkOverlapSeconds * 1000))"
+        logger.info("\(planMessage, privacy: .public)")
+        PerformanceLog.record(category: "STTRouter", message: planMessage)
+
+        var texts: [String] = []
+        var transcriptLanguage: String?
+        for (index, chunk) in chunks.enumerated() {
+            let startedAt = CFAbsoluteTimeGetCurrent()
+            let chunkStartMessage = "STT local chunk started. index=\(index + 1) total=\(chunks.count) bytes=\(chunk.audio.samples.count) audio_seconds=\(audioDurationSeconds(chunk.audio)) range=\(chunk.sourceRange.lowerBound)-\(chunk.sourceRange.upperBound) total_elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
+            logger.info("\(chunkStartMessage, privacy: .public)")
+            PerformanceLog.record(category: "STTRouter", message: chunkStartMessage)
+
+            let transcript = try await engine.transcribe(chunk.audio, language: language)
+            if transcriptLanguage == nil {
+                transcriptLanguage = transcript.language
+            }
+            let text = transcript.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.isEmpty == false {
+                texts.append(text)
+            }
+
+            let chunkDoneMessage = "STT local chunk finished. index=\(index + 1) total=\(chunks.count) chars=\(transcript.text.count) elapsed_ms=\(formatElapsedMs(since: startedAt)) total_elapsed_ms=\(formatElapsedMs(since: overallStartedAt))"
+            logger.info("\(chunkDoneMessage, privacy: .public)")
+            PerformanceLog.record(category: "STTRouter", message: chunkDoneMessage)
+        }
+
+        let text = joinedTranscriptChunks(texts)
+        return try validateTranscript(
+            Transcript(text: text, language: transcriptLanguage ?? language, durationMs: nil, confidence: nil, isFinal: true),
+            engineID: engine.id
+        )
+    }
+
+    private static func localChunks(for audio: AudioData) -> [TranscriptionChunk] {
+        let maxBytes = byteCount(seconds: localChunkTargetSeconds, sampleRate: audio.sampleRate, channels: audio.channels)
+        let overlapBytes = byteCount(seconds: localChunkOverlapSeconds, sampleRate: audio.sampleRate, channels: audio.channels)
+        let ranges = splitRange(
+            0..<audio.samples.count,
+            maxBytes: maxBytes,
+            overlapBytes: overlapBytes,
+            frameBytes: frameBytes(for: audio)
+        )
+        return ranges.compactMap { range in
+            let data = audio.samples.subdata(in: range)
+            guard data.isEmpty == false else { return nil }
+            return TranscriptionChunk(
+                audio: AudioData(samples: data, sampleRate: audio.sampleRate, channels: audio.channels, container: audio.container),
+                sourceRange: range
+            )
+        }
+    }
+
+    private static func splitRange(
+        _ range: Range<Int>,
+        maxBytes: Int,
+        overlapBytes: Int,
+        frameBytes: Int
+    ) -> [Range<Int>] {
+        guard maxBytes > frameBytes, range.count > maxBytes else { return [range] }
+        let alignedOverlap = max(0, overlapBytes - overlapBytes % frameBytes)
+        var ranges: [Range<Int>] = []
+        var start = range.lowerBound
+        while start < range.upperBound {
+            let end = min(start + maxBytes, range.upperBound)
+            if end > start {
+                ranges.append(start..<end)
+            }
+            guard end < range.upperBound else { break }
+            let nextStart = max(range.lowerBound, end - alignedOverlap)
+            start = nextStart > start ? nextStart : end
+        }
+        return ranges
+    }
+
+    private static func joinedTranscriptChunks(_ texts: [String]) -> String {
+        var output = ""
+        for text in texts {
+            let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard value.isEmpty == false else { continue }
+            guard output.isEmpty == false else {
+                output = value
+                continue
+            }
+            let overlap = transcriptTextOverlapSuffixPrefix(output, value, maxCharacters: chunkTextOverlapMaxCharacters)
+            let remainder = String(value.dropFirst(overlap))
+            guard remainder.isEmpty == false else { continue }
+            output += joinSeparator(previous: output, next: remainder) + remainder
+        }
+        return output
+    }
+
+    private static func transcriptTextOverlapSuffixPrefix(_ previous: String, _ next: String, maxCharacters: Int) -> Int {
+        let maxLength = min(maxCharacters, previous.count, next.count)
+        guard maxLength >= 2 else { return 0 }
+        for length in stride(from: maxLength, through: 2, by: -1) {
+            if previous.suffix(length) == next.prefix(length) {
+                return length
+            }
+        }
+        return 0
+    }
+
+    private static func joinSeparator(previous: String, next: String) -> String {
+        guard let previousLast = previous.last, let nextFirst = next.first else { return "" }
+        if previousLast.isWhitespace || nextFirst.isWhitespace { return "" }
+        let noSpaceBefore = CharacterSet(charactersIn: "，。！？；：、,.!?;:")
+        if String(nextFirst).rangeOfCharacter(from: noSpaceBefore) != nil { return "" }
+        if isCJK(previousLast) || isCJK(nextFirst) { return "" }
+        return " "
+    }
+
+    private static func isCJK(_ character: Character) -> Bool {
+        String(character).range(of: #"\p{Han}"#, options: .regularExpression) != nil
+    }
+
     private static func validateTranscript(_ transcript: Transcript, engineID: String) throws -> Transcript {
         guard transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             throw STTTranscriptionError.emptyTranscript(engine: engineID)
@@ -403,6 +563,17 @@ public enum ConfiguredSTTRouter {
     private static func audioDurationSeconds(_ audio: AudioData) -> String {
         guard audio.sampleRate > 0, audio.channels > 0 else { return "0.0" }
         return String(format: "%.1f", Double(audio.samples.count) / Double(audio.sampleRate * audio.channels * 2))
+    }
+
+    private static func byteCount(seconds: Double, sampleRate: Int, channels: Int) -> Int {
+        guard seconds > 0, sampleRate > 0, channels > 0 else { return 0 }
+        let frameBytes = max(1, channels * MemoryLayout<Int16>.size)
+        let bytes = Int(seconds * Double(sampleRate * channels * MemoryLayout<Int16>.size))
+        return max(frameBytes, bytes - bytes % frameBytes)
+    }
+
+    private static func frameBytes(for audio: AudioData) -> Int {
+        max(1, audio.channels * MemoryLayout<Int16>.size)
     }
     
     private static func formatElapsedMs(since startedAt: CFAbsoluteTime) -> String {

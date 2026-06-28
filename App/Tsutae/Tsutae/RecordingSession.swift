@@ -9,6 +9,29 @@ private struct ProcessedTranscriptOutcome {
     let postProcessing: TranscriptPostProcessingResult?
 }
 
+private struct TranscriptionAudioChunk {
+    let audio: AudioData
+    let sourceRange: Range<Int>
+    let source: String
+}
+
+private struct TranscriptionAudioPlan {
+    let strategy: String
+    let chunks: [TranscriptionAudioChunk]
+    let sourceAudioBytes: Int
+
+    var chunkCount: Int { chunks.count }
+
+    var chunkBytes: Int {
+        chunks.reduce(0) { $0 + $1.audio.samples.count }
+    }
+
+    var savedPercent: Double {
+        guard sourceAudioBytes > 0 else { return 0 }
+        return max(0, (1.0 - Double(chunkBytes) / Double(sourceAudioBytes)) * 100.0)
+    }
+}
+
 private struct TranscriptOutputOutcome {
     let method: String
     let copied: Bool
@@ -56,6 +79,14 @@ final class RecordingSession: ObservableObject {
 
     private static let escapeCancelConfirmationWindow: TimeInterval = 2.0
     private static let meaningfulAudioSeconds: Double = 0.8
+    private static let vadNoSpeechMaxAudioSeconds: Double = 2.5
+    private static let vadNoSpeechMaxProbability: Double = 0.25
+    private static let maxLocalChunkSeconds: Double = 25.0
+    private static let hardLocalChunkSeconds: Double = 29.0
+    private static let longRecordingSoftWarningSeconds = 120
+    private static let fixedChunkOverlapMs: Double = 200.0
+    private static let minVADSegmentSeconds: Double = 0.6
+    private static let minVADTrimSavedPercent: Double = 8.0
     
     private init() {}
     
@@ -221,10 +252,11 @@ final class RecordingSession: ObservableObject {
     
     private func stopAndTranscribe() {
         let audio: AudioData
+        var vadSummaryTask: Task<VADObservationSummary?, Never>?
         let stopStartedAt = CFAbsoluteTimeGetCurrent()
         do {
             audio = try audioInput.stopRecording()
-            finishVADObservation(reason: "stopped")
+            vadSummaryTask = finishVADObservation(reason: "stopped")
             let stopElapsedMs = formatElapsedMs(since: stopStartedAt)
             isRecording = false
             liveRecordedBytes = 0
@@ -265,9 +297,26 @@ final class RecordingSession: ObservableObject {
             }
             
             do {
-                let transcript = try await ConfiguredSTTRouter.transcribe(audio)
+                let config = (try? ConfigLoader.load()) ?? .default
+                let vadSummary = await vadSummaryTask?.value
+                if self.shouldSkipTranscriptionForNoSpeech(audio: audio, vadSummary: vadSummary) {
+                    let message = "Transcription skipped by VAD no-speech gate. audio_seconds=\(self.audioDurationSeconds(audio)) max_probability=\(String(format: "%.3f", vadSummary?.maxProbability ?? 0)) speech_windows=\(vadSummary?.speechWindows ?? 0)"
+                    self.logger.info("\(message, privacy: .public)")
+                    PerformanceLog.record(category: "RecordingSession", message: message)
+                    self.lastError = "No speech detected"
+                    self.statusText = "no speech detected"
+                    self.presentTranscriptionError(STTTranscriptionError.emptyTranscript(engine: "vad_gate"), audio: audio)
+                    return
+                }
+
+                let plan = self.makeTranscriptionAudioPlan(audio: audio, vadSummary: vadSummary, config: config)
+                let planMessage = "RecordingSession transcription plan. strategy=\(plan.strategy) chunks=\(plan.chunkCount) audio_bytes=\(audio.samples.count) chunk_bytes=\(plan.chunkBytes) saved_pct=\(String(format: "%.1f", plan.savedPercent)) vad_segments=\(vadSummary?.segments.count ?? 0)"
+                self.logger.info("\(planMessage, privacy: .public)")
+                PerformanceLog.record(category: "RecordingSession", message: planMessage)
+
+                let transcript = try await self.transcribe(audioPlan: plan, config: config)
                 let transcriptionElapsedMs = self.elapsedMs(since: transcriptionStartedAt)
-                let transcribeDoneMessage = "RecordingSession transcription finished. chars=\(transcript.text.count) elapsed_ms=\(self.formatElapsedMs(transcriptionElapsedMs))"
+                let transcribeDoneMessage = "RecordingSession transcription finished. chars=\(transcript.text.count) elapsed_ms=\(self.formatElapsedMs(transcriptionElapsedMs)) strategy=\(plan.strategy) chunks=\(plan.chunkCount)"
                 self.logger.info("\(transcribeDoneMessage, privacy: .public)")
                 PerformanceLog.record(category: "RecordingSession", message: transcribeDoneMessage)
                 guard !Task.isCancelled, self.activeOperationID == operationID else {
@@ -275,7 +324,6 @@ final class RecordingSession: ObservableObject {
                     return
                 }
                 
-                let config = (try? ConfigLoader.load()) ?? .default
                 let processed = await self.postProcessedTranscriptText(
                     transcript.text,
                     config: config,
@@ -315,7 +363,8 @@ final class RecordingSession: ObservableObject {
                                 elapsedMs: output.elapsedMs,
                                 error: output.error
                             ),
-                            endToEndElapsedMs: endToEndElapsedMs
+                            endToEndElapsedMs: endToEndElapsedMs,
+                            vad: vadSummary?.asASRSampleLogSnapshot
                         )
                     )
                     self.activeTargetApplication = nil
@@ -377,11 +426,12 @@ final class RecordingSession: ObservableObject {
         }
     }
 
-    private func finishVADObservation(reason: String) {
+    @discardableResult
+    private func finishVADObservation(reason: String) -> Task<VADObservationSummary?, Never>? {
         audioInput.setFrameObserver(nil)
-        guard let session = activeVADObservation else { return }
+        guard let session = activeVADObservation else { return nil }
         activeVADObservation = nil
-        Task(priority: .utility) {
+        return Task(priority: .utility) {
             await session.finish(reason: reason)
         }
     }
@@ -428,10 +478,10 @@ final class RecordingSession: ObservableObject {
         guard hasShownLongRecordingWarning == false else { return }
         guard let context = currentLocalRecordingGuidanceContext() else { return }
         let seconds = Int(recordingDurationSeconds(sampleBytes: recordedBytes).rounded(.down))
-        guard seconds >= context.guidance.warningSeconds else { return }
+        guard seconds >= Self.longRecordingSoftWarningSeconds else { return }
 
         hasShownLongRecordingWarning = true
-        let message = "Long recording warning shown. model=\(context.modelID) audio_seconds=\(seconds) warning_seconds=\(context.guidance.warningSeconds) recommended_max_seconds=\(context.guidance.recommendedMaximumSeconds) estimated=\(context.guidance.isEstimated)"
+        let message = "Long recording warning shown. model=\(context.modelID) audio_seconds=\(seconds) warning_seconds=\(Self.longRecordingSoftWarningSeconds) chunk_target_seconds=\(Self.maxLocalChunkSeconds) chunk_hard_seconds=\(Self.hardLocalChunkSeconds) estimated=\(context.guidance.isEstimated)"
         logger.info("\(message, privacy: .public)")
         PerformanceLog.record(category: "RecordingSession", message: message)
 
@@ -681,6 +731,246 @@ final class RecordingSession: ObservableObject {
                 PerformanceLog.record(category: "RecordingSession", message: failedMessage)
             }
         }
+    }
+
+    private func shouldSkipTranscriptionForNoSpeech(audio: AudioData, vadSummary: VADObservationSummary?) -> Bool {
+        guard let vadSummary else { return false }
+        guard recordingDurationSeconds(sampleBytes: audio.samples.count, sampleRate: audio.sampleRate, channels: audio.channels) < Self.vadNoSpeechMaxAudioSeconds else {
+            return false
+        }
+        return vadSummary.speechWindows == 0 && vadSummary.maxProbability < Self.vadNoSpeechMaxProbability
+    }
+
+    private func makeTranscriptionAudioPlan(
+        audio: AudioData,
+        vadSummary: VADObservationSummary?,
+        config: Config
+    ) -> TranscriptionAudioPlan {
+        let original = originalTranscriptionPlan(audio: audio)
+        guard config.stt.mode == .localFirst, audio.container == .pcm16 else {
+            return original
+        }
+
+        let maxChunkBytes = byteCount(
+            seconds: Self.maxLocalChunkSeconds,
+            sampleRate: audio.sampleRate,
+            channels: audio.channels
+        )
+        let hardMaxChunkBytes = byteCount(
+            seconds: Self.hardLocalChunkSeconds,
+            sampleRate: audio.sampleRate,
+            channels: audio.channels
+        )
+        guard maxChunkBytes > 0, hardMaxChunkBytes >= maxChunkBytes else { return original }
+
+        let audioNeedsChunking = audio.samples.count > hardMaxChunkBytes
+        if let vadSummary {
+            var validRanges: [Range<Int>] = []
+            for range in vadSummary.segmentByteRanges {
+                guard let normalized = normalizedRange(range, totalBytes: audio.samples.count, frameBytes: frameBytes(for: audio)) else {
+                    continue
+                }
+                guard recordingDurationSeconds(sampleBytes: normalized.count, sampleRate: audio.sampleRate, channels: audio.channels) >= Self.minVADSegmentSeconds else {
+                    continue
+                }
+                validRanges.append(normalized)
+            }
+
+            if validRanges.isEmpty == false {
+                let segmentBytes = validRanges.reduce(0) { $0 + $1.count }
+                let savedPercent = audio.samples.count > 0 ? (1.0 - Double(segmentBytes) / Double(audio.samples.count)) * 100.0 : 0
+                if savedPercent >= Self.minVADTrimSavedPercent {
+                    let overlapBytes = audioNeedsChunking
+                        ? byteCount(seconds: Self.fixedChunkOverlapMs / 1_000.0, sampleRate: audio.sampleRate, channels: audio.channels)
+                        : 0
+                    let ranges = validRanges.flatMap {
+                        splitRange(
+                            $0,
+                            maxBytes: maxChunkBytes,
+                            overlapBytes: overlapBytes,
+                            frameBytes: frameBytes(for: audio),
+                            maxMergedBytes: hardMaxChunkBytes
+                        )
+                    }
+                    if ranges.isEmpty == false {
+                        return transcriptionPlan(
+                            audio: audio,
+                            ranges: ranges,
+                            strategy: audioNeedsChunking ? "vad_segments_chunked" : "vad_segments",
+                            source: "vad_segment"
+                        )
+                    }
+                }
+            }
+        }
+
+        if audioNeedsChunking {
+            let fullRange = 0..<audio.samples.count
+            let overlapBytes = byteCount(seconds: Self.fixedChunkOverlapMs / 1_000.0, sampleRate: audio.sampleRate, channels: audio.channels)
+            let ranges = splitRange(
+                fullRange,
+                maxBytes: maxChunkBytes,
+                overlapBytes: overlapBytes,
+                frameBytes: frameBytes(for: audio),
+                maxMergedBytes: hardMaxChunkBytes
+            )
+            return transcriptionPlan(audio: audio, ranges: ranges, strategy: "fixed_chunks", source: "fixed_chunk")
+        }
+
+        return original
+    }
+
+    private func transcribe(audioPlan plan: TranscriptionAudioPlan, config: Config) async throws -> Transcript {
+        guard plan.chunks.count > 1 else {
+            return try await ConfiguredSTTRouter.transcribe(plan.chunks[0].audio, config: config)
+        }
+
+        var texts: [String] = []
+        var language: String?
+        for (index, chunk) in plan.chunks.enumerated() {
+            let startedAt = CFAbsoluteTimeGetCurrent()
+            let chunkMessage = "RecordingSession transcription chunk started. index=\(index + 1) total=\(plan.chunks.count) source=\(chunk.source) bytes=\(chunk.audio.samples.count) range=\(chunk.sourceRange.lowerBound)-\(chunk.sourceRange.upperBound)"
+            logger.info("\(chunkMessage, privacy: .public)")
+            PerformanceLog.record(category: "RecordingSession", message: chunkMessage)
+            let transcript = try await ConfiguredSTTRouter.transcribe(chunk.audio, config: config)
+            if language == nil {
+                language = transcript.language
+            }
+            let text = transcript.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.isEmpty == false {
+                texts.append(text)
+            }
+            let doneMessage = "RecordingSession transcription chunk finished. index=\(index + 1) total=\(plan.chunks.count) chars=\(transcript.text.count) elapsed_ms=\(formatElapsedMs(since: startedAt))"
+            logger.info("\(doneMessage, privacy: .public)")
+            PerformanceLog.record(category: "RecordingSession", message: doneMessage)
+        }
+
+        return Transcript(
+            text: joinedTranscriptChunks(texts),
+            language: language,
+            durationMs: nil,
+            confidence: nil,
+            isFinal: true
+        )
+    }
+
+    private func originalTranscriptionPlan(audio: AudioData) -> TranscriptionAudioPlan {
+        transcriptionPlan(audio: audio, ranges: [0..<audio.samples.count], strategy: "original", source: "original")
+    }
+
+    private func transcriptionPlan(
+        audio: AudioData,
+        ranges: [Range<Int>],
+        strategy: String,
+        source: String
+    ) -> TranscriptionAudioPlan {
+        let chunks = ranges.compactMap { range -> TranscriptionAudioChunk? in
+            guard let normalized = normalizedRange(range, totalBytes: audio.samples.count, frameBytes: frameBytes(for: audio)) else {
+                return nil
+            }
+            let data = audio.samples.subdata(in: normalized)
+            guard data.isEmpty == false else { return nil }
+            return TranscriptionAudioChunk(
+                audio: AudioData(samples: data, sampleRate: audio.sampleRate, channels: audio.channels, container: audio.container),
+                sourceRange: normalized,
+                source: source
+            )
+        }
+        if chunks.isEmpty {
+            let fullRange = 0..<audio.samples.count
+            return TranscriptionAudioPlan(
+                strategy: "original",
+                chunks: [TranscriptionAudioChunk(audio: audio, sourceRange: fullRange, source: "original")],
+                sourceAudioBytes: audio.samples.count
+            )
+        }
+        return TranscriptionAudioPlan(strategy: strategy, chunks: chunks, sourceAudioBytes: audio.samples.count)
+    }
+
+    private func splitRange(
+        _ range: Range<Int>,
+        maxBytes: Int,
+        overlapBytes: Int,
+        frameBytes: Int,
+        maxMergedBytes: Int? = nil
+    ) -> [Range<Int>] {
+        if let maxMergedBytes, range.count <= maxMergedBytes { return [range] }
+        guard maxBytes > frameBytes, range.count > maxBytes else { return [range] }
+        let alignedOverlap = max(0, overlapBytes - overlapBytes % frameBytes)
+        var ranges: [Range<Int>] = []
+        var start = range.lowerBound
+        while start < range.upperBound {
+            let end = min(start + maxBytes, range.upperBound)
+            if end > start {
+                ranges.append(start..<end)
+            }
+            guard end < range.upperBound else { break }
+            let nextStart = max(range.lowerBound, end - alignedOverlap)
+            start = nextStart > start ? nextStart : end
+        }
+        return ranges
+    }
+
+    private func normalizedRange(_ range: Range<Int>, totalBytes: Int, frameBytes: Int) -> Range<Int>? {
+        guard totalBytes > 0 else { return nil }
+        let lower = min(max(0, range.lowerBound), totalBytes)
+        let upper = min(max(lower, range.upperBound), totalBytes)
+        let alignedLower = lower - lower % frameBytes
+        let alignedUpper = upper - upper % frameBytes
+        guard alignedUpper > alignedLower else { return nil }
+        return alignedLower..<alignedUpper
+    }
+
+    private func byteCount(seconds: Double, sampleRate: Int, channels: Int) -> Int {
+        guard seconds > 0, sampleRate > 0, channels > 0 else { return 0 }
+        let bytes = Int(seconds * Double(sampleRate * channels * MemoryLayout<Int16>.size))
+        let frameBytes = max(1, channels * MemoryLayout<Int16>.size)
+        return max(frameBytes, bytes - bytes % frameBytes)
+    }
+
+    private func frameBytes(for audio: AudioData) -> Int {
+        max(1, audio.channels * MemoryLayout<Int16>.size)
+    }
+
+    private func joinedTranscriptChunks(_ texts: [String]) -> String {
+        var output = ""
+        for text in texts {
+            let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard value.isEmpty == false else { continue }
+            guard output.isEmpty == false else {
+                output = value
+                continue
+            }
+            let overlap = transcriptTextOverlapSuffixPrefix(output, value, maxCharacters: 12)
+            let remainder = String(value.dropFirst(overlap))
+            guard remainder.isEmpty == false else { continue }
+            output += joinSeparator(previous: output, next: remainder) + remainder
+        }
+        return output
+    }
+
+    private func transcriptTextOverlapSuffixPrefix(_ previous: String, _ next: String, maxCharacters: Int) -> Int {
+        let maxLength = min(maxCharacters, previous.count, next.count)
+        guard maxLength >= 2 else { return 0 }
+        for length in stride(from: maxLength, through: 2, by: -1) {
+            if previous.suffix(length) == next.prefix(length) {
+                return length
+            }
+        }
+        return 0
+    }
+
+    private func joinSeparator(previous: String, next: String) -> String {
+        guard let previousLast = previous.last, let nextFirst = next.first else { return "" }
+        if previousLast.isWhitespace || nextFirst.isWhitespace { return "" }
+        let noSpaceBefore = CharacterSet(charactersIn: "，。！？；：、,.!?;:")
+        if String(nextFirst).rangeOfCharacter(from: noSpaceBefore) != nil { return "" }
+        if isCJK(previousLast) || isCJK(nextFirst) { return "" }
+        return " "
+    }
+
+    private func isCJK(_ character: Character) -> Bool {
+        String(character).range(of: #"\p{Han}"#, options: .regularExpression) != nil
     }
 
     private func postProcessedTranscriptText(

@@ -44,6 +44,9 @@ public enum Paths {
     
     /// `~/.tsutae/traces/` — OTLP jsonl
     public static var traces: URL { root.appendingPathComponent("traces") }
+
+    /// `~/.tsutae/dictionary/` — 词典学习状态、候选词和用户决策
+    public static var dictionary: URL { root.appendingPathComponent("dictionary") }
     
     /// `~/.tsutae/state.db` — 运行状态数据库
     public static var stateDB: URL { root.appendingPathComponent("state.db") }
@@ -67,23 +70,34 @@ public enum Paths {
     /// 确保目录存在，不存在则创建
     public static func ensureDirectories() throws {
         let fm = FileManager.default
-        for dir in [root, engines, recipes, models, sttModels, ttsModels, vadModels, traces, logs] {
+        for dir in [root, engines, recipes, models, sttModels, ttsModels, vadModels, traces, dictionary, logs] {
             if !fm.fileExists(atPath: dir.path) {
                 try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             }
         }
         
-        // 创建 .gitignore（如果不存在）
+        // 创建/更新 .gitignore，避免本地模型、日志、候选词证据等隐私数据被同步
         let gitignore = root.appendingPathComponent(".gitignore")
-        if !fm.fileExists(atPath: gitignore.path) {
-            let content = """
-                models/
-                traces/
-                state.db
-                state.db-*
-                logs/
-                *.log
-                """
+        let ignoredEntries = [
+            "models/",
+            "traces/",
+            "dictionary/",
+            "state.db",
+            "state.db-*",
+            "logs/",
+            "*.log"
+        ]
+        if fm.fileExists(atPath: gitignore.path) {
+            var content = (try? String(contentsOf: gitignore, encoding: .utf8)) ?? ""
+            for entry in ignoredEntries where content.split(separator: "\n").contains(Substring(entry)) == false {
+                if content.isEmpty == false, content.hasSuffix("\n") == false {
+                    content += "\n"
+                }
+                content += entry + "\n"
+            }
+            try content.write(to: gitignore, atomically: true, encoding: .utf8)
+        } else {
+            let content = ignoredEntries.joined(separator: "\n") + "\n"
             try content.write(to: gitignore, atomically: true, encoding: .utf8)
         }
     }
