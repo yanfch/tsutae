@@ -139,7 +139,8 @@ final class TsutaeCoreTests: XCTestCase {
             provider: "rules+dictionary",
             model: nil,
             elapsedMs: 1.4,
-            dictionaryMatches: ["code x"]
+            dictionaryMatches: ["code x"],
+            dictionaryReplacements: [TranscriptDictionaryReplacement(key: "code x", value: "Codex")]
         )
         let record = ASRSampleLog.makeRecord(
             context: "test",
@@ -177,11 +178,135 @@ final class TsutaeCoreTests: XCTestCase {
         XCTAssertEqual(decoded.finalText, "Codex hook。")
         XCTAssertEqual(decoded.localModel, "sensevoice-small")
         XCTAssertEqual(decoded.postProcessing?.dictionaryMatches, ["code x"])
+        XCTAssertEqual(decoded.postProcessing?.dictionaryReplacements, [TranscriptDictionaryReplacement(key: "code x", value: "Codex")])
         XCTAssertEqual(decoded.recordingStartApplication?.bundleIdentifier, "com.apple.dt.Xcode")
         XCTAssertEqual(decoded.insertionApplication?.bundleIdentifier, "com.apple.Notes")
         XCTAssertEqual(decoded.targetApplication?.bundleIdentifier, "com.apple.Notes")
         XCTAssertEqual(decoded.insertion?.method, "focused_app")
         XCTAssertEqual(decoded.endToEndElapsedMs, 51)
+
+        let candidateText = try String(contentsOf: TranscriptDictionaryCandidateLog.fileURL, encoding: .utf8)
+        let candidateLine = try XCTUnwrap(candidateText.split(separator: "\n").first)
+        let candidate = try JSONDecoder().decode(TranscriptDictionaryCandidateLog.CandidateRecord.self, from: Data(candidateLine.utf8))
+        XCTAssertEqual(candidate.kind, "dictionary_usage")
+        XCTAssertEqual(candidate.key, "code x")
+        XCTAssertEqual(candidate.value, "Codex")
+        XCTAssertEqual(candidate.source.asrSampleID, decoded.id)
+
+        let summaryData = try Data(contentsOf: TranscriptDictionaryCandidateLog.summaryFileURL)
+        let summary = try JSONDecoder().decode(TranscriptDictionaryCandidateLog.SummaryFile.self, from: summaryData)
+        XCTAssertEqual(summary.evidenceCount, 1)
+        XCTAssertEqual(summary.observedCount, 1)
+        XCTAssertEqual(summary.items.first?.key, "code x")
+        XCTAssertEqual(summary.items.first?.status, "observed")
+    }
+
+    func testDictionaryCandidateLogFindsSubwordArtifacts() throws {
+        var config = Config.default
+        config.stt.local.preferredModel = "paraformer-large-zh"
+        let transcript = Transcript(text: "用 co@@dingag@@ent 接 sk@@ill", language: "zh")
+        let record = ASRSampleLog.makeRecord(
+            context: "test",
+            audio: AudioData(samples: Data(count: 3200), sampleRate: 16000, channels: 1),
+            transcript: transcript,
+            config: config,
+            transcriptionElapsedMs: 42,
+            totalElapsedMs: 45,
+            postProcessing: nil
+        )
+
+        let candidates = TranscriptDictionaryCandidateLog.candidates(from: record)
+
+        XCTAssertEqual(candidates.map(\.kind), ["dictionary_candidate", "dictionary_candidate"])
+        XCTAssertEqual(candidates.map(\.key), ["codingagent", "skill"])
+        XCTAssertEqual(candidates.first?.value, "coding agent")
+        XCTAssertEqual(candidates.first?.status, "needs_review")
+        XCTAssertEqual(candidates.first?.reason, "asr_subword_artifact")
+    }
+
+    func testDictionaryCandidateLogCompactsStoredEvidence() async throws {
+        var config = Config.default
+        config.stt.local.preferredModel = "paraformer-large-zh"
+        let record = ASRSampleLog.makeRecord(
+            context: "test",
+            audio: AudioData(samples: Data(count: 3200), sampleRate: 16000, channels: 1),
+            transcript: Transcript(text: "wor@@ktree", language: "zh"),
+            config: config,
+            transcriptionElapsedMs: 42,
+            totalElapsedMs: 45,
+            postProcessing: nil
+        )
+        let source = TranscriptDictionaryCandidateLog.SourceSnapshot(record: record)
+        let records = (0..<5_005).map { index in
+            TranscriptDictionaryCandidateLog.CandidateRecord(
+                timestamp: String(format: "2026-06-28T00:00:%02d.000Z", index % 60),
+                kind: "dictionary_candidate",
+                key: "term\(index)",
+                value: "term\(index)",
+                status: "needs_review",
+                confidence: 0.35,
+                reason: "test",
+                source: source,
+                evidence: TranscriptDictionaryCandidateLog.EvidenceSnapshot(
+                    rawSnippet: "term\(index)",
+                    finalSnippet: "term\(index)",
+                    observedText: "term\(index)",
+                    normalizedObservedText: "term\(index)",
+                    occurrenceCount: 1
+                )
+            )
+        }
+
+        await TranscriptDictionaryCandidateLog.append(records)
+
+        XCTAssertEqual(TranscriptDictionaryCandidateLog.loadCandidates().count, 5_000)
+        let summaryData = try Data(contentsOf: TranscriptDictionaryCandidateLog.summaryFileURL)
+        let summary = try JSONDecoder().decode(TranscriptDictionaryCandidateLog.SummaryFile.self, from: summaryData)
+        XCTAssertEqual(summary.evidenceCount, 5_000)
+    }
+
+    func testDictionaryCandidateSummaryAggregatesReviewItemsAndKnownItems() throws {
+        var config = Config.default
+        config.stt.local.preferredModel = "paraformer-large-zh"
+        let record1 = ASRSampleLog.makeRecord(
+            context: "test",
+            audio: AudioData(samples: Data(count: 3200), sampleRate: 16000, channels: 1),
+            transcript: Transcript(text: "d@@ou@@bleop@@tion 和 wor@@ktree", language: "zh"),
+            config: config,
+            transcriptionElapsedMs: 42,
+            totalElapsedMs: 45,
+            postProcessing: nil
+        )
+        let record2 = ASRSampleLog.makeRecord(
+            context: "test",
+            audio: AudioData(samples: Data(count: 3200), sampleRate: 16000, channels: 1),
+            transcript: Transcript(text: "再测 wor@@ktree", language: "zh"),
+            config: config,
+            transcriptionElapsedMs: 42,
+            totalElapsedMs: 45,
+            postProcessing: nil
+        )
+        let candidates = TranscriptDictionaryCandidateLog.candidates(from: record1)
+            + TranscriptDictionaryCandidateLog.candidates(from: record2)
+
+        let summary = TranscriptDictionaryCandidateLog.makeSummary(
+            from: candidates,
+            config: config,
+            generatedAt: "2026-06-28T00:00:00Z"
+        )
+
+        let doubleOption = try XCTUnwrap(summary.items.first { $0.key == "doubleoption" })
+        XCTAssertEqual(doubleOption.status, "already_known")
+        XCTAssertEqual(doubleOption.suggestedValue, "Double Option")
+        XCTAssertEqual(doubleOption.count, 1)
+
+        let worktree = try XCTUnwrap(summary.items.first { $0.key == "worktree" })
+        XCTAssertEqual(worktree.status, "needs_review")
+        XCTAssertEqual(worktree.suggestedValue, "worktree")
+        XCTAssertEqual(worktree.count, 2)
+        XCTAssertGreaterThan(worktree.score, doubleOption.score)
+        XCTAssertEqual(summary.needsReviewCount, 1)
+        XCTAssertEqual(summary.alreadyKnownCount, 1)
     }
 
     func testTTSPlaybackSnapshotEncodesPreparingState() throws {
@@ -260,6 +385,7 @@ final class TsutaeCoreTests: XCTestCase {
         XCTAssertEqual(Paths.hotkeysYML.lastPathComponent, "hotkeys.yml")
         XCTAssertEqual(Paths.models.lastPathComponent, "models")
         XCTAssertEqual(Paths.sttModels.lastPathComponent, "stt")
+        XCTAssertEqual(Paths.dictionary.lastPathComponent, "dictionary")
     }
     
     func testEnsureDirectories() throws {
@@ -268,6 +394,7 @@ final class TsutaeCoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: Paths.root.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: Paths.recipes.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: Paths.models.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: Paths.dictionary.path))
         
         // 检查 .gitignore 被创建
         let gitignore = Paths.root.appendingPathComponent(".gitignore")
@@ -286,6 +413,58 @@ final class TsutaeCoreTests: XCTestCase {
         XCTAssertEqual(config.hotkeys.count, 3)
     }
     
+    func testRecordingShortcutDefaultIsDoubleOption() {
+        XCTAssertEqual(RecordingShortcut.defaultShortcutID, "double+option")
+        XCTAssertEqual(RecordingShortcut.mode(forShortcutID: RecordingShortcut.defaultShortcutID), .doubleTapModifier)
+        XCTAssertEqual(RecordingShortcut.modifier(forShortcutID: RecordingShortcut.defaultShortcutID), .option)
+        XCTAssertEqual(RecordingShortcut.displayString(forShortcutID: RecordingShortcut.defaultShortcutID), "Double ⌥")
+    }
+
+    func testRecordingShortcutKeyboardNormalization() {
+        XCTAssertEqual(RecordingShortcut.normalizedID(for: "shift+option+r"), "option+shift+r")
+        XCTAssertEqual(RecordingShortcut.normalizedID(for: "option+r"), "option+r")
+        XCTAssertEqual(RecordingShortcut.displayString(forShortcutID: "option+space"), "⌥Space")
+        XCTAssertEqual(RecordingShortcut.mode(forShortcutID: "option+r"), .keyboardShortcut)
+        XCTAssertEqual(RecordingShortcut.keyboardShortcutID(forShortcutID: "double+option"), nil)
+    }
+
+    func testRecordingShortcutDoubleTapModifierNormalization() {
+        XCTAssertEqual(RecordingShortcut.normalizedID(for: "double+option"), "double+option")
+        XCTAssertEqual(RecordingShortcut.normalizedID(for: "doubleoption"), "double+option")
+        XCTAssertEqual(RecordingShortcut.normalizedID(for: "doubletap-command"), "double+command")
+        XCTAssertEqual(RecordingShortcut.mode(forShortcutID: "double+option"), .doubleTapModifier)
+        XCTAssertEqual(RecordingShortcut.modifier(forShortcutID: "double+option"), .option)
+        XCTAssertEqual(RecordingShortcut.displayString(forShortcutID: "double+option"), "Double ⌥")
+    }
+
+    func testRecordingShortcutPressAndHoldModifierNormalization() {
+        XCTAssertEqual(RecordingShortcut.normalizedID(for: "hold+option"), "hold+option")
+        XCTAssertEqual(RecordingShortcut.normalizedID(for: "holdoption"), "hold+option")
+        XCTAssertEqual(RecordingShortcut.normalizedID(for: "pressandhold command"), "hold+command")
+        XCTAssertEqual(RecordingShortcut.mode(forShortcutID: "hold+shift"), .pressAndHoldModifier)
+        XCTAssertEqual(RecordingShortcut.modifier(forShortcutID: "hold+shift"), .shift)
+        XCTAssertEqual(RecordingShortcut.displayString(forShortcutID: "hold+shift"), "Hold ⇧")
+    }
+
+    func testRecordingShortcutIDBuilder() {
+        XCTAssertEqual(
+            RecordingShortcut.id(mode: .keyboardShortcut, keyboardShortcutID: "command+option+r"),
+            "option+command+r"
+        )
+        XCTAssertEqual(
+            RecordingShortcut.id(mode: .doubleTapModifier, keyboardShortcutID: "option+r", modifier: .control),
+            "double+control"
+        )
+        XCTAssertEqual(
+            RecordingShortcut.id(mode: .pressAndHoldModifier, keyboardShortcutID: "option+r", modifier: .command),
+            "hold+command"
+        )
+        XCTAssertEqual(
+            RecordingShortcut.id(mode: .keyboardShortcut, keyboardShortcutID: "double+option"),
+            RecordingShortcut.defaultKeyboardShortcutID
+        )
+    }
+
     func testHotkeysLoadSave() throws {
         try Paths.ensureDirectories()
         
