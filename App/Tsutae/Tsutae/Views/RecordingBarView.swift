@@ -18,10 +18,14 @@ struct RecordingBarView: View {
     let preset: DS.recordingBar.Preset
     let colorScheme: ColorScheme
     let showsReleaseHint: Bool
+    let locatePulseID: Int
     
     private let phaseOffsets: [Double] = [0, 0.7, 1.2, 1.8, 2.4, 3.0, 3.6, 4.2, 4.8]
     
     @State private var completionPulse: CGFloat = 0
+    @State private var locatePulseScale: CGFloat = 1
+    @State private var locatePulseOpacity: Double = 0
+    @State private var locatePulseGlow: CGFloat = 0
     
     private var layout: DS.recordingBar.Layout {
         DS.recordingBar.layout(for: preset)
@@ -31,12 +35,14 @@ struct RecordingBarView: View {
         state: RecordingBarVisualState,
         preset: DS.recordingBar.Preset = DS.recordingBar.defaultPreset,
         colorScheme: ColorScheme = .light,
-        showsReleaseHint: Bool = false
+        showsReleaseHint: Bool = false,
+        locatePulseID: Int = 0
     ) {
         self.state = state
         self.preset = preset
         self.colorScheme = colorScheme
         self.showsReleaseHint = showsReleaseHint
+        self.locatePulseID = locatePulseID
     }
     
     var body: some View {
@@ -76,11 +82,16 @@ struct RecordingBarView: View {
                         lineWidth: capsuleBorderWidth
                     )
             )
+            .overlay(locatePulseOverlay)
         }
         .onChange(of: state) { _, newState in
             if newState == .idle || newState == .copied {
                 triggerCompletionPulse()
             }
+        }
+        .onChange(of: locatePulseID) { _, newValue in
+            guard newValue > 0 else { return }
+            triggerLocatePulse()
         }
     }
     
@@ -328,6 +339,27 @@ struct RecordingBarView: View {
     
     private var capsuleBorderWidth: CGFloat {
         isDarkMode ? 0.6 : 0.5
+    }
+
+    private var locatePulseOverlay: some View {
+        backgroundShape
+            .strokeBorder(locatePulseColor.opacity(locatePulseOpacity), lineWidth: locatePulseLineWidth)
+            .scaleEffect(locatePulseScale)
+            .shadow(
+                color: locatePulseColor.opacity(locatePulseOpacity * 0.82),
+                radius: locatePulseGlow,
+                x: 0,
+                y: 0
+            )
+            .allowsHitTesting(false)
+    }
+
+    private var locatePulseColor: Color {
+        isDarkMode ? Color.white : accentColor
+    }
+
+    private var locatePulseLineWidth: CGFloat {
+        preset == .minimal ? 2.4 : 2.0
     }
     
     private var shadowColor: Color {
@@ -577,6 +609,30 @@ struct RecordingBarView: View {
                 completionPulse = 0
             }
         }
+    }
+
+    private func triggerLocatePulse() {
+        runLocatePulse(scale: locatePulseScaleTarget, opacity: 0.92, glow: 5)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            runLocatePulse(scale: locatePulseScaleTarget - 0.02, opacity: 0.72, glow: 4)
+        }
+    }
+
+    private func runLocatePulse(scale: CGFloat, opacity: Double, glow: CGFloat) {
+        locatePulseScale = 0.98
+        locatePulseOpacity = opacity
+        locatePulseGlow = glow
+
+        withAnimation(.easeOut(duration: 0.46)) {
+            locatePulseScale = scale
+            locatePulseOpacity = 0
+            locatePulseGlow = preset == .minimal ? 18 : 15
+        }
+    }
+
+    private var locatePulseScaleTarget: CGFloat {
+        preset == .minimal ? 1.16 : 1.10
     }
 }
 

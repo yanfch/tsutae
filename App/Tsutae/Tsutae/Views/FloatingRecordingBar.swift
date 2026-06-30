@@ -20,8 +20,9 @@ final class FloatingRecordingBar {
     static let shared = FloatingRecordingBar()
     
     private let logger = Logger(subsystem: "dev.yanfch.Tsutae", category: "FloatingRecordingBar")
-    private let savedOriginXKey = "recordingBar.origin.x"
-    private let savedOriginYKey = "recordingBar.origin.y"
+    private let savedOriginKeyPrefix = "recordingBar.origin"
+    private let legacySavedOriginXKey = "recordingBar.origin.x"
+    private let legacySavedOriginYKey = "recordingBar.origin.y"
     private var panel: NSPanel?
     private var hostingView: NSHostingView<RecordingBarWrapper>?
     private var presentationModel: RecordingBarPresentationModel?
@@ -95,7 +96,7 @@ final class FloatingRecordingBar {
         )
         panel.onDragEnded = { [weak self, weak panel] in
             guard let self, let panel else { return }
-            self.savePanelOrigin(self.persistedOrigin(from: panel.frame.origin))
+            self.savePanelOrigin(self.persistedOrigin(from: panel.frame.origin), preferredScreen: panel.screen)
         }
         logger.info("NSPanel created")
         
@@ -109,17 +110,23 @@ final class FloatingRecordingBar {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
         
-        if let savedOrigin = savedOrigin(for: panel.frame.size) {
+        let presentationScreen = screenForPresentation()
+        if
+            let presentationScreen,
+            let savedOrigin = savedOrigin(for: panel.frame.size, on: presentationScreen)
+        {
             panel.setFrameOrigin(savedOrigin)
             logger.info("Panel restored to saved origin=(\(savedOrigin.x, privacy: .public), \(savedOrigin.y, privacy: .public))")
-        } else if let screen = screenForPresentation() {
+        } else if let screen = presentationScreen {
             // 对于菜单栏 App，NSScreen.main 可能为空，优先使用鼠标所在屏幕。
-            let visibleFrame = screen.visibleFrame
-            let x = visibleFrame.midX - (barContainerSize.width / 2)
-            let y = visibleFrame.midY - (barContainerSize.height / 2) - 42 - (panelSize.height - barContainerSize.height)
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            let origin = clampedPanelOriginKeepingBarVisible(
+                centeredPanelOrigin(on: screen),
+                placement: .below,
+                preferredScreen: screen
+            )
+            panel.setFrameOrigin(origin)
             logger.info(
-                "Panel positioned on visibleFrame=\(String(describing: visibleFrame), privacy: .public) origin=(\(x, privacy: .public), \(y, privacy: .public))"
+                "Panel positioned on visibleFrame=\(String(describing: screen.visibleFrame), privacy: .public) origin=(\(origin.x, privacy: .public), \(origin.y, privacy: .public))"
             )
         } else {
             panel.center()
@@ -284,6 +291,26 @@ final class FloatingRecordingBar {
         withAnimation(.easeInOut(duration: 0.18)) {
             presentationModel.showsReleaseHint = isVisible
         }
+    }
+
+    func locateWithPulse() {
+        logger.info("locateWithPulse() called. isShowing=\(self.isShowing, privacy: .public)")
+        guard isShowing else {
+            logger.info("Skipping locate because recording bar is hidden")
+            return
+        }
+
+        guard let panel else {
+            logger.error("Failed to locate recording bar because panel is missing")
+            return
+        }
+
+        if let origin = locatePanelOriginOnPresentationScreen() {
+            panel.setFrameOrigin(origin)
+        }
+        panel.alphaValue = 1
+        panel.orderFrontRegardless()
+        triggerLocatePulse()
     }
     
     func showCompanion(_ companion: RecordingBarCompanion, displayState: RecordingBarVisualState = .failed) {
@@ -487,26 +514,78 @@ final class FloatingRecordingBar {
             ?? NSScreen.main
             ?? NSScreen.screens.first
     }
-    
-    private func savedOrigin(for panelSize: NSSize) -> NSPoint? {
-        let defaults = UserDefaults.standard
-        
-        guard
-            defaults.object(forKey: savedOriginXKey) != nil,
-            defaults.object(forKey: savedOriginYKey) != nil
-        else {
+
+    private func locatePanelOriginOnPresentationScreen() -> NSPoint? {
+        guard let screen = screenForPresentation() else {
             return nil
         }
-        
+
+        var placement = presentationModel?.companionPlacement ?? .below
+        if presentationModel?.companion == nil {
+            placement = .below
+        }
+
+        var origin = centeredPanelOrigin(on: screen)
+        if placement == .above {
+            origin.y += companionVerticalShift
+        }
+
+        let clampedOrigin = clampedPanelOriginKeepingBarVisible(
+            origin,
+            placement: placement,
+            preferredScreen: screen
+        )
+        presentationModel?.companionPlacement = placement
+        logger.info(
+            "Panel located on visibleFrame=\(String(describing: screen.visibleFrame), privacy: .public) origin=(\(clampedOrigin.x, privacy: .public), \(clampedOrigin.y, privacy: .public))"
+        )
+        return clampedOrigin
+    }
+
+    private func centeredPanelOrigin(on screen: NSScreen) -> NSPoint {
+        let visibleFrame = screen.visibleFrame
+        let x = visibleFrame.midX - (barContainerSize.width / 2)
+        let y = visibleFrame.midY - (barContainerSize.height / 2) - 42 - (panelSize.height - barContainerSize.height)
+        return NSPoint(x: x, y: y)
+    }
+    
+    private func savedOrigin(for panelSize: NSSize, on screen: NSScreen) -> NSPoint? {
+        let defaults = UserDefaults.standard
+
+        if let origin = savedOriginFromDefaults(
+            xKey: savedOriginXKey(for: screen),
+            yKey: savedOriginYKey(for: screen),
+            panelSize: panelSize,
+            screen: screen
+        ) {
+            return origin
+        }
+
+        if let origin = savedOriginFromDefaults(
+            xKey: legacySavedOriginXKey,
+            yKey: legacySavedOriginYKey,
+            panelSize: panelSize,
+            screen: screen
+        ) {
+            savePanelOrigin(origin, preferredScreen: screen)
+            return origin
+        }
+
+        return nil
+    }
+
+    private func savedOriginFromDefaults(xKey: String, yKey: String, panelSize: NSSize, screen: NSScreen) -> NSPoint? {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: xKey) != nil, defaults.object(forKey: yKey) != nil else {
+            return nil
+        }
+
         let origin = NSPoint(
-            x: defaults.double(forKey: savedOriginXKey),
-            y: defaults.double(forKey: savedOriginYKey)
+            x: defaults.double(forKey: xKey),
+            y: defaults.double(forKey: yKey)
         )
         let frame = NSRect(origin: origin, size: panelSize)
         let barFrame = barFrame(for: frame, placement: .below)
-        guard let screen = NSScreen.screens.max(by: { $0.visibleFrame.intersection(barFrame).area < $1.visibleFrame.intersection(barFrame).area }) else {
-            return nil
-        }
         guard screen.visibleFrame.intersects(barFrame) else {
             return nil
         }
@@ -544,10 +623,53 @@ final class FloatingRecordingBar {
         return NSPoint(x: origin.x + deltaX, y: origin.y + deltaY)
     }
     
-    private func savePanelOrigin(_ origin: NSPoint) {
-        UserDefaults.standard.set(origin.x, forKey: savedOriginXKey)
-        UserDefaults.standard.set(origin.y, forKey: savedOriginYKey)
-        logger.info("Panel origin saved=(\(origin.x, privacy: .public), \(origin.y, privacy: .public))")
+    private func savePanelOrigin(_ origin: NSPoint, preferredScreen: NSScreen?) {
+        guard let screen = screenForSavedOrigin(origin, preferredScreen: preferredScreen) else {
+            logger.error("Failed to save panel origin because no screen could be resolved")
+            return
+        }
+
+        UserDefaults.standard.set(origin.x, forKey: savedOriginXKey(for: screen))
+        UserDefaults.standard.set(origin.y, forKey: savedOriginYKey(for: screen))
+        logger.info("Panel origin saved for screen=\(self.screenIdentifier(for: screen), privacy: .public) origin=(\(origin.x, privacy: .public), \(origin.y, privacy: .public))")
+    }
+
+    private func triggerLocatePulse() {
+        guard let presentationModel else { return }
+        presentationModel.locatePulseID += 1
+    }
+
+    private func screenForSavedOrigin(_ origin: NSPoint, preferredScreen: NSScreen?) -> NSScreen? {
+        let frame = NSRect(origin: origin, size: panelSize)
+        let barFrame = barFrame(for: frame, placement: .below)
+        if let preferredScreen, preferredScreen.visibleFrame.intersects(barFrame) {
+            return preferredScreen
+        }
+        return NSScreen.screens.max(by: { $0.visibleFrame.intersection(barFrame).area < $1.visibleFrame.intersection(barFrame).area })
+    }
+
+    private func savedOriginXKey(for screen: NSScreen) -> String {
+        "\(savedOriginKeyPrefix).\(screenIdentifier(for: screen)).x"
+    }
+
+    private func savedOriginYKey(for screen: NSScreen) -> String {
+        "\(savedOriginKeyPrefix).\(screenIdentifier(for: screen)).y"
+    }
+
+    private func screenIdentifier(for screen: NSScreen) -> String {
+        if let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+            return screenNumber.stringValue
+        }
+
+        let frame = screen.frame
+        return [
+            Int(frame.origin.x.rounded()),
+            Int(frame.origin.y.rounded()),
+            Int(frame.width.rounded()),
+            Int(frame.height.rounded())
+        ]
+        .map(String.init)
+        .joined(separator: "_")
     }
     
     private func teardownPanel() {
@@ -649,6 +771,7 @@ private final class RecordingBarPresentationModel: ObservableObject {
     @Published var companionPlacement: RecordingBarCompanionPlacement
     @Published var companion: RecordingBarCompanion?
     @Published var showsReleaseHint: Bool
+    @Published var locatePulseID: Int
     
     init(
         displayState: RecordingBarVisualState,
@@ -663,6 +786,7 @@ private final class RecordingBarPresentationModel: ObservableObject {
         self.companionPlacement = companionPlacement
         self.companion = nil
         self.showsReleaseHint = showsReleaseHint
+        self.locatePulseID = 0
     }
 }
 
@@ -696,7 +820,8 @@ private struct RecordingBarWrapper: View {
                 state: model.displayState,
                 preset: model.preset,
                 colorScheme: model.colorScheme,
-                showsReleaseHint: model.showsReleaseHint
+                showsReleaseHint: model.showsReleaseHint,
+                locatePulseID: model.locatePulseID
             )
             .offset(x: 0, y: barOffsetY)
             

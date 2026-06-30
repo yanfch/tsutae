@@ -6,6 +6,7 @@
 "common.open_accessibility_settings" = "打开辅助功能设置";
 
 "menu.copy_latest_transcript" = "复制最近转写";
+"menu.locate_capsule" = "找回胶囊";
 "menu.error_format" = "错误：%@";
 "menu.shortcut_format" = "快捷键：%@";
 "menu.stop_and_transcribe" = "停止并转写";

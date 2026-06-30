@@ -71,6 +71,7 @@ enum L10n {
     
     enum Menu {
         static var copyLatestTranscript: String { tr("menu.copy_latest_transcript", default: "Copy Latest Transcript") }
+        static var locateCapsule: String { tr("menu.locate_capsule", default: "Find Capsule") }
         static func error(_ value: String) -> String {
             String(format: tr("menu.error_format", default: "Error: %@"), value)
         }

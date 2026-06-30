@@ -393,6 +393,12 @@ private struct MenuBarMenuContent: View {
             }
         }
 
+        Button(L10n.Menu.locateCapsule) {
+            logger.info("Menu action: locate recording capsule")
+            FloatingRecordingBar.shared.locateWithPulse()
+        }
+        .disabled(!FloatingRecordingBar.shared.isShowing)
+
         if let transcript = recordingSession.lastTranscript, !transcript.isEmpty {
             Button(L10n.Menu.copyLatestTranscript) {
                 NSPasteboard.general.clearContents()
